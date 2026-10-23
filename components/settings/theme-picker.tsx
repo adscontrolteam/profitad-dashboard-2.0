@@ -13,7 +13,7 @@ import {
 
 const PREVIEW: Record<ThemeId, { sidebar: string; canvas: string; card: string; accent: string }> = {
   light: { sidebar: "#ffffff", canvas: "#f3f4f2", card: "#ffffff", accent: "#12283a" },
-  dark: { sidebar: "#121e29", canvas: "#0b141c", card: "#121e29", accent: "#b9ef1c" },
+  dark: { sidebar: "#161616", canvas: "#0b0b0b", card: "#141414", accent: "#b9ef1c" },
 };
 
 const OPTIONS: { id: ThemePreference; name: string; description: string }[] = [

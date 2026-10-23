@@ -38,26 +38,26 @@ html[data-theme="light"] {
 
 html[data-theme="dark"] {
   color-scheme: dark;
-  --background: #0b141c;
-  --foreground: #eef2f5;
-  --muted: #1c2b39;
-  --muted-foreground: #a8b4be;
-  --card: #121e29;
-  --card-foreground: #eef2f5;
-  --border: #233343;
-  --sidebar: rgba(18, 30, 41, 0.72);
-  --sidebar-foreground: #eef2f5;
-  --sidebar-muted: #a8b4be;
-  --sidebar-hover: rgba(238, 242, 245, 0.06);
+  --background: #0b0b0b;
+  --foreground: #f5f5f5;
+  --muted: #161616;
+  --muted-foreground: #8a8a8a;
+  --card: #141414;
+  --card-foreground: #f5f5f5;
+  --border: rgba(255, 255, 255, 0.08);
+  --sidebar: rgba(22, 22, 22, 0.58);
+  --sidebar-foreground: #f5f5f5;
+  --sidebar-muted: #8a8a8a;
+  --sidebar-hover: rgba(255, 255, 255, 0.08);
   --accent: #b9ef1c;
   --accent-foreground: #12283a;
   --cta: #b9ef1c;
   --cta-foreground: #12283a;
   --ring: #b9ef1c;
   --highlight: #b9ef1c;
-  --glass: rgba(18, 30, 41, 0.72);
-  --glass-border: #233343;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.25);
+  --glass: rgba(22, 22, 22, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --shadow: 0 22px 60px rgba(0, 0, 0, 0.38);
   --radius: 26px;
   --logo-ink: #ffffff;
   --logo-bars: #b9ef1c;
@@ -65,7 +65,7 @@ html[data-theme="dark"] {
   --positive: #4fcb72;
   --negative: #f06a6a;
   --warning: #ffb340;
-  --info: #9fb3c4;
+  --info: #a0c4ff;
 }
 
 @theme inline {
