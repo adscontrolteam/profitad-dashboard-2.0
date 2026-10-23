@@ -15,7 +15,7 @@ export function StatusSummary({ summary }: { summary: Summary }) {
               <span className={cn("size-2 rounded-full", TONE_DOT[meta.tone])} aria-hidden />
               {meta.summaryLabel}
             </p>
-            <p className="mt-2 text-3xl font-semibold tracking-[-0.045em] tabular-nums lg:text-4xl">
+            <p className="mt-2 font-display text-3xl font-extrabold tracking-[-0.03em] tabular-nums lg:text-4xl">
               {summary[status]}
             </p>
           </Card>

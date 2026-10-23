@@ -109,7 +109,7 @@ export function ProjectEditor({
         role="dialog"
         aria-modal="true"
         aria-label={project ? project.name : "Новый проект"}
-        className="relative flex h-full w-full max-w-lg flex-col overflow-y-auto bg-card p-5 shadow-[var(--shadow)] sm:m-3 sm:h-[calc(100%-1.5rem)] sm:rounded-[28px] sm:border sm:border-border lg:p-6"
+        className="relative flex h-full w-full max-w-lg flex-col overflow-y-auto bg-card p-5 shadow-[var(--shadow)] sm:m-3 sm:h-[calc(100%-1.5rem)] sm:rounded-[26px] sm:border sm:border-border lg:p-6"
       >
         <div className="mb-5 flex items-center justify-between gap-3">
           <h2 className="section-title">{project ? "Проект" : "Новый проект"}</h2>

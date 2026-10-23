@@ -12,8 +12,8 @@ import {
 } from "@/lib/theme";
 
 const PREVIEW: Record<ThemeId, { sidebar: string; canvas: string; card: string; accent: string }> = {
-  light: { sidebar: "#ffffff", canvas: "#f5f5f7", card: "#ffffff", accent: "#111111" },
-  dark: { sidebar: "#161616", canvas: "#0b0b0b", card: "#141414", accent: "#ececec" },
+  light: { sidebar: "#ffffff", canvas: "#f3f4f2", card: "#ffffff", accent: "#12283a" },
+  dark: { sidebar: "#121e29", canvas: "#0b141c", card: "#121e29", accent: "#b9ef1c" },
 };
 
 const OPTIONS: { id: ThemePreference; name: string; description: string }[] = [
@@ -47,7 +47,7 @@ export function ThemePicker() {
                 : "border-border hover:border-ring/40",
             )}
           >
-            <div className="flex h-[88px] overflow-hidden rounded-[22px]" aria-hidden="true">
+            <div className="flex h-[88px] overflow-hidden rounded-[16px]" aria-hidden="true">
               {option.id === "system" ? (
                 <>
                   <Preview theme="light" />

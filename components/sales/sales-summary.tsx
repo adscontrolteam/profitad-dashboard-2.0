@@ -30,7 +30,7 @@ export function SalesSummaryTiles({ summary }: { summary: SalesSummary }) {
       {tiles.map((tile) => (
         <Card key={tile.label}>
           <p className="text-xs text-muted-foreground">{tile.label}</p>
-          <p className={cn("mt-2 text-3xl font-semibold tracking-[-0.045em] tabular-nums lg:text-4xl", tile.tone)}>
+          <p className={cn("mt-2 font-display text-3xl font-extrabold tracking-[-0.03em] tabular-nums lg:text-4xl", tile.tone)}>
             {tile.value}
           </p>
           <p className="mt-1 text-xs text-muted-foreground tabular-nums">{tile.hint}</p>

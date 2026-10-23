@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ICONS } from "@/components/icons/nav-icons";
+import { Logo } from "@/components/ui/logo";
 import { SignalDot } from "@/components/ui/signal";
 import { APP_CONFIG } from "@/config/app";
 import { isNavItemActive, type NavItem } from "@/config/navigation";
@@ -14,9 +15,9 @@ export function Sidebar({ items, projects }: { items: NavItem[]; projects: Proje
   const footer = items.filter((item) => item.footer);
 
   return (
-    <aside className="glass hidden shrink-0 flex-col overflow-hidden rounded-[28px] text-sidebar-foreground backdrop-blur-xl lg:sticky lg:top-3 lg:flex lg:h-[calc(100dvh-1.5rem)] lg:w-[248px]">
-      <Link href="/" className="px-6 pt-6 text-[22px] font-semibold tracking-[-0.04em]">
-        {APP_CONFIG.name}
+    <aside className="glass hidden shrink-0 flex-col overflow-hidden rounded-[26px] text-sidebar-foreground backdrop-blur-xl lg:sticky lg:top-3 lg:flex lg:h-[calc(100dvh-1.5rem)] lg:w-[248px]">
+      <Link href="/" className="px-6 pt-6" aria-label={APP_CONFIG.name}>
+        <Logo className="w-[148px]" />
       </Link>
 
       <nav className="flex min-h-0 flex-1 flex-col gap-1 px-3 pt-5" aria-label="Навигация">

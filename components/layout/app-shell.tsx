@@ -30,7 +30,7 @@ export function AppShell({
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between gap-3 border-b border-border bg-background/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-md lg:static lg:mb-3 lg:h-14 lg:rounded-full lg:border lg:bg-[var(--glass)] lg:px-5 lg:pt-0 lg:backdrop-blur-sm">
-            <h1 className="min-w-0 truncate text-base font-semibold tracking-[-0.04em] sm:text-lg lg:text-[22px]">
+            <h1 className="min-w-0 truncate text-base font-bold tracking-[-0.02em] sm:text-lg lg:text-[22px]">
               {getPageTitle(pathname, projects)}
             </h1>
             <div className="flex shrink-0 items-center gap-3">

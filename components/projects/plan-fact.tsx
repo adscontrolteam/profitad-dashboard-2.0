@@ -18,12 +18,12 @@ export function PlanFact({ result, elapsed }: { result: KpiStats; elapsed: numbe
           <p className="text-xs text-muted-foreground">
             План / факт · {METRICS[kpi.metric].label.toLowerCase()}
           </p>
-          <p className="mt-1 text-2xl font-semibold tracking-[-0.045em] tabular-nums">
+          <p className="mt-1 font-display text-2xl font-extrabold tracking-[-0.03em] tabular-nums">
             {formatMetric(result.fact, format)}
             <span className="text-muted-foreground"> / {formatMetric(kpi.plan, format)}</span>
           </p>
         </div>
-        <p className={cn("text-2xl font-semibold tracking-[-0.045em] tabular-nums", SIGNAL_TEXT[level])}>
+        <p className={cn("font-display text-2xl font-extrabold tracking-[-0.03em] tabular-nums", SIGNAL_TEXT[level])}>
           {result.progress === null ? "—" : formatPercent(result.progress)}
         </p>
       </div>

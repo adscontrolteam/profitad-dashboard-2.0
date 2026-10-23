@@ -22,7 +22,7 @@ export function StatTile({
   className?: string;
 }) {
   return (
-    <div className={cn("min-w-0 rounded-[22px] border border-border bg-background/70 px-4 py-3", className)}>
+    <div className={cn("min-w-0 rounded-[16px] border border-border bg-background/70 px-4 py-3", className)}>
       <p className="text-xs text-muted-foreground">{label}</p>
       <div className="mt-1 text-sm font-semibold leading-6 tabular-nums [overflow-wrap:anywhere]">
         {children}

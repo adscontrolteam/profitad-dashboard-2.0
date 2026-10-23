@@ -26,7 +26,7 @@ export function MobileTabBar({ items }: { items: NavItem[] }) {
               aria-current={isActive ? "page" : undefined}
               className={cn(
                 "flex size-12 items-center justify-center rounded-full transition-colors [-webkit-tap-highlight-color:transparent] touch-manipulation",
-                isActive ? "bg-muted text-foreground" : "text-muted-foreground active:bg-muted/70",
+                isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground active:bg-muted/70",
               )}
             >
               <Icon className="size-5" />

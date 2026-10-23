@@ -1,13 +1,21 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Manrope, Onest } from "next/font/google";
 import { AppClerkProvider } from "@/components/auth/app-clerk-provider";
 import { APP_CONFIG } from "@/config/app";
 import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin", "cyrillic"],
+  weight: ["700", "800"],
+  display: "swap",
+});
+
+const onest = Onest({
+  variable: "--font-onest",
+  subsets: ["latin", "cyrillic"],
+  weight: ["400", "500", "600"],
   display: "swap",
 });
 
@@ -26,7 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="ru"
-      className={`${inter.variable} min-h-dvh antialiased`}
+      className={`${manrope.variable} ${onest.variable} min-h-dvh antialiased`}
       data-theme="light"
       suppressHydrationWarning
     >
