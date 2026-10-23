@@ -15,7 +15,7 @@ interface ProgressBarProps {
 export function ProgressBar({ value, marker, pace = value, className }: ProgressBarProps) {
   const level = paceLevel(pace);
   return (
-    <div className={cn("relative h-2 w-full rounded-full bg-muted", className)}>
+    <div className={cn("relative h-2 w-full rounded-full bg-track", className)}>
       <div
         className={cn(
           "h-full rounded-full transition-[width] duration-500",
