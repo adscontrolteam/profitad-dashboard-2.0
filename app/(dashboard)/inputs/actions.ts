@@ -13,7 +13,8 @@ import {
   type ResultMetric,
   type TrafficPlatform,
 } from "@/lib/domain/types";
-import { createProject, deleteProject, updateProject, type ProjectInput } from "@/lib/projects/store";
+import { createProject, deleteProject, getProjectStatus, updateProject, type ProjectInput } from "@/lib/projects/store";
+import { archiveProjectTasks } from "@/lib/tasks/store";
 
 export interface ProjectActionState {
   ok: boolean;
@@ -92,7 +93,12 @@ export async function saveProjectAction(
   const id = str((raw as Record<string, unknown>).id, 64);
   if (id) {
     if (!canViewProject(viewer.permissions, id)) return { ok: false, message: "Нет доступа к проекту." };
+    const previousStatus = await getProjectStatus(id);
     if (!(await updateProject(id, input, viewer.email))) return { ok: false, message: "Проект не найден." };
+    // Archiving a project archives every task set for it so far; tasks added later stay on the board.
+    if (input.status === "archived" && previousStatus !== "archived") {
+      await archiveProjectTasks(id, viewer.email);
+    }
   } else {
     if (viewer.permissions.projects !== "all") {
       return { ok: false, message: "Создавать проекты может только пользователь с доступом ко всем проектам." };

@@ -59,6 +59,15 @@ function SalesIcon(props: IconProps) {
   );
 }
 
+function TasksIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      <path d="m7.5 9.5 1.5 1.5 3-3M7.5 15h.01M11.5 15H17M14 10h3" />
+    </IconFrame>
+  );
+}
+
 function SettingsIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
@@ -73,5 +82,6 @@ export const NAV_ICONS: Record<AppRoute, (props: IconProps) => ReactNode> = {
   "/analysis": AnalysisIcon,
   "/inputs": InputsIcon,
   "/sales": SalesIcon,
+  "/tasks": TasksIcon,
   "/settings": SettingsIcon,
 };

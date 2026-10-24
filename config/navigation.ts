@@ -1,6 +1,6 @@
 import type { Section } from "@/lib/access/roles";
 
-export type AppRoute = "/" | "/analysis" | "/inputs" | "/sales" | "/settings";
+export type AppRoute = "/" | "/analysis" | "/inputs" | "/sales" | "/tasks" | "/settings";
 
 export interface NavItem {
   label: string;
@@ -18,6 +18,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Анализ", href: "/analysis", section: "analysis", withProjects: true },
   { label: "Вводные", href: "/inputs", section: "inputs" },
   { label: "Sales", href: "/sales", section: "sales" },
+  { label: "Task Manager", href: "/tasks", section: "tasks" },
   { label: "Настройки", href: "/settings", footer: true },
 ];
 

@@ -11,6 +11,7 @@ export const STATUS_META: Record<
   awaiting_offer: { label: "Ждёт оффер", summaryLabel: "Проектов ждёт оффер", tone: "blue" },
   need_contact: { label: "Связаться", summaryLabel: "Проектов связаться", tone: "red" },
   paused: { label: "На паузе", summaryLabel: "Проектов на паузе", tone: "gray" },
+  archived: { label: "В архиве", summaryLabel: "Проектов в архиве", tone: "gray" },
 };
 
 /** Statuses shown as summary cards on the dashboard, in display order. */

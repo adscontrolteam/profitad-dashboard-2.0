@@ -45,7 +45,7 @@ export async function getStatusSummary(permissions: Permissions): Promise<Status
 
 export async function getProjectNav() {
   const projects = await getProjects();
-  return projects.map(({ id, name, status, stats }) => ({
+  return projects.filter((p) => p.status !== "archived").map(({ id, name, status, stats }) => ({
     id,
     name,
     signal: status === "active" ? paceLevel(stats.primary?.pace) : null,

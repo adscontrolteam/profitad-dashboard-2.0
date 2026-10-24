@@ -13,6 +13,7 @@ import {
 import type { AssignableRole, Section } from "@/lib/access/roles";
 import type { Kpi, ProjectStatus, TrafficPlatform, TrafficSource } from "@/lib/domain/types";
 import type { DealStage } from "@/lib/sales/stages";
+import type { TaskStage } from "@/lib/tasks/stages";
 
 /** Access is bound to the account email, so it can be granted before the first sign-in. */
 export const accessGrants = pgTable("access_grants", {
@@ -54,6 +55,52 @@ export const deals = pgTable(
 );
 
 export type DealRow = typeof deals.$inferSelect;
+
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: text("id").primaryKey(),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    /** Not a foreign key: tasks outlive deleted projects. */
+    projectId: text("project_id"),
+    assigneeEmail: text("assignee_email"),
+    deadline: date("deadline"),
+    stage: text("stage").$type<TaskStage>().notNull(),
+    position: doublePrecision("position").notNull().default(0),
+    /** Set when archived by hand or together with its project. */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedBy: text("archived_by"),
+    stageChangedAt: timestamp("stage_changed_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdBy: text("created_by"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedBy: text("updated_by"),
+  },
+  (t) => [
+    index("tasks_stage_position_idx").on(t.stage, t.position),
+    index("tasks_project_idx").on(t.projectId),
+  ],
+);
+
+export type TaskRow = typeof tasks.$inferSelect;
+
+export const taskComments = pgTable(
+  "task_comments",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    authorEmail: text("author_email").notNull(),
+    authorName: text("author_name"),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("task_comments_task_idx").on(t.taskId, t.createdAt)],
+);
+
+export type TaskCommentRow = typeof taskComments.$inferSelect;
 
 export const projects = pgTable("projects", {
   id: text("id").primaryKey(),

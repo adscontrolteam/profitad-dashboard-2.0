@@ -1,4 +1,4 @@
-export const SECTIONS = ["dashboard", "analysis", "inputs", "sales"] as const;
+export const SECTIONS = ["dashboard", "analysis", "inputs", "sales", "tasks"] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export const SECTION_LABELS: Record<Section, string> = {
@@ -6,6 +6,7 @@ export const SECTION_LABELS: Record<Section, string> = {
   analysis: "Анализ",
   inputs: "Вводные",
   sales: "Sales",
+  tasks: "Task Manager",
 };
 
 export const ROLES = ["admin", "project_manager", "marketer", "reader", "custom"] as const;

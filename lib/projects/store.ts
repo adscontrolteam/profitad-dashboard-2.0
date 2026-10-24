@@ -46,6 +46,11 @@ export async function createProject(input: ProjectInput, actorEmail: string) {
   return id;
 }
 
+export async function getProjectStatus(id: string) {
+  const [row] = await getDb().select({ status: projects.status }).from(projects).where(eq(projects.id, id)).limit(1);
+  return row?.status ?? null;
+}
+
 export async function updateProject(id: string, input: ProjectInput, actorEmail: string) {
   const rows = await getDb()
     .update(projects)

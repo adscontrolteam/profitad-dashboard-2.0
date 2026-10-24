@@ -4,6 +4,7 @@ export const PROJECT_STATUSES = [
   "awaiting_offer",
   "need_contact",
   "paused",
+  "archived",
 ] as const;
 
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
