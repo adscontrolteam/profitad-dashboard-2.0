@@ -18,8 +18,6 @@ export interface NavItem {
   section?: Section;
   /** Pinned to the bottom of the sidebar. */
   footer?: boolean;
-  /** Renders the project list under this item. */
-  withProjects?: boolean;
   children?: SubNavItem[];
 }
 
@@ -36,7 +34,7 @@ export const SMM_TABS: SubNavItem[] = [
 ];
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: "Дашборд", href: "/", section: "dashboard", withProjects: true },
+  { label: "Дашборд", href: "/", section: "dashboard" },
   { label: "Реклама", href: "/ads", section: "ads", children: ADS_TABS },
   { label: "SMM", href: "/smm", section: "smm", children: SMM_TABS },
   { label: "Вводные", href: "/inputs", section: "inputs" },

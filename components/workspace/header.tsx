@@ -1,9 +1,13 @@
 import { allowedTabs, ADS_TABS, SMM_TABS } from "@/config/navigation";
 import type { Permissions } from "@/lib/access/roles";
 import type { Workspace } from "@/lib/workspace/context";
-import { ProjectPicker, RangePicker, SectionTabs } from "./toolbar";
+import { ProjectSelect } from "./project-select";
+import { RangePicker, SectionTabs } from "./toolbar";
 
-/** Top of every Ads/SMM page: sub-tabs, project and (optionally) period. */
+/**
+ * Top of every Ads/SMM page: project dropdown and (optionally) period.
+ * Sub-tabs live in the app top bar on desktop and are repeated here only on mobile.
+ */
 export function WorkspaceHeader({
   section,
   pathname,
@@ -26,11 +30,13 @@ export function WorkspaceHeader({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="lg:hidden">
         <SectionTabs tabs={tabs} pathname={pathname} query={workspace.query} />
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ProjectSelect projects={workspace.projects} current={workspace.project?.id} path={pathname} query={query} />
         {withRange && <RangePicker path={pathname} query={query} current={workspace.range.value} />}
       </div>
-      <ProjectPicker projects={workspace.projects} current={workspace.project?.id} path={pathname} query={query} />
       {children}
     </div>
   );

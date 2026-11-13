@@ -62,42 +62,6 @@ export function SectionTabs({
   );
 }
 
-export function ProjectPicker({
-  projects,
-  current,
-  path,
-  query,
-}: {
-  projects: { id: string; name: string }[];
-  current: string | undefined;
-  path: string;
-  query: Query;
-}) {
-  if (projects.length === 0) return null;
-  return (
-    <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <span className="section-kicker">Проект</span>
-      <div className="flex min-w-0 flex-wrap gap-1.5">
-        {projects.map((p) => (
-          <Link
-            key={p.id}
-            href={workspaceHref(path, query, { p: p.id })}
-            scroll={false}
-            className={cn(
-              "rounded-full border px-3 py-1 text-[13px] font-medium transition-colors",
-              p.id === current
-                ? "border-transparent bg-accent text-accent-foreground"
-                : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            {p.name}
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function RangePicker({ path, query, current }: { path: string; query: Query; current: string }) {
   return (
     <PillTabs

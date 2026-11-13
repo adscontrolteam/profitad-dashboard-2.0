@@ -4,13 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ICONS } from "@/components/icons/nav-icons";
 import { Logo } from "@/components/ui/logo";
-import { SignalDot } from "@/components/ui/signal";
 import { APP_CONFIG } from "@/config/app";
 import { isNavItemActive, type NavItem, type SubNavItem } from "@/config/navigation";
 import { cn } from "@/lib/cn";
-import type { ProjectNavItem } from "./types";
 
-export function Sidebar({ items, projects }: { items: NavItem[]; projects: ProjectNavItem[] }) {
+export function Sidebar({ items }: { items: NavItem[] }) {
   const main = items.filter((item) => !item.footer);
   const footer = items.filter((item) => item.footer);
 
@@ -25,7 +23,6 @@ export function Sidebar({ items, projects }: { items: NavItem[]; projects: Proje
           {main.map((item) => (
             <div key={item.href} className="flex flex-col gap-0.5">
               <NavLink item={item} />
-              {item.withProjects ? <ProjectLinks projects={projects} /> : null}
               {item.children && item.children.length > 1 ? <SubLinks items={item.children} /> : null}
             </div>
           ))}
@@ -88,36 +85,6 @@ function SubLinks({ items }: { items: SubNavItem[] }) {
             >
               <span className="size-1.5 shrink-0 rounded-full bg-current opacity-50" />
               <span className="truncate">{item.label}</span>
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function ProjectLinks({ projects }: { projects: ProjectNavItem[] }) {
-  const pathname = usePathname();
-  if (projects.length === 0) return null;
-
-  return (
-    <ul className="flex flex-col gap-0.5 pl-6">
-      {projects.map((p) => {
-        const href = `/projects/${p.id}`;
-        const active = pathname === href;
-        return (
-          <li key={p.id}>
-            <Link
-              href={href}
-              className={cn(
-                "flex items-center gap-2.5 rounded-full px-3 py-1.5 text-[13px] font-medium tracking-[-0.01em] transition-colors",
-                active
-                  ? "bg-accent text-accent-foreground"
-                  : "text-sidebar-muted hover:bg-sidebar-hover hover:text-sidebar-foreground",
-              )}
-            >
-              {p.signal ? <SignalDot level={p.signal} /> : <span className="size-2 shrink-0" />}
-              <span className="truncate">{p.name}</span>
             </Link>
           </li>
         );
