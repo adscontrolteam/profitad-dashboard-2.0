@@ -17,6 +17,10 @@ function toRow(input: ProjectInput) {
     notes: input.notes,
     smmEmail: input.owners.smm,
     mediaBuyerEmail: input.owners.mediaBuyer,
+    leadActions: input.agent.leadActions,
+    currency: input.agent.currency,
+    budgetMonth: input.agent.budgetMonth,
+    agentDailyReport: input.agent.dailyReport,
   };
 }
 

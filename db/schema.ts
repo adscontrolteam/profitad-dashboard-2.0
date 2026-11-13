@@ -117,6 +117,11 @@ export const projects = pgTable("projects", {
   /** Responsible SMM and media buyer (account emails); null = not assigned. */
   smmEmail: text("smm_email"),
   mediaBuyerEmail: text("media_buyer_email"),
+  /** What the AI agent needs (read by the agent through the bot_sync role; see docs/agent-contract.md). */
+  leadActions: jsonb("lead_actions").$type<string[]>().notNull().default([]),
+  currency: text("currency"),
+  budgetMonth: doublePrecision("budget_month"),
+  agentDailyReport: boolean("agent_daily_report").notNull().default(true),
   position: integer("position").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

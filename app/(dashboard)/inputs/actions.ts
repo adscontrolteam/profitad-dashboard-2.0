@@ -82,6 +82,15 @@ function parseProject(raw: unknown): ProjectInput | string {
       smm: str(data.smmEmail, 200).toLowerCase() || null,
       mediaBuyer: str(data.mediaBuyerEmail, 200).toLowerCase() || null,
     },
+    agent: {
+      leadActions: (Array.isArray(data.leadActions) ? data.leadActions : [])
+        .map((a) => str(a, 200))
+        .filter(Boolean)
+        .slice(0, 30),
+      currency: /^[A-Z]{3}$/.test(str(data.currency, 3).toUpperCase()) ? str(data.currency, 3).toUpperCase() : null,
+      budgetMonth: positive(data.budgetMonth),
+      dailyReport: data.agentDailyReport !== false,
+    },
   };
 }
 
@@ -160,5 +169,19 @@ async function provision(projectId: string, name: string, actorEmail: string, dr
     const message = error instanceof Error ? error.message : String(error);
     await audit({ actorEmail, action: "project.provision", projectId, ok: false, result: message });
     return `Проект добавлен, но ${report ? "папку и Репорт" : "папку"} создать не удалось: ${message} Повторить можно в карточке проекта → Подключения.`;
+  }
+}
+
+/** Conversion actions of a Google Ads account, to choose what counts as a lead. */
+export async function listConversionActionsAction(accountId: string): Promise<{ ok: boolean; actions: string[]; message?: string }> {
+  await requireSection("inputs");
+  const id = accountId.replace(/\D/g, "");
+  if (!id) return { ok: false, actions: [] };
+  try {
+    const { adsConfigured, conversionActions } = await import("@/lib/google/ads");
+    if (!adsConfigured()) return { ok: false, actions: [], message: "Google Ads API не настроен." };
+    return { ok: true, actions: (await conversionActions(id)).map((a) => a.name) };
+  } catch (error) {
+    return { ok: false, actions: [], message: error instanceof Error ? error.message : "Ошибка Google Ads" };
   }
 }

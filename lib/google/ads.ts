@@ -188,3 +188,16 @@ export async function createSearchCampaign(customerId: string, spec: SearchCampa
   const created = data?.mutateOperationResponses?.find((r) => r.campaignResult)?.campaignResult?.resourceName ?? null;
   return { campaignResourceName: created, campaignId: created?.split("/").pop() ?? null };
 }
+
+/** Enabled conversion actions of an account (to pick what counts as a lead). */
+export async function conversionActions(customerId: string): Promise<{ name: string; category: string }[]> {
+  const rows = await gaql(
+    customerId,
+    "SELECT conversion_action.name, conversion_action.category FROM conversion_action WHERE conversion_action.status = 'ENABLED'",
+  );
+  return rows
+    .map((r) => r.conversionAction as { name?: string; category?: string })
+    .map((c) => ({ name: c.name ?? "", category: c.category ?? "" }))
+    .filter((c) => c.name)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}

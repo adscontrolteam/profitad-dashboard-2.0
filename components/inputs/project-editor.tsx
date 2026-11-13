@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState, useTransition } from "react";
 import {
   deleteProjectAction,
+  listConversionActionsAction,
   saveProjectAction,
   type ProjectActionState,
 } from "@/app/(dashboard)/inputs/actions";
@@ -84,6 +85,10 @@ export function ProjectEditor({
   const [createReport, setCreateReport] = useState(Boolean(serviceAccountEmail));
   const [smmEmail, setSmmEmail] = useState(project?.owners.smm ?? "");
   const [mediaBuyerEmail, setMediaBuyerEmail] = useState(project?.owners.mediaBuyer ?? "");
+  const [leadActions, setLeadActions] = useState<string[]>(project?.agent.leadActions ?? []);
+  const [currency, setCurrency] = useState(project?.agent.currency ?? "");
+  const [budgetMonth, setBudgetMonth] = useState(project?.agent.budgetMonth?.toString() ?? "");
+  const [agentDailyReport, setAgentDailyReport] = useState(project?.agent.dailyReport ?? true);
 
   const [state, formAction, saving] = useActionState(async (prev: ProjectActionState, formData: FormData) => {
     const next = await saveProjectAction(prev, formData);
@@ -111,6 +116,10 @@ export function ProjectEditor({
     notes,
     smmEmail,
     mediaBuyerEmail,
+    leadActions,
+    currency,
+    budgetMonth,
+    agentDailyReport,
     createDrive: !project && (createDrive || createReport),
     createReport: !project && createReport,
   });
@@ -305,6 +314,19 @@ export function ProjectEditor({
             </button>
           </fieldset>
 
+          <AgentSettings
+            googleAccountId={sources.find((src) => src.platform === "google" && src.accountId)?.accountId.replace(/\D/g, "") ?? ""}
+            adsAccounts={adsAccounts}
+            leadActions={leadActions}
+            setLeadActions={setLeadActions}
+            currency={currency}
+            setCurrency={setCurrency}
+            budgetMonth={budgetMonth}
+            setBudgetMonth={setBudgetMonth}
+            dailyReport={agentDailyReport}
+            setDailyReport={setAgentDailyReport}
+          />
+
           {project ? (
             <ProjectIntegrations projectId={project.id} integrations={integrations} serviceAccountEmail={serviceAccountEmail} />
           ) : (
@@ -368,6 +390,121 @@ export function ProjectEditor({
         </form>
       </aside>
     </div>
+  );
+}
+
+function AgentSettings({
+  googleAccountId,
+  adsAccounts,
+  leadActions,
+  setLeadActions,
+  currency,
+  setCurrency,
+  budgetMonth,
+  setBudgetMonth,
+  dailyReport,
+  setDailyReport,
+}: {
+  googleAccountId: string;
+  adsAccounts: AdsAccountOption[] | null;
+  leadActions: string[];
+  setLeadActions: (v: string[]) => void;
+  currency: string;
+  setCurrency: (v: string) => void;
+  budgetMonth: string;
+  setBudgetMonth: (v: string) => void;
+  dailyReport: boolean;
+  setDailyReport: (v: boolean) => void;
+}) {
+  const [available, setAvailable] = useState<string[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [custom, setCustom] = useState("");
+
+  // Conversion actions of the chosen Google Ads account; currency comes from the account too.
+  useEffect(() => {
+    let cancelled = false;
+    if (!googleAccountId) return;
+    const account = adsAccounts?.find((a) => a.id === googleAccountId);
+    if (account?.currency && !currency) setCurrency(account.currency);
+    listConversionActionsAction(googleAccountId).then((r) => {
+      if (cancelled) return;
+      setAvailable(r.ok ? r.actions : null);
+      setLoadError(r.ok ? null : (r.message ?? null));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Re-run only when the account changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleAccountId]);
+
+  const options = [...new Set([...(available ?? []), ...leadActions])];
+  const toggle = (name: string) =>
+    setLeadActions(leadActions.includes(name) ? leadActions.filter((a) => a !== name) : [...leadActions, name]);
+
+  return (
+    <fieldset className="flex flex-col gap-3">
+      <legend className="section-kicker mb-2">AI-агент</legend>
+      <p className="-mt-1 text-xs leading-5 text-muted-foreground">
+        Агент берёт проект отсюда: цель и цену заявки — из KPI, бриф — из заметок. Заводить клиента в Telegram больше не нужно.
+      </p>
+      <Field label="Что считать заявкой (конверсии Google Ads)">
+        {!googleAccountId ? (
+          <span className="text-xs text-muted-foreground">Выберите кабинет Google Ads в источниках — появится список конверсий.</span>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {options.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {options.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => toggle(name)}
+                    aria-pressed={leadActions.includes(name)}
+                    className={
+                      leadActions.includes(name)
+                        ? "rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground"
+                        : "rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+                    }
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs text-muted-foreground">{available === null && !loadError ? "Загружаю конверсии…" : "Конверсий в кабинете нет."}</span>
+            )}
+            {loadError && <span className="text-xs text-warning">{loadError} Можно вписать вручную:</span>}
+            <div className="flex gap-2">
+              <input className="field" placeholder="Название конверсии вручную" value={custom} onChange={(e) => setCustom(e.target.value)} />
+              <button
+                type="button"
+                className="btn-ghost shrink-0 border border-border px-3 py-1.5 text-xs"
+                disabled={!custom.trim()}
+                onClick={() => {
+                  if (!leadActions.includes(custom.trim())) setLeadActions([...leadActions, custom.trim()]);
+                  setCustom("");
+                }}
+              >
+                Добавить
+              </button>
+            </div>
+          </div>
+        )}
+      </Field>
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="Бюджет на месяц">
+          <input className="field tabular-nums" inputMode="decimal" placeholder="—" value={budgetMonth} onChange={(e) => setBudgetMonth(e.target.value)} />
+        </Field>
+        <Field label="Валюта кабинета">
+          <input className="field uppercase" maxLength={3} placeholder="EUR" value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} />
+        </Field>
+      </div>
+      <label className="flex cursor-pointer items-center gap-3 text-sm">
+        <input type="checkbox" checked={dailyReport} onChange={(e) => setDailyReport(e.target.checked)} className="size-4 accent-[var(--accent)]" />
+        Утренний отчёт агента в Telegram
+      </label>
+    </fieldset>
   );
 }
 

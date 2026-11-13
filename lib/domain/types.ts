@@ -59,7 +59,19 @@ export interface Project {
   sources: TrafficSource[];
   notes: string;
   owners: ProjectOwners;
+  agent: ProjectAgentSettings;
   metrics: Metrics;
+}
+
+/** Settings the AI agent takes from the project instead of asking in Telegram. */
+export interface ProjectAgentSettings {
+  /** Google Ads conversion actions that count as a lead (names as in the account). */
+  leadActions: string[];
+  /** Ad account currency, e.g. EUR. */
+  currency: string | null;
+  budgetMonth: number | null;
+  /** Morning report in Telegram. */
+  dailyReport: boolean;
 }
 
 /** People responsible for the project (account emails); null = not assigned. */

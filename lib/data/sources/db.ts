@@ -39,6 +39,12 @@ function toProject(row: ProjectRow, metrics: Metrics): Project {
     sources: row.sources,
     notes: row.notes,
     owners: { smm: row.smmEmail ?? null, mediaBuyer: row.mediaBuyerEmail ?? null },
+    agent: {
+      leadActions: row.leadActions ?? [],
+      currency: row.currency ?? null,
+      budgetMonth: row.budgetMonth ?? null,
+      dailyReport: row.agentDailyReport ?? true,
+    },
     metrics,
   };
 }

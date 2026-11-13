@@ -33,7 +33,7 @@ export default async function InputsPage() {
         integrations={integrationsByProject}
         serviceAccountEmail={serviceAccountEmail()}
         adsAccounts={adsAccounts}
-        projects={projects.map(({ id, name, status, goal, period, kpis, sources, notes, owners }) => ({
+        projects={projects.map(({ id, name, status, goal, period, kpis, sources, notes, owners, agent }) => ({
           id,
           name,
           status,
@@ -43,6 +43,7 @@ export default async function InputsPage() {
           sources,
           notes,
           owners,
+          agent,
         }))}
         canEdit={permissions.canEditInputs}
         canCreate={permissions.canEditInputs && permissions.projects === "all"}
