@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Регистрация" };
 export default function SignUpPage() {
   return (
     <AuthScreen>
-      <SignUp />
+      <SignUp fallbackRedirectUrl="/profile" />
     </AuthScreen>
   );
 }

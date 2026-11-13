@@ -23,7 +23,7 @@ export default function NoAccessPage() {
 async function NoAccessDetails() {
   const state = await getViewerState();
   if (state.status === "signed-out") redirect("/sign-in");
-  if (state.status === "ok") redirect("/");
+  if (state.status === "ok") redirect("/profile");
 
   return (
     <>

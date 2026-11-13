@@ -14,7 +14,7 @@ export function Sidebar({ items }: { items: NavItem[] }) {
 
   return (
     <aside className="glass hidden shrink-0 flex-col overflow-hidden rounded-[26px] text-sidebar-foreground backdrop-blur-xl lg:sticky lg:top-3 lg:flex lg:h-[calc(100dvh-1.5rem)] lg:w-[248px]">
-      <Link href="/" className="px-6 pt-6" aria-label={APP_CONFIG.name}>
+      <Link href="/profile" className="px-6 pt-6" aria-label={APP_CONFIG.name}>
         <Logo className="w-[148px]" />
       </Link>
 

@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Вход" };
 export default function SignInPage() {
   return (
     <AuthScreen>
-      <SignIn />
+      <SignIn fallbackRedirectUrl="/profile" />
     </AuthScreen>
   );
 }
