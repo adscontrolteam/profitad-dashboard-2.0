@@ -48,14 +48,17 @@ export async function detectReport(spreadsheetId: string) {
 
 const ddmmyyyy = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
 
-function sameDay(cell: string, iso: string) {
-  const c = cell.trim();
+function sameDay(cell: string | undefined, iso: string) {
+  const c = (cell ?? "").trim();
   if (c === ddmmyyyy(iso) || c === iso) return true;
   const m = c.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   return Boolean(m && `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` === iso);
 }
 
-const isDateCell = (v: string) => /^\d{1,2}\.\d{1,2}\.\d{4}$/.test(v.trim()) || /^\d{4}-\d{2}-\d{2}$/.test(v.trim());
+const isDateCell = (v: string | undefined) => {
+  const c = (v ?? "").trim();
+  return /^\d{1,2}\.\d{1,2}\.\d{4}$/.test(c) || /^\d{4}-\d{2}-\d{2}$/.test(c);
+};
 
 /**
  * Writes the last `days` days of ad results into the report: finds the row by date in column A and fills
@@ -80,6 +83,7 @@ export async function writeReport(projectId: string, cfg: SheetsReportConfig, da
 
   const cells: { tab: string; cell: string; value: number }[] = [];
   const newRows: { tab: string; row: number; values: (string | number)[] }[] = [];
+  const formatCopies: { tab: string; from: number; to: number }[] = [];
 
   for (const tab of cfg.tabs) {
     const relevant = rows.filter((r) => tab.platform === "all" || r.platform === tab.platform);
@@ -111,7 +115,7 @@ export async function writeReport(projectId: string, cfg: SheetsReportConfig, da
         }
         continue;
       }
-      if (date < (colA.filter(isDateCell).map(toIso).sort()[0] ?? "0000")) continue; // never insert before the history
+      if (date < (colA.filter((v) => isDateCell(v)).map(toIso).sort()[0] ?? "0000")) continue; // never insert before the history
 
       // New day: copy the prototype row's formulas, then put the date and our numbers in.
       if (protoFormulas === null) {
@@ -121,6 +125,7 @@ export async function writeReport(projectId: string, cfg: SheetsReportConfig, da
         if (protoIndex < 0) {
           protoIndex = p;
           nextFree = p; // empty template: the first data row is free
+          while (colA.length < p) colA.push("");
         }
       }
       const target = nextFree++;
@@ -134,11 +139,29 @@ export async function writeReport(projectId: string, cfg: SheetsReportConfig, da
         values[idx] = rounded(metric, totals[metric]);
       }
       newRows.push({ tab: tab.tab, row: target + 1, values });
+      if (target !== protoIndex) formatCopies.push({ tab: tab.tab, from: protoIndex, to: target });
       colA[target] = ddmmyyyy(date);
     }
   }
   const written = await writeCells(cfg.spreadsheetId, cells);
-  return written + (await writeRows(cfg.spreadsheetId, newRows));
+  const added = await writeRows(cfg.spreadsheetId, newRows);
+  if (formatCopies.length) {
+    // New rows take the number formats (%, currency) of the row they were copied from.
+    const { sheetIds } = await spreadsheetInfo(cfg.spreadsheetId);
+    await batchUpdate(
+      cfg.spreadsheetId,
+      formatCopies
+        .filter((f) => sheetIds.has(f.tab))
+        .map((f) => ({
+          copyPaste: {
+            source: { sheetId: sheetIds.get(f.tab), startRowIndex: f.from, endRowIndex: f.from + 1 },
+            destination: { sheetId: sheetIds.get(f.tab), startRowIndex: f.to, endRowIndex: f.to + 1 },
+            pasteType: "PASTE_FORMAT",
+          },
+        })),
+    );
+  }
+  return written + added;
 }
 
 function toIso(cell: string) {

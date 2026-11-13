@@ -303,7 +303,8 @@ function ReportCard({ projectId, current }: { projectId: string; current?: Integ
     <Shell kind="sheets_report" current={current} projectId={projectId} summary={cfg && `«${cfg.title}» · листы: ${cfg.tabs.map((t) => t.tab).join(", ")}`}>
       <p className="text-xs leading-5 text-muted-foreground">
         Каждый день дашборд находит строку с датой в колонке A и вписывает расход, показы, клики, лиды и подписки за последние 3 дня
-        (Google досчитывает конверсии задним числом). Формулы и ручные колонки не трогаются, строки не добавляются.
+        (Google досчитывает конверсии задним числом). Формулы и ручные колонки не трогаются; если строки с датой нет, она
+        добавляется под последней с теми же формулами и форматом.
       </p>
       {!current && (
         <div>
