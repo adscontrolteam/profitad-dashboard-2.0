@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { LocalClock } from "@/components/profile/local-clock";
 import { ProjectCard } from "@/components/projects/project-card";
 import { TaskBoard } from "@/components/tasks/task-board";
@@ -30,12 +31,14 @@ export default async function ProfilePage() {
     (t) => t.assigneeEmail === viewer.email && (t.projectId === null || canViewProject(permissions, t.projectId)),
   );
 
-  // «Мои проекты»: the ones the person is limited to, otherwise the ones where they have open tasks.
-  const myProjectIds = new Set(
-    permissions.projects === "all"
+  // «Мои проекты»: where the person is responsible (SMM / MediaBuyer) or has open tasks;
+  // for someone limited to selected projects, those projects.
+  const myProjectIds = new Set([
+    ...projects.filter((p) => p.owners.smm === viewer.email || p.owners.mediaBuyer === viewer.email).map((p) => p.id),
+    ...(permissions.projects === "all"
       ? myTasks.filter((t) => t.stage !== "done" && t.projectId).map((t) => t.projectId as string)
-      : permissions.projects,
-  );
+      : permissions.projects),
+  ]);
   const myProjects = projects.filter((p) => p.status === "active" && myProjectIds.has(p.id));
 
   const today = new Date().toISOString().slice(0, 10);
@@ -72,9 +75,13 @@ export default async function ProfilePage() {
       {showProjects && (
         <Card className="min-w-0">
           <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="section-title">Твои проекты в работе</h2>
+            <Link href="/" className="group">
+              <h2 className="section-title group-hover:underline">Твои проекты в работе →</h2>
+            </Link>
             <p className="text-xs text-muted-foreground">
-              {permissions.projects === "all" ? "Активные проекты, где у тебя есть открытые задачи" : "Проекты, к которым у тебя доступ"}
+              {permissions.projects === "all"
+                ? "Активные проекты, где ты ответственный или у тебя есть открытые задачи"
+                : "Проекты, к которым у тебя доступ"}
             </p>
           </div>
           {myProjects.length > 0 ? (
@@ -85,7 +92,7 @@ export default async function ProfilePage() {
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Пока нет активных проектов с твоими задачами. Они появятся здесь, когда тебе назначат задачу в проекте.
+              Пока нет активных проектов, где ты ответственный или у тебя есть задачи.
             </p>
           )}
         </Card>
@@ -93,7 +100,9 @@ export default async function ProfilePage() {
 
       {showTasks && (
         <Card className="min-w-0">
-          <h2 className="section-title mb-4">Твои задачи</h2>
+          <Link href="/tasks" className="group mb-4 block w-fit">
+            <h2 className="section-title group-hover:underline">Твои задачи →</h2>
+          </Link>
           <TaskBoard
             key="profile-board"
             tasks={myTasks}

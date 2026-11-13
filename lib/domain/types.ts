@@ -58,7 +58,14 @@ export interface Project {
   kpis: Kpi[];
   sources: TrafficSource[];
   notes: string;
+  owners: ProjectOwners;
   metrics: Metrics;
+}
+
+/** People responsible for the project (account emails); null = not assigned. */
+export interface ProjectOwners {
+  smm: string | null;
+  mediaBuyer: string | null;
 }
 
 export interface KpiStats {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useDeferredValue, useOptimistic, useState, useTransition } from "react";
 import { archiveTasksAction, moveTaskAction } from "@/app/(dashboard)/tasks/actions";
 import { TONE_DOT } from "@/components/ui/status-badge";
@@ -32,6 +33,7 @@ export function TaskBoard({
   viewerEmail,
   canModerate,
   personal = false,
+  initialTaskId = null,
 }: {
   tasks: Task[];
   projects: TaskProject[];
@@ -41,7 +43,10 @@ export function TaskBoard({
   canModerate: boolean;
   /** Board of the viewer's own tasks (profile): no assignee filter, new tasks go to the viewer. */
   personal?: boolean;
+  /** Opens this task on load (links like /tasks?task=<id>). */
+  initialTaskId?: string | null;
 }) {
+  const router = useRouter();
   const [optimisticTasks, applyChange] = useOptimistic(
     tasks,
     (state, change: Move | { archive: string[] }) =>
@@ -57,7 +62,10 @@ export function TaskBoard({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
-  const [drawer, setDrawer] = useState<{ task: Task | null; stage: TaskStage } | null>(null);
+  const [drawer, setDrawer] = useState<{ task: Task | null; stage: TaskStage } | null>(() => {
+    const task = initialTaskId ? tasks.find((t) => t.id === initialTaskId) : undefined;
+    return task ? { task, stage: task.stage } : null;
+  });
 
   const projectsById = new Map(projects.map((p) => [p.id, p]));
   const teamByEmail = new Map(team.map((m) => [m.email, m]));
@@ -251,7 +259,9 @@ export function TaskBoard({
                       selected={selected.has(task.id)}
                       selecting={selected.size > 0}
                       onSelect={(on) => toggle([task.id], on)}
-                      onOpen={() => setDrawer({ task, stage: task.stage })}
+                      onOpen={() =>
+                        personal ? router.push(`/tasks?task=${task.id}`) : setDrawer({ task, stage: task.stage })
+                      }
                     />
                   </li>
                 ))}
@@ -297,7 +307,11 @@ export function TaskBoard({
           viewerEmail={viewerEmail}
           canModerate={canModerate}
           defaultAssignee={personal ? viewerEmail : null}
-          onClose={() => setDrawer(null)}
+          onClose={() => {
+            setDrawer(null);
+            // Drop ?task= so a reload does not reopen the task.
+            if (initialTaskId && window.location.search.includes("task=")) router.replace("/tasks", { scroll: false });
+          }}
         />
       )}
     </section>

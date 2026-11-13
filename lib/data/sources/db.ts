@@ -38,6 +38,7 @@ function toProject(row: ProjectRow, metrics: Metrics): Project {
     kpis: row.kpis,
     sources: row.sources,
     notes: row.notes,
+    owners: { smm: row.smmEmail ?? null, mediaBuyer: row.mediaBuyerEmail ?? null },
     metrics,
   };
 }

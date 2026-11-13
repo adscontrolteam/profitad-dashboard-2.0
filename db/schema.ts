@@ -112,6 +112,9 @@ export const projects = pgTable("projects", {
   kpis: jsonb("kpis").$type<Kpi[]>().notNull().default([]),
   sources: jsonb("sources").$type<TrafficSource[]>().notNull().default([]),
   notes: text("notes").notNull().default(""),
+  /** Responsible SMM and media buyer (account emails); null = not assigned. */
+  smmEmail: text("smm_email"),
+  mediaBuyerEmail: text("media_buyer_email"),
   position: integer("position").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

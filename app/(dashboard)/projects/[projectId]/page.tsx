@@ -10,6 +10,9 @@ import { canViewProject, canViewSection } from "@/lib/access/policy";
 import { getViewerState, requireProject } from "@/lib/access/viewer";
 import { getProject, getProjects } from "@/lib/data";
 import { formatDate } from "@/lib/format";
+import type { ProjectOwners } from "@/lib/domain/types";
+import { memberLabel } from "@/components/tasks/types";
+import { listTeam } from "@/lib/tasks/team";
 
 export async function generateStaticParams() {
   const projects = await getProjects();
@@ -45,6 +48,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[proj
           {formatDate(project.period.start)} — {formatDate(project.period.end)}
         </span>
         <SourceChips sources={project.sources} />
+        <ProjectOwnersLine owners={project.owners} />
         <div className="ml-auto flex flex-wrap gap-2">
           {canViewSection(permissions, "ads") && (
             <Link href={`/ads?p=${project.id}`} className="btn-ghost border border-border px-3 py-1.5">
@@ -80,5 +84,21 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[proj
 
       <MetricsGrid metrics={project.metrics} />
     </div>
+  );
+}
+
+async function ProjectOwnersLine({ owners }: { owners: ProjectOwners }) {
+  if (!owners.smm && !owners.mediaBuyer) return null;
+  const team = await listTeam();
+  const name = (email: string | null) => {
+    if (!email) return "—";
+    const member = team.find((m) => m.email === email);
+    return memberLabel(member, email);
+  };
+  return (
+    <span className="text-sm text-muted-foreground">
+      SMM: <span className="font-medium text-foreground">{name(owners.smm)}</span> · MediaBuyer:{" "}
+      <span className="font-medium text-foreground">{name(owners.mediaBuyer)}</span>
+    </span>
   );
 }

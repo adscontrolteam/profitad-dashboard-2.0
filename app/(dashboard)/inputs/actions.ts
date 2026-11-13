@@ -9,11 +9,14 @@ import {
   RESULT_METRICS,
   TRAFFIC_PLATFORMS,
   type Kpi,
+  type ProjectOwners,
   type ProjectStatus,
   type ResultMetric,
   type TrafficPlatform,
 } from "@/lib/domain/types";
 import { createProject, deleteProject, getProjectStatus, updateProject, type ProjectInput } from "@/lib/projects/store";
+import { getProject } from "@/lib/data";
+import { listOwnerCandidates } from "@/lib/projects/owners";
 import { archiveProjectTasks } from "@/lib/tasks/store";
 
 export interface ProjectActionState {
@@ -71,7 +74,23 @@ function parseProject(raw: unknown): ProjectInput | string {
     kpis,
     sources,
     notes: str(data.notes, 5000),
+    owners: {
+      smm: str(data.smmEmail, 200).toLowerCase() || null,
+      mediaBuyer: str(data.mediaBuyerEmail, 200).toLowerCase() || null,
+    },
   };
+}
+
+/** Owners must have the matching role (or be admins); an unchanged previous owner is kept as is. */
+async function checkOwners(input: ProjectInput, previous: ProjectOwners | null): Promise<string | null> {
+  const candidates = await listOwnerCandidates();
+  const ok = (email: string | null, list: { email: string }[], prev: string | null | undefined) =>
+    email === null || email === prev || list.some((c) => c.email === email);
+  if (!ok(input.owners.smm, candidates.smm, previous?.smm)) return "Ответственный SMM должен иметь роль SMM.";
+  if (!ok(input.owners.mediaBuyer, candidates.mediaBuyer, previous?.mediaBuyer)) {
+    return "Ответственный MediaBuyer должен иметь роль MediaBuyer.";
+  }
+  return null;
 }
 
 export async function saveProjectAction(
@@ -91,6 +110,9 @@ export async function saveProjectAction(
   if (typeof input === "string") return { ok: false, message: input };
 
   const id = str((raw as Record<string, unknown>).id, 64);
+  const ownersError = await checkOwners(input, id ? ((await getProject(id))?.owners ?? null) : null);
+  if (ownersError) return { ok: false, message: ownersError };
+
   if (id) {
     if (!canViewProject(viewer.permissions, id)) return { ok: false, message: "Нет доступа к проекту." };
     const previousStatus = await getProjectStatus(id);

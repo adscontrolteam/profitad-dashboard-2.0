@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AvatarSettings } from "@/components/settings/avatar-settings";
 import { ThemePicker } from "@/components/settings/theme-picker";
 import { Card } from "@/components/ui/card";
 import { requireViewer } from "@/lib/access/viewer";
@@ -11,6 +12,8 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      <AvatarSettings />
+
       <Card className="min-w-0">
         <h2 className="section-title">Оформление</h2>
         <p className="mt-1 text-sm text-muted-foreground">Выбор сохраняется на этом устройстве.</p>

@@ -15,6 +15,8 @@ function toRow(input: ProjectInput) {
     kpis: input.kpis,
     sources: input.sources,
     notes: input.notes,
+    smmEmail: input.owners.smm,
+    mediaBuyerEmail: input.owners.mediaBuyer,
   };
 }
 

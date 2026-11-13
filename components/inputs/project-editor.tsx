@@ -7,6 +7,7 @@ import {
   type ProjectActionState,
 } from "@/app/(dashboard)/inputs/actions";
 import { METRICS, PLATFORM_LABELS } from "@/lib/domain/metrics";
+import type { OwnerCandidates, OwnerOption } from "@/lib/projects/owners";
 import { STATUS_META } from "@/lib/domain/statuses";
 import {
   PROJECT_STATUSES,
@@ -44,10 +45,12 @@ function currentMonth() {
 
 export function ProjectEditor({
   project,
+  owners,
   canDelete,
   onClose,
 }: {
   project: EditableProject | null;
+  owners: OwnerCandidates;
   canDelete: boolean;
   onClose: () => void;
 }) {
@@ -62,6 +65,8 @@ export function ProjectEditor({
     ],
   );
   const [sources, setSources] = useState<SourceDraft[]>(project?.sources ?? []);
+  const [smmEmail, setSmmEmail] = useState(project?.owners.smm ?? "");
+  const [mediaBuyerEmail, setMediaBuyerEmail] = useState(project?.owners.mediaBuyer ?? "");
 
   const [state, formAction, saving] = useActionState(async (prev: ProjectActionState, formData: FormData) => {
     const next = await saveProjectAction(prev, formData);
@@ -87,6 +92,8 @@ export function ProjectEditor({
     kpis,
     sources,
     notes,
+    smmEmail,
+    mediaBuyerEmail,
   });
 
   const unusedMetric = RESULT_METRICS.find((m) => !kpis.some((k) => k.metric === m));
@@ -153,6 +160,23 @@ export function ProjectEditor({
               <input type="date" required value={period.end} onChange={(e) => setPeriod({ ...period, end: e.target.value })} className="field" />
             </Field>
           </div>
+
+          <fieldset className="flex flex-col gap-2">
+            <legend className="section-kicker mb-2">Ответственные</legend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="SMM">
+                <OwnerSelect value={smmEmail} options={owners.smm} onChange={setSmmEmail} empty="Нет пользователей с ролью SMM" />
+              </Field>
+              <Field label="MediaBuyer">
+                <OwnerSelect
+                  value={mediaBuyerEmail}
+                  options={owners.mediaBuyer}
+                  onChange={setMediaBuyerEmail}
+                  empty="Нет пользователей с ролью MediaBuyer"
+                />
+              </Field>
+            </div>
+          </fieldset>
 
           <fieldset className="flex flex-col gap-2">
             <legend className="section-kicker mb-2">Результаты и KPI</legend>
@@ -272,6 +296,31 @@ export function ProjectEditor({
         </form>
       </aside>
     </div>
+  );
+}
+
+function OwnerSelect({
+  value,
+  options,
+  onChange,
+  empty,
+}: {
+  value: string;
+  options: OwnerOption[];
+  onChange: (email: string) => void;
+  empty: string;
+}) {
+  // Keep a previously assigned person selectable even if their role has changed since.
+  const all = value && !options.some((o) => o.email === value) ? [...options, { email: value, label: value }] : options;
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="field">
+      <option value="">{all.length ? "Не назначен" : empty}</option>
+      {all.map((o) => (
+        <option key={o.email} value={o.email}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }
 

@@ -7,20 +7,25 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { METRICS } from "@/lib/domain/metrics";
 import type { Project } from "@/lib/domain/types";
 import { formatDate, formatMetric } from "@/lib/format";
+import type { OwnerCandidates } from "@/lib/projects/owners";
 import { ProjectEditor, type EditableProject } from "./project-editor";
 
 export function ProjectsInputs({
   projects,
+  owners,
   canEdit,
   canCreate,
   canDelete,
 }: {
   projects: EditableProject[];
+  owners: OwnerCandidates;
   canEdit: boolean;
   canCreate: boolean;
   canDelete: boolean;
 }) {
   const [editing, setEditing] = useState<EditableProject | "new" | null>(null);
+  const labelOf = new Map([...owners.smm, ...owners.mediaBuyer].map((o) => [o.email, o.label.replace(" · админ", "")]));
+  const ownerName = (email: string | null) => (email ? (labelOf.get(email) ?? email.split("@")[0]) : "—");
 
   return (
     <Card className="min-w-0 overflow-hidden">
@@ -37,13 +42,14 @@ export function ProjectsInputs({
       </div>
 
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[900px] border-separate border-spacing-y-1 text-sm">
+        <table className="w-full min-w-[1040px] border-separate border-spacing-y-1 text-sm">
           <thead>
             <tr className="text-left text-xs text-muted-foreground">
               <th className="px-4 pb-2 font-medium">Проект</th>
               <th className="px-4 pb-2 font-medium">Основная цель</th>
               <th className="px-4 pb-2 font-medium">Результаты и KPI</th>
               <th className="px-4 pb-2 font-medium">Источники трафика</th>
+              <th className="px-4 pb-2 font-medium">Ответственные</th>
               <th className="px-4 pb-2 font-medium">Период</th>
               {canEdit && <th className="w-px px-4 pb-2" />}
             </tr>
@@ -66,6 +72,14 @@ export function ProjectsInputs({
                 <td className="bg-background/70 px-4 py-3 transition-colors group-hover:bg-muted">
                   {project.sources.length ? <SourceChips sources={project.sources} /> : <span className="text-muted-foreground">—</span>}
                 </td>
+                <td className="bg-background/70 px-4 py-3 text-xs transition-colors group-hover:bg-muted">
+                  <p>
+                    <span className="text-muted-foreground">SMM:</span> {ownerName(project.owners.smm)}
+                  </p>
+                  <p className="mt-1">
+                    <span className="text-muted-foreground">MediaBuyer:</span> {ownerName(project.owners.mediaBuyer)}
+                  </p>
+                </td>
                 <td className="whitespace-nowrap bg-background/70 px-4 py-3 text-muted-foreground tabular-nums transition-colors group-hover:bg-muted">
                   {formatDate(project.period.start)} — {formatDate(project.period.end)}
                 </td>
@@ -87,6 +101,7 @@ export function ProjectsInputs({
         <ProjectEditor
           key={editing === "new" ? "new" : editing.id}
           project={editing === "new" ? null : editing}
+          owners={owners}
           canDelete={canDelete}
           onClose={() => setEditing(null)}
         />

@@ -14,7 +14,7 @@ import { listTeam } from "@/lib/tasks/team";
 export const metadata: Metadata = { title: "Task Manager" };
 
 export default async function TasksPage({ searchParams }: PageProps<"/tasks">) {
-  const { view } = await searchParams;
+  const { view, task: taskParam } = await searchParams;
   const archived = view === "archive";
   const viewer = await requireSection("tasks");
   const { permissions } = viewer;
@@ -47,6 +47,7 @@ export default async function TasksPage({ searchParams }: PageProps<"/tasks">) {
           today={today}
           viewerEmail={viewer.email}
           canModerate={permissions.canManageAccess}
+          initialTaskId={typeof taskParam === "string" ? taskParam : null}
         />
       )}
     </div>
