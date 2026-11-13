@@ -185,3 +185,38 @@ export async function listConversionActionsAction(accountId: string): Promise<{ 
     return { ok: false, actions: [], message: error instanceof Error ? error.message : "Ошибка Google Ads" };
   }
 }
+
+export interface BriefActionResult {
+  ok: boolean;
+  message?: string;
+  analysis?: import("@/lib/ai/conductor").BriefAnalysis;
+}
+
+/** «Дирижёр»: free-form brief → project passport, card fields and follow-up questions. Nothing is saved here. */
+export async function analyzeBriefAction(input: {
+  projectName: string;
+  brief: string;
+  answers: { question: string; answer: string }[];
+  current: { goal: string; currency: string | null; budgetMonth: number | null; leadActions: string[] };
+}): Promise<BriefActionResult> {
+  const viewer = await requireSection("inputs");
+  if (!viewer.permissions.canEditInputs) return { ok: false, message: "Нет прав на редактирование «Вводных»." };
+  const brief = String(input.brief ?? "").slice(0, 30000);
+  if (brief.trim().length < 20) return { ok: false, message: "Вставьте бриф — хотя бы пару предложений." };
+  const { analyzeBrief, conductorConfigured } = await import("@/lib/ai/conductor");
+  if (!conductorConfigured()) return { ok: false, message: "Дирижёр не настроен: нужен ANTHROPIC_API_KEY." };
+  try {
+    const analysis = await analyzeBrief({
+      projectName: String(input.projectName ?? "").slice(0, 120),
+      brief,
+      answers: (input.answers ?? []).slice(0, 20).map((a) => ({ question: String(a.question).slice(0, 500), answer: String(a.answer).slice(0, 2000) })),
+      current: input.current,
+    });
+    return { ok: true, analysis };
+  } catch (error) {
+    const text = error instanceof Error ? error.message : "Ошибка Дирижёра";
+    if (/credit balance/i.test(text)) return { ok: false, message: "На балансе Anthropic API закончились кредиты — пополните в console.anthropic.com → Billing." };
+    if (/authentication|invalid x-api-key/i.test(text)) return { ok: false, message: "Ключ ANTHROPIC_API_KEY не принят Anthropic." };
+    return { ok: false, message: text };
+  }
+}

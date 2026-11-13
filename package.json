@@ -10,6 +10,7 @@
     "db:push": "node --env-file=.env.local ./node_modules/drizzle-kit/bin.cjs push --force"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@clerk/localizations": "^4.22.0",
     "@clerk/nextjs": "^7.9.11",
     "@vercel/functions": "^3.9.11",

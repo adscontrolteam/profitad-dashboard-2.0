@@ -11,6 +11,7 @@ import { METRICS, PLATFORM_LABELS } from "@/lib/domain/metrics";
 import type { OwnerCandidates, OwnerOption } from "@/lib/projects/owners";
 import type { IntegrationView } from "@/lib/integrations/types";
 import { ProjectIntegrations } from "./project-integrations";
+import { BriefConductor } from "./brief-conductor";
 import { STATUS_META } from "@/lib/domain/statuses";
 import {
   PROJECT_STATUSES,
@@ -313,6 +314,26 @@ export function ProjectEditor({
               + Добавить источник
             </button>
           </fieldset>
+
+          <BriefConductor
+            current={{ projectName: name, goal, notes, currency, budgetMonth, leadActions, kpis }}
+            onApply={(patch) => {
+              if (patch.goal !== undefined) setGoal(patch.goal);
+              if (patch.notes !== undefined) setNotes(patch.notes);
+              if (patch.currency !== undefined) setCurrency(patch.currency);
+              if (patch.budgetMonth !== undefined) setBudgetMonth(patch.budgetMonth);
+              const kpi = patch.kpi;
+              if (kpi) {
+                const merge = (k: KpiDraft): KpiDraft => ({ ...k, plan: kpi.plan ?? k.plan, cpaPlan: kpi.cpaPlan ?? k.cpaPlan });
+                setKpis((prev) => {
+                  if (prev.some((k) => k.metric === kpi.metric)) return prev.map((k) => (k.metric === kpi.metric ? merge(k) : k));
+                  // A single empty default row is a placeholder: replace it instead of adding a second result.
+                  if (prev.length === 1 && !prev[0].plan && !prev[0].cpaPlan) return [merge({ ...prev[0], metric: kpi.metric })];
+                  return [...prev, merge({ metric: kpi.metric, plan: "", cpaPlan: "" })];
+                });
+              }
+            }}
+          />
 
           <AgentSettings
             googleAccountId={sources.find((src) => src.platform === "google" && src.accountId)?.accountId.replace(/\D/g, "") ?? ""}
