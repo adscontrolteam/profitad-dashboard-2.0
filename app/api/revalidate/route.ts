@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json().catch(() => ({}))) as { projectId?: unknown };
-  // Project rows feed both the project page and every list (dashboard, analysis, nav).
+  // Project rows feed both the project page and every list (dashboard, project pages, nav).
   revalidateTag(TAGS.projects, "max");
   const tag = typeof body.projectId === "string" ? TAGS.project(body.projectId) : TAGS.projects;
   if (tag !== TAGS.projects) revalidateTag(tag, "max");

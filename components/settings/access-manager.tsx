@@ -7,13 +7,7 @@ import {
   type AccessActionState,
 } from "@/app/(dashboard)/settings/access/actions";
 import { Card } from "@/components/ui/card";
-import {
-  ROLE_META,
-  SECTION_LABELS,
-  SECTIONS,
-  type AccessGrant,
-  type AssignableRole,
-} from "@/lib/access/roles";
+import { ROLE_META, type AccessGrant, type AssignableRole } from "@/lib/access/roles";
 import { cn } from "@/lib/cn";
 
 export type AccessRow =
@@ -105,12 +99,11 @@ export function AccessManager({
 }
 
 function describeGrant(grant: AccessGrant, projects: ProjectOption[]) {
-  if (grant.role !== "custom") return ROLE_META[grant.role].description;
-  const sections = grant.sections.map((s) => SECTION_LABELS[s]).join(", ");
+  if (!grant.role) return `Роль «${grant.storedRole}» из старой схемы — доступа нет, назначьте новую роль.`;
   const projectNames = grant.projectIds
     ? grant.projectIds.map((id) => projects.find((p) => p.id === id)?.name ?? id).join(", ")
     : "все проекты";
-  return `${sections} · ${projectNames}${grant.canEditInputs ? " · редактирует «Вводные»" : ""}`;
+  return `${ROLE_META[grant.role].description} · ${projectNames}`;
 }
 
 function UserRow({
@@ -129,6 +122,7 @@ function UserRow({
   const [pending, startTransition] = useTransition();
   const email = row.kind === "admin" ? row.email : row.grant.email;
   const role = row.kind === "admin" ? "admin" : row.grant.role;
+  const roleLabel = role ? ROLE_META[role].label : "Нужна новая роль";
 
   const revoke = (grant: AccessGrant) => {
     if (!window.confirm(`Отозвать доступ для ${grant.email}?`)) return;
@@ -150,10 +144,14 @@ function UserRow({
       <span
         className={cn(
           "rounded-full px-3 py-1 text-xs font-semibold",
-          role === "admin" ? "bg-accent text-accent-foreground" : "bg-muted text-foreground",
+          role === "admin"
+            ? "bg-accent text-accent-foreground"
+            : role
+              ? "bg-muted text-foreground"
+              : "bg-warning/15 text-warning",
         )}
       >
-        {ROLE_META[role].label}
+        {roleLabel}
       </span>
 
       {row.kind === "grant" && row.editable ? (
@@ -192,8 +190,7 @@ function GrantForm({
   onSaved: (state: AccessActionState) => void;
   onCancel: () => void;
 }) {
-  const [role, setRole] = useState<AssignableRole>(grant?.role ?? "reader");
-  const [sections, setSections] = useState(grant?.sections ?? ["dashboard", "analysis"]);
+  const [role, setRole] = useState<AssignableRole>(grant?.role ?? assignableRoles[0] ?? "smm");
   const [projectsMode, setProjectsMode] = useState<"all" | "selected">(
     grant?.projectIds ? "selected" : "all",
   );
@@ -206,9 +203,6 @@ function GrantForm({
     },
     IDLE,
   );
-
-  const toggleSection = (section: (typeof SECTIONS)[number], on: boolean) =>
-    setSections((prev) => (on ? [...prev, section] : prev.filter((s) => s !== section)));
 
   return (
     <Card className="min-w-0 xl:sticky xl:top-0">
@@ -260,77 +254,45 @@ function GrantForm({
           </div>
         </fieldset>
 
-        {role === "custom" && (
-          <>
-            <fieldset>
-              <legend className="section-kicker mb-2">Вкладки</legend>
-              <div className="flex flex-wrap gap-2">
-                {SECTIONS.map((section) => (
-                  <Chip
-                    key={section}
-                    name="sections"
-                    value={section}
-                    checked={sections.includes(section)}
-                    onChange={(on) => toggleSection(section, on)}
-                  >
-                    {SECTION_LABELS[section]}
-                  </Chip>
-                ))}
-              </div>
-            </fieldset>
-
-            <fieldset>
-              <legend className="section-kicker mb-2">Проекты</legend>
-              <div className="mb-3 flex gap-2">
-                {(["all", "selected"] as const).map((mode) => (
-                  <label
-                    key={mode}
-                    className={cn(
-                      "cursor-pointer rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
-                      projectsMode === mode ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    <input
-                      type="radio"
-                      name="projectsMode"
-                      value={mode}
-                      checked={projectsMode === mode}
-                      onChange={() => setProjectsMode(mode)}
-                      className="sr-only"
-                    />
-                    {mode === "all" ? "Все проекты" : "Выбранные"}
-                  </label>
-                ))}
-              </div>
-              {projectsMode === "selected" && (
-                <div className="flex flex-wrap gap-2">
-                  {projects.map((project) => (
-                    <Chip
-                      key={project.id}
-                      name="projectIds"
-                      value={project.id}
-                      defaultChecked={grant?.projectIds?.includes(project.id)}
-                    >
-                      {project.name}
-                    </Chip>
-                  ))}
-                </div>
-              )}
-            </fieldset>
-
-            {sections.includes("inputs") && (
-              <label className="flex cursor-pointer items-center gap-3 text-sm">
+        <fieldset>
+          <legend className="section-kicker mb-2">Проекты</legend>
+          <div className="mb-3 flex gap-2">
+            {(["all", "selected"] as const).map((mode) => (
+              <label
+                key={mode}
+                className={cn(
+                  "cursor-pointer rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+                  projectsMode === mode ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground",
+                )}
+              >
                 <input
-                  type="checkbox"
-                  name="canEditInputs"
-                  defaultChecked={grant?.canEditInputs}
-                  className="size-4 accent-[var(--accent)]"
+                  type="radio"
+                  name="projectsMode"
+                  value={mode}
+                  checked={projectsMode === mode}
+                  onChange={() => setProjectsMode(mode)}
+                  className="sr-only"
                 />
-                Может редактировать «Вводные»
+                {mode === "all" ? "Все проекты" : "Выбранные"}
               </label>
-            )}
-          </>
-        )}
+            ))}
+          </div>
+          {projectsMode === "selected" && (
+            <div className="flex flex-wrap gap-2">
+              {projects.map((project) => (
+                <Chip
+                  key={project.id}
+                  name="projectIds"
+                  value={project.id}
+                  defaultChecked={grant?.projectIds?.includes(project.id)}
+                >
+                  {project.name}
+                </Chip>
+              ))}
+            </div>
+          )}
+        </fieldset>
+
 
         {state.message && !state.ok && (
           <p role="alert" className="text-sm font-medium text-negative">

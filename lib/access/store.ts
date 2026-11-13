@@ -1,17 +1,16 @@
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { accessGrants, type AccessGrantRow } from "@/db/schema";
-import type { AccessGrant } from "./roles";
+import { isAssignableRole, type AccessGrant, type AssignableRole } from "./roles";
 
 // Grants are read uncached on purpose: a revoked access must stop working on the very next request.
 
 function toGrant(row: AccessGrantRow): AccessGrant {
   return {
     email: row.email,
-    role: row.role,
-    sections: row.sections,
+    role: isAssignableRole(row.role) ? row.role : null,
+    storedRole: row.role,
     projectIds: row.projectIds ?? null,
-    canEditInputs: row.canEditInputs,
     updatedAt: row.updatedAt.toISOString(),
     updatedBy: row.updatedBy,
   };
@@ -28,15 +27,15 @@ export async function listGrants(): Promise<AccessGrant[]> {
 }
 
 export async function saveGrant(
-  grant: Omit<AccessGrant, "updatedAt" | "updatedBy">,
+  grant: { email: string; role: AssignableRole; projectIds: string[] | null },
   actorEmail: string,
 ) {
   const values = {
     email: grant.email,
     role: grant.role,
-    sections: grant.sections,
+    sections: [],
     projectIds: grant.projectIds,
-    canEditInputs: grant.canEditInputs,
+    canEditInputs: false,
     updatedAt: new Date(),
     updatedBy: actorEmail,
   };

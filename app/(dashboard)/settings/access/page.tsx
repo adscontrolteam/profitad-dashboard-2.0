@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { AccessManager, type AccessRow } from "@/components/settings/access-manager";
+import { RoleMatrix } from "@/components/settings/role-matrix";
 import { getAdminEmails } from "@/lib/access/admins";
-import { canManageRole, manageableRoles } from "@/lib/access/policy";
+import { manageableRoles } from "@/lib/access/policy";
 import { listGrants } from "@/lib/access/store";
 import { requireAccessManager } from "@/lib/access/viewer";
 import { getProjects } from "@/lib/data";
@@ -22,15 +23,18 @@ export default async function AccessPage() {
         kind: "grant" as const,
         grant,
         isSelf: grant.email === viewer.email,
-        editable: grant.email !== viewer.email && canManageRole(actorRole, grant.role),
+        editable: grant.email !== viewer.email && manageableRoles(actorRole).length > 0,
       })),
   ];
 
   return (
-    <AccessManager
-      rows={rows}
-      assignableRoles={manageableRoles(actorRole)}
-      projects={projects.map(({ id, name }) => ({ id, name }))}
-    />
+    <div className="flex flex-col gap-5">
+      <AccessManager
+        rows={rows}
+        assignableRoles={manageableRoles(actorRole)}
+        projects={projects.map(({ id, name }) => ({ id, name }))}
+      />
+      <RoleMatrix />
+    </div>
   );
 }

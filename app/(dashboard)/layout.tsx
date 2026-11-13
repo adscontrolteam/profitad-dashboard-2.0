@@ -28,6 +28,10 @@ async function ViewerShell({ children }: { children: React.ReactNode }) {
       routes={routes}
       projects={visibleProjects(permissions, projects)}
       roleLabel={ROLE_META[permissions.role].label}
+      capabilities={{
+        canManageAds: permissions.canManageAds,
+        canPublishContent: permissions.canPublishContent,
+      }}
     >
       {children}
     </AppShell>

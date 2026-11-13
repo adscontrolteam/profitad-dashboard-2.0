@@ -1,4 +1,5 @@
 import {
+  ASSIGNABLE_ROLES,
   SECTIONS,
   type AccessGrant,
   type AssignableRole,
@@ -7,37 +8,28 @@ import {
   type Section,
 } from "./roles";
 
-const WITHOUT_SALES = SECTIONS.filter((s) => s !== "sales");
+const ROLE_SECTIONS: Record<Role, readonly Section[]> = {
+  admin: SECTIONS,
+  smm: ["dashboard", "ads", "smm", "tasks"],
+  media_buyer: ["dashboard", "ads", "smm", "tasks"],
+  sales: ["dashboard", "sales", "tasks"],
+};
 
 export function permissionsFor(role: Role, grant?: AccessGrant | null): Permissions {
-  switch (role) {
-    case "admin":
-    case "project_manager":
-      return { role, sections: [...SECTIONS], projects: "all", canEditInputs: true, canManageAccess: true };
-    case "marketer":
-      return { role, sections: WITHOUT_SALES, projects: "all", canEditInputs: true, canManageAccess: false };
-    case "reader":
-      return { role, sections: WITHOUT_SALES, projects: "all", canEditInputs: false, canManageAccess: false };
-    case "custom":
-      return {
-        role,
-        sections: grant?.sections ?? [],
-        projects: grant?.projectIds ?? "all",
-        canEditInputs: Boolean(grant?.canEditInputs && grant.sections.includes("inputs")),
-        canManageAccess: false,
-      };
-  }
+  return {
+    role,
+    sections: [...ROLE_SECTIONS[role]],
+    projects: role === "admin" ? "all" : (grant?.projectIds ?? "all"),
+    canEditInputs: role === "admin",
+    canManageAccess: role === "admin",
+    canManageAds: role === "admin" || role === "media_buyer",
+    canPublishContent: role === "admin" || role === "smm",
+  };
 }
 
 /** Roles the actor may grant, edit or revoke. */
 export function manageableRoles(actor: Role): AssignableRole[] {
-  if (actor === "admin") return ["project_manager", "marketer", "reader", "custom"];
-  if (actor === "project_manager") return ["marketer", "reader", "custom"];
-  return [];
-}
-
-export function canManageRole(actor: Role, target: Role) {
-  return target !== "admin" && (manageableRoles(actor) as Role[]).includes(target);
+  return actor === "admin" ? [...ASSIGNABLE_ROLES] : [];
 }
 
 export const canViewSection = (p: Permissions, section: Section) => p.sections.includes(section);

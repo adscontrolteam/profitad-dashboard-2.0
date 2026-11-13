@@ -2,9 +2,9 @@
 
 import { refresh } from "next/cache";
 import { isAdminEmail } from "@/lib/access/admins";
-import { canManageRole, isValidEmail, manageableRoles, normalizeEmail } from "@/lib/access/policy";
-import { isAssignableRole, isSection, type AccessGrant } from "@/lib/access/roles";
-import { deleteGrant, getGrant, saveGrant } from "@/lib/access/store";
+import { isValidEmail, manageableRoles, normalizeEmail } from "@/lib/access/policy";
+import { isAssignableRole } from "@/lib/access/roles";
+import { deleteGrant, saveGrant } from "@/lib/access/store";
 import { requireAccessManager, type Viewer } from "@/lib/access/viewer";
 import { getProjects } from "@/lib/data";
 
@@ -18,9 +18,8 @@ async function checkTarget(actor: Viewer, email: string): Promise<string | null>
   if (isAdminEmail(email)) return "Доступ администратора нельзя изменить или отозвать.";
   if (email === actor.email) return "Свой уровень доступа изменить нельзя.";
 
-  const existing = await getGrant(email);
-  if (existing && !canManageRole(actor.permissions.role, existing.role)) {
-    return "У вас нет прав управлять доступом этого пользователя.";
+  if (manageableRoles(actor.permissions.role).length === 0) {
+    return "У вас нет прав управлять доступами.";
   }
   return null;
 }
@@ -40,29 +39,17 @@ export async function saveGrantAction(
     return { ok: false, message: "Этот уровень доступа вам недоступен." };
   }
 
-  const grant: Omit<AccessGrant, "updatedAt" | "updatedBy"> = {
-    email,
-    role,
-    sections: [],
-    projectIds: null,
-    canEditInputs: false,
-  };
-
-  if (role === "custom") {
-    grant.sections = formData.getAll("sections").filter(isSection);
-    if (grant.sections.length === 0) return { ok: false, message: "Выберите хотя бы одну вкладку." };
-
-    if (formData.get("projectsMode") === "selected") {
-      const knownIds = new Set((await getProjects()).map((p) => p.id));
-      grant.projectIds = formData
-        .getAll("projectIds")
-        .map(String)
-        .filter((id) => knownIds.has(id));
-      if (grant.projectIds.length === 0) return { ok: false, message: "Выберите хотя бы один проект." };
-    }
-
-    grant.canEditInputs = formData.get("canEditInputs") === "on" && grant.sections.includes("inputs");
+  let projectIds: string[] | null = null;
+  if (formData.get("projectsMode") === "selected") {
+    const knownIds = new Set((await getProjects()).map((p) => p.id));
+    projectIds = formData
+      .getAll("projectIds")
+      .map(String)
+      .filter((id) => knownIds.has(id));
+    if (projectIds.length === 0) return { ok: false, message: "Выберите хотя бы один проект." };
   }
+
+  const grant = { email, role, projectIds };
 
   await saveGrant(grant, actor.email);
   refresh();

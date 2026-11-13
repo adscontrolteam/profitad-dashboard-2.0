@@ -2,7 +2,7 @@
 
 import { UserButton } from "@clerk/nextjs";
 import { usePathname } from "next/navigation";
-import { getPageTitle, NAV_ITEMS, type AppRoute } from "@/config/navigation";
+import { allowedTabs, getPageTitle, NAV_ITEMS, type AppRoute, type Capability } from "@/config/navigation";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { PageTransition } from "./page-transition";
 import { Sidebar } from "./sidebar";
@@ -13,15 +13,19 @@ export function AppShell({
   projects,
   routes,
   roleLabel,
+  capabilities,
 }: {
   children: React.ReactNode;
   projects: ProjectNavItem[];
   /** Routes the viewer may open. */
   routes: AppRoute[];
   roleLabel: string;
+  capabilities: Record<Capability, boolean>;
 }) {
   const pathname = usePathname();
-  const items = NAV_ITEMS.filter((item) => routes.includes(item.href));
+  const items = NAV_ITEMS.filter((item) => routes.includes(item.href)).map((item) =>
+    item.children ? { ...item, children: allowedTabs(item.children, capabilities) } : item,
+  );
 
   return (
     <>

@@ -37,7 +37,7 @@ export const getViewerState = cache(async (): Promise<ViewerState> => {
   }
 
   const grant = await getGrant(email);
-  if (!grant) return { status: "no-access", email };
+  if (!grant?.role) return { status: "no-access", email };
 
   return { status: "ok", viewer: { email, name, permissions: permissionsFor(grant.role, grant) } };
 });
@@ -60,8 +60,18 @@ export async function requireSection(section: Section): Promise<Viewer> {
 }
 
 export async function requireProject(projectId: string): Promise<Viewer> {
-  const viewer = await requireSection("analysis");
+  const viewer = await requireSection("dashboard");
   if (!canViewProject(viewer.permissions, projectId)) notFound();
+  return viewer;
+}
+
+/** For actions and sub-pages behind a capability rather than a whole section. */
+export async function requireCapability(
+  section: Section,
+  capability: "canManageAds" | "canPublishContent" | "canEditInputs",
+): Promise<Viewer> {
+  const viewer = await requireSection(section);
+  if (!viewer.permissions[capability]) redirect(`/${section}`);
   return viewer;
 }
 

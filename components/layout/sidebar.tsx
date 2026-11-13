@@ -6,7 +6,7 @@ import { NAV_ICONS } from "@/components/icons/nav-icons";
 import { Logo } from "@/components/ui/logo";
 import { SignalDot } from "@/components/ui/signal";
 import { APP_CONFIG } from "@/config/app";
-import { isNavItemActive, type NavItem } from "@/config/navigation";
+import { isNavItemActive, type NavItem, type SubNavItem } from "@/config/navigation";
 import { cn } from "@/lib/cn";
 import type { ProjectNavItem } from "./types";
 
@@ -25,7 +25,8 @@ export function Sidebar({ items, projects }: { items: NavItem[]; projects: Proje
           {main.map((item) => (
             <div key={item.href} className="flex flex-col gap-0.5">
               <NavLink item={item} />
-              {item.withProjects ? <ProjectLinks base={item.href} projects={projects} /> : null}
+              {item.withProjects ? <ProjectLinks projects={projects} /> : null}
+              {item.children && item.children.length > 1 ? <SubLinks items={item.children} /> : null}
             </div>
           ))}
         </div>
@@ -65,14 +66,44 @@ function NavLink({ item }: { item: NavItem }) {
   );
 }
 
-function ProjectLinks({ base, projects }: { base: string; projects: ProjectNavItem[] }) {
+function SubLinks({ items }: { items: SubNavItem[] }) {
+  const pathname = usePathname();
+  const parent = items[0]?.href ?? "";
+  if (!pathname.startsWith(parent)) return null;
+
+  return (
+    <ul className="flex flex-col gap-0.5 pl-6">
+      {items.map((item) => {
+        const active = pathname === item.href;
+        return (
+          <li key={item.href}>
+            <Link
+              href={item.href}
+              className={cn(
+                "flex items-center gap-2.5 rounded-full px-3 py-1.5 text-[13px] font-medium tracking-[-0.01em] transition-colors",
+                active
+                  ? "bg-accent text-accent-foreground"
+                  : "text-sidebar-muted hover:bg-sidebar-hover hover:text-sidebar-foreground",
+              )}
+            >
+              <span className="size-1.5 shrink-0 rounded-full bg-current opacity-50" />
+              <span className="truncate">{item.label}</span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function ProjectLinks({ projects }: { projects: ProjectNavItem[] }) {
   const pathname = usePathname();
   if (projects.length === 0) return null;
 
   return (
     <ul className="flex flex-col gap-0.5 pl-6">
       {projects.map((p) => {
-        const href = `${base}/${p.id}`;
+        const href = `/projects/${p.id}`;
         const active = pathname === href;
         return (
           <li key={p.id}>

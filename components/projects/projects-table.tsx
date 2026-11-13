@@ -31,7 +31,7 @@ export function ProjectsTable({ projects }: { projects: ProjectWithStats[] }) {
               return (
                 <tr key={p.id} className="group">
                   <td className="rounded-l-[18px] bg-background/70 px-4 py-3 font-semibold tracking-[-0.02em] transition-colors group-hover:bg-muted">
-                    <Link href={`/analysis/${p.id}`} className="hover:underline">
+                    <Link href={`/projects/${p.id}`} className="hover:underline">
                       {p.name}
                     </Link>
                   </td>

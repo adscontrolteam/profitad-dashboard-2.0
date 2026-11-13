@@ -10,7 +10,6 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
-import type { AssignableRole, Section } from "@/lib/access/roles";
 import type { Kpi, ProjectStatus, TrafficPlatform, TrafficSource } from "@/lib/domain/types";
 import type { DealStage } from "@/lib/sales/stages";
 import type { TaskStage } from "@/lib/tasks/stages";
@@ -18,12 +17,13 @@ import type { TaskStage } from "@/lib/tasks/stages";
 /** Access is bound to the account email, so it can be granted before the first sign-in. */
 export const accessGrants = pgTable("access_grants", {
   email: text("email").primaryKey(),
-  role: text("role").$type<AssignableRole>().notNull(),
-  /** Custom role only. */
-  sections: jsonb("sections").$type<Section[]>().notNull().default([]),
-  /** Custom role only; null means all projects. */
+  /** An AssignableRole; older rows may hold a role from the previous access model. */
+  role: text("role").notNull(),
+  /** Unused since the role-based model (kept so no migration is needed). */
+  sections: jsonb("sections").$type<string[]>().notNull().default([]),
+  /** null means all projects. */
   projectIds: jsonb("project_ids").$type<string[] | null>(),
-  /** Custom role only. */
+  /** Unused since the role-based model. */
   canEditInputs: boolean("can_edit_inputs").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

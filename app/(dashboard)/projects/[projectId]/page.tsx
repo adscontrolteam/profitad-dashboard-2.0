@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MetricsGrid } from "@/components/projects/metrics-grid";
 import { ResultCard } from "@/components/projects/result-card";
@@ -18,20 +19,20 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({
   params,
-}: PageProps<"/analysis/[projectId]">): Promise<Metadata> {
+}: PageProps<"/projects/[projectId]">): Promise<Metadata> {
   const { projectId } = await params;
   const state = await getViewerState();
   const allowed =
     state.status === "ok" &&
-    canViewSection(state.viewer.permissions, "analysis") &&
+    canViewSection(state.viewer.permissions, "dashboard") &&
     canViewProject(state.viewer.permissions, projectId);
   const project = allowed ? await getProject(projectId) : null;
   return { title: project?.name ?? "Проект" };
 }
 
-export default async function ProjectPage({ params }: PageProps<"/analysis/[projectId]">) {
+export default async function ProjectPage({ params }: PageProps<"/projects/[projectId]">) {
   const { projectId } = await params;
-  await requireProject(projectId);
+  const { permissions } = await requireProject(projectId);
   const project = await getProject(projectId);
   if (!project) notFound();
   const { stats } = project;
@@ -44,6 +45,18 @@ export default async function ProjectPage({ params }: PageProps<"/analysis/[proj
           {formatDate(project.period.start)} — {formatDate(project.period.end)}
         </span>
         <SourceChips sources={project.sources} />
+        <div className="ml-auto flex flex-wrap gap-2">
+          {canViewSection(permissions, "ads") && (
+            <Link href={`/ads?p=${project.id}`} className="btn-ghost border border-border px-3 py-1.5">
+              Реклама →
+            </Link>
+          )}
+          {canViewSection(permissions, "smm") && (
+            <Link href={`/smm?p=${project.id}`} className="btn-ghost border border-border px-3 py-1.5">
+              SMM →
+            </Link>
+          )}
+        </div>
       </div>
 
       {project.goal && (

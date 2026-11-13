@@ -10,7 +10,7 @@ export function ProjectCard({ project }: { project: ProjectWithStats }) {
   const pace = stats.primary?.pace ?? null;
 
   return (
-    <Link href={`/analysis/${project.id}`} className="group block">
+    <Link href={`/projects/${project.id}`} className="group block">
       <Card className="h-full transition-transform duration-200 group-hover:scale-[1.015]">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="truncate text-[15px] font-semibold tracking-[-0.02em]">{project.name}</h3>
