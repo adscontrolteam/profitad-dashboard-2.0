@@ -37,11 +37,18 @@ export const serviceAccountEmail = () => serviceAccount()?.client_email ?? null;
 
 const cache = new Map<string, { token: string; expiresAt: number }>();
 
-export async function googleAccessToken(scopes: string[]): Promise<string> {
+/**
+ * Workspace user the service account acts as for Drive and Sheets (domain-wide delegation),
+ * so files are owned by that user and live in their My Drive. Unset = the service account itself.
+ */
+export const workspaceUser = () => (process.env.GOOGLE_WORKSPACE_USER ?? "").trim() || null;
+
+export async function googleAccessToken(scopes: string[], subject: string | null = null): Promise<string> {
   const sa = serviceAccount();
   if (!sa) throw new GoogleNotConfigured("Сервис-аккаунт Google не настроен (GOOGLE_SERVICE_ACCOUNT_JSON).");
 
-  const cacheKey = scopes.slice().sort().join(" ");
+  const scope = scopes.slice().sort().join(" ");
+  const cacheKey = `${subject ?? ""}|${scope}`;
   const hit = cache.get(cacheKey);
   if (hit && hit.expiresAt > Date.now() + 60_000) return hit.token;
 
@@ -50,7 +57,8 @@ export async function googleAccessToken(scopes: string[]): Promise<string> {
   const b64 = (v: object) => Buffer.from(JSON.stringify(v)).toString("base64url");
   const unsigned = `${b64({ alg: "RS256", typ: "JWT" })}.${b64({
     iss: sa.client_email,
-    scope: cacheKey,
+    ...(subject ? { sub: subject } : {}),
+    scope,
     aud: tokenUri,
     iat: now,
     exp: now + 3600,
@@ -68,6 +76,11 @@ export async function googleAccessToken(scopes: string[]): Promise<string> {
   });
   const body = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error_description?: string };
   if (!res.ok || !body.access_token) {
+    if (subject && /unauthorized_client|not authorized/i.test(JSON.stringify(body))) {
+      throw new GoogleNotConfigured(
+        `Делегирование на уровне домена не настроено для ${subject}: Admin Console → Безопасность → Управление API → Делегирование на уровне домена.`,
+      );
+    }
     throw new Error(`Google не выдал токен: ${body.error_description ?? res.status}`);
   }
   cache.set(cacheKey, { token: body.access_token, expiresAt: Date.now() + (body.expires_in ?? 3600) * 1000 });
@@ -77,8 +90,13 @@ export async function googleAccessToken(scopes: string[]): Promise<string> {
 export class GoogleNotConfigured extends Error {}
 
 /** Fetch to a Google API with the service account token; throws with Google's own message on errors. */
-export async function googleFetch<T>(url: string, scopes: string[], init: RequestInit = {}): Promise<T> {
-  const token = await googleAccessToken(scopes);
+export async function googleFetch<T>(
+  url: string,
+  scopes: string[],
+  init: RequestInit = {},
+  opts: { asWorkspaceUser?: boolean } = {},
+): Promise<T> {
+  const token = await googleAccessToken(scopes, opts.asWorkspaceUser ? workspaceUser() : null);
   const res = await fetch(url, {
     ...init,
     headers: { authorization: `Bearer ${token}`, ...(init.headers ?? {}) },

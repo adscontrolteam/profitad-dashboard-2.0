@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   detectReportAction,
+  createFromTemplateAction,
   disconnectAction,
   revealWebhookAction,
   rotateWebhookKeyAction,
@@ -46,7 +47,7 @@ export function ProjectIntegrations({
       <legend className="section-kicker mb-2">Подключения</legend>
       {serviceAccountEmail ? (
         <p className="-mt-1 text-xs leading-5 text-muted-foreground">
-          Для Таблиц и Drive откройте доступ «Редактор» для{" "}
+          Таблицы и папки в вашем Google Workspace доступны автоматически. Для чужих таблиц откройте доступ «Редактор» для{" "}
           <button
             type="button"
             className="font-semibold text-foreground underline decoration-dotted"
@@ -304,6 +305,14 @@ function ReportCard({ projectId, current }: { projectId: string; current?: Integ
         Каждый день дашборд находит строку с датой в колонке A и вписывает расход, показы, клики, лиды и подписки за последние 3 дня
         (Google досчитывает конверсии задним числом). Формулы и ручные колонки не трогаются, строки не добавляются.
       </p>
+      {!current && (
+        <div>
+          <button type="button" className="btn-primary px-3 py-1.5 text-xs" disabled={pending} onClick={() => run(() => createFromTemplateAction(projectId, "report"))}>
+            {pending ? "Создаю…" : "Создать из шаблона"}
+          </button>
+          <span className="ml-2 text-xs text-muted-foreground">или подключите существующую:</span>
+        </div>
+      )}
       <div className="flex gap-2">
         <input className="field" placeholder="Ссылка на таблицу «Репорт»" value={url} onChange={(e) => setUrl(e.target.value)} />
         <button
@@ -393,8 +402,17 @@ function DriveCard({ projectId, current }: { projectId: string; current?: Integr
   return (
     <Shell kind="drive" current={current} projectId={projectId} summary={cfg && `Папка «${cfg.name}»`}>
       <p className="text-xs leading-5 text-muted-foreground">
-        Сюда уходит контент, созданный в дашборде, и отсюда берутся исходники. Папка должна быть на общем диске (Shared Drive).
+        Сюда уходит контент, созданный в дашборде, и отсюда берутся исходники. Новая папка создаётся копией «Template Project» в
+        PROFITAD → PROJECTS.
       </p>
+      {!current && (
+        <div>
+          <button type="button" className="btn-primary px-3 py-1.5 text-xs" disabled={pending} onClick={() => run(() => createFromTemplateAction(projectId, "drive"))}>
+            {pending ? "Создаю…" : "Создать папку из шаблона"}
+          </button>
+          <span className="ml-2 text-xs text-muted-foreground">или укажите существующую:</span>
+        </div>
+      )}
       <input className="field" placeholder="Ссылка на папку Google Drive" value={url} onChange={(e) => setUrl(e.target.value)} />
       <SaveButton pending={pending} onClick={() => run(() => saveDriveAction(projectId, { url }))} />
       <Result r={result} />

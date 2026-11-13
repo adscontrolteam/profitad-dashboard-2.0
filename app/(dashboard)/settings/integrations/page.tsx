@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
 import { hasEncryptionKey } from "@/lib/crypto";
 import { getProjects } from "@/lib/data";
 import { adsConfigured, listAccounts, mccId } from "@/lib/google/ads";
-import { serviceAccountEmail } from "@/lib/google/auth";
+import { serviceAccountEmail, workspaceUser } from "@/lib/google/auth";
 import { INTEGRATION_LABELS } from "@/lib/integrations/kinds";
 import { listIntegrations } from "@/lib/integrations/store";
 
@@ -42,6 +42,13 @@ export default async function IntegrationsSettingsPage() {
         : ads.ok
           ? `MCC ${mccId()}: кабинетов под управлением — ${ads.accounts.length}`
           : `Ошибка: ${ads.error}`,
+    },
+    {
+      label: "Google Workspace (Drive и Таблицы)",
+      ok: Boolean(workspaceUser()),
+      detail: workspaceUser()
+        ? `Работаем от имени ${workspaceUser()} (делегирование на уровне домена)`
+        : "GOOGLE_WORKSPACE_USER не задан — файлы будет создавать сам сервис-аккаунт, а у него нет места на Drive",
     },
     { label: "Шифрование секретов", ok: hasEncryptionKey(), detail: hasEncryptionKey() ? "TOKEN_ENCRYPTION_KEY задан" : "TOKEN_ENCRYPTION_KEY не задан — CRM-токены сохранить нельзя" },
     { label: "Ежедневная синхронизация", ok: Boolean(process.env.CRON_SECRET), detail: process.env.CRON_SECRET ? "CRON_SECRET задан, запуск каждый день в 05:00 UTC" : "CRON_SECRET не задан — Vercel Cron не сможет запускать синк" },

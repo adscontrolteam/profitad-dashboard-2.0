@@ -18,10 +18,14 @@ import { createProject, deleteProject, getProjectStatus, updateProject, type Pro
 import { getProject } from "@/lib/data";
 import { listOwnerCandidates } from "@/lib/projects/owners";
 import { archiveProjectTasks } from "@/lib/tasks/store";
+import { audit } from "@/lib/audit";
+import { ensureProjectFolder, ensureReport } from "@/lib/integrations/provision";
 
 export interface ProjectActionState {
   ok: boolean;
   message: string | null;
+  /** Saved, but something to read before closing (e.g. Drive/report creation failed). */
+  warning?: string | null;
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -125,11 +129,15 @@ export async function saveProjectAction(
     if (viewer.permissions.projects !== "all") {
       return { ok: false, message: "Создавать проекты может только пользователь с доступом ко всем проектам." };
     }
-    await createProject(input, viewer.email);
+    const newId = await createProject(input, viewer.email);
+    const flags = raw as { createDrive?: unknown; createReport?: unknown };
+    const warning = await provision(newId, input.name, viewer.email, Boolean(flags.createDrive), Boolean(flags.createReport));
+    updateTag(TAGS.projects);
+    return { ok: true, message: "Проект добавлен.", warning };
   }
 
   updateTag(TAGS.projects);
-  return { ok: true, message: id ? "Проект сохранён." : "Проект добавлен." };
+  return { ok: true, message: "Проект сохранён." };
 }
 
 export async function deleteProjectAction(id: string): Promise<ProjectActionState> {
@@ -138,4 +146,19 @@ export async function deleteProjectAction(id: string): Promise<ProjectActionStat
   await deleteProject(id);
   updateTag(TAGS.projects);
   return { ok: true, message: "Проект удалён." };
+}
+
+/** Creates the project's Drive folder and/or «Репорт» from the templates. Returns a warning text on failure. */
+async function provision(projectId: string, name: string, actorEmail: string, drive: boolean, report: boolean) {
+  if (!drive && !report) return null;
+  try {
+    if (report) await ensureReport(projectId, name, actorEmail);
+    else await ensureProjectFolder(projectId, name, actorEmail);
+    await audit({ actorEmail, action: "project.provision", projectId, ok: true, result: report ? "папка и Репорт" : "папка" });
+    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await audit({ actorEmail, action: "project.provision", projectId, ok: false, result: message });
+    return `Проект добавлен, но ${report ? "папку и Репорт" : "папку"} создать не удалось: ${message} Повторить можно в карточке проекта → Подключения.`;
+  }
 }

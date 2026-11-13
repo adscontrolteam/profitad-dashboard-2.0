@@ -14,6 +14,8 @@ import { syncIntegration } from "@/lib/integrations/run";
 import { detectReport } from "@/lib/integrations/sheets";
 import { deleteIntegration, getIntegration, readSecret, saveIntegration } from "@/lib/integrations/store";
 import { REPORT_METRICS, type ReportTab } from "@/lib/integrations/types";
+import { ensureProjectFolder, ensureReport } from "@/lib/integrations/provision";
+import { getProject } from "@/lib/data";
 
 export interface IntegrationResult {
   ok: boolean;
@@ -29,6 +31,9 @@ const admin = () => requireCapability("inputs", "canEditInputs");
 function explain(error: unknown) {
   if (error instanceof GoogleNotConfigured) return error.message;
   if (error instanceof GoogleApiError) {
+    if (/storage ?quota/i.test(error.message)) {
+      return "У сервис-аккаунта нет места на Drive: нужно делегирование на уровне домена (GOOGLE_WORKSPACE_USER).";
+    }
     if (error.status === 403 || error.status === 404) {
       return "Нет доступа: откройте доступ сервис-аккаунту (его почта — в «Настройки → Подключения») с правами редактора.";
     }
@@ -212,4 +217,29 @@ export async function disconnectAction(projectId: string, kind: IntegrationKind)
   if (!isIntegrationKind(kind)) return { ok: false, message: "Неизвестное подключение." };
   await deleteIntegration(projectId, kind);
   return done(viewer, `integration.${kind}.disconnect`, projectId, { ok: true, message: "Отключено." });
+}
+
+/* ---------- From templates ---------- */
+
+export async function createFromTemplateAction(projectId: string, what: "drive" | "report"): Promise<IntegrationResult> {
+  const viewer = await admin();
+  const project = await getProject(projectId);
+  if (!project) return { ok: false, message: "Проект не найден." };
+  try {
+    if (what === "report") {
+      const r = await ensureReport(projectId, project.name, viewer.email);
+      const sync = await trySync(projectId, "sheets_report");
+      return done(viewer, "integration.sheets_report.template", projectId, {
+        ok: true,
+        message: `${r.created ? "Репорт создан из шаблона" : "Найден существующий Репорт, подключён"}. ${sync}`,
+      });
+    }
+    const r = await ensureProjectFolder(projectId, project.name, viewer.email);
+    return done(viewer, "integration.drive.template", projectId, {
+      ok: true,
+      message: r.created ? "Папка проекта создана из шаблона." : "Найдена существующая папка проекта, подключена.",
+    });
+  } catch (error) {
+    return done(viewer, `integration.${what}.template`, projectId, { ok: false, message: explain(error) });
+  }
 }

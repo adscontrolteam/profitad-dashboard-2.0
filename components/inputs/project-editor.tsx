@@ -80,12 +80,14 @@ export function ProjectEditor({
     ],
   );
   const [sources, setSources] = useState<SourceDraft[]>(project?.sources ?? []);
+  const [createDrive, setCreateDrive] = useState(Boolean(serviceAccountEmail));
+  const [createReport, setCreateReport] = useState(Boolean(serviceAccountEmail));
   const [smmEmail, setSmmEmail] = useState(project?.owners.smm ?? "");
   const [mediaBuyerEmail, setMediaBuyerEmail] = useState(project?.owners.mediaBuyer ?? "");
 
   const [state, formAction, saving] = useActionState(async (prev: ProjectActionState, formData: FormData) => {
     const next = await saveProjectAction(prev, formData);
-    if (next.ok) onClose();
+    if (next.ok && !next.warning) onClose();
     return next;
   }, IDLE);
   const [deleting, startDelete] = useTransition();
@@ -109,6 +111,8 @@ export function ProjectEditor({
     notes,
     smmEmail,
     mediaBuyerEmail,
+    createDrive: !project && (createDrive || createReport),
+    createReport: !project && createReport,
   });
 
   const unusedMetric = RESULT_METRICS.find((m) => !kpis.some((k) => k.metric === m));
@@ -122,7 +126,7 @@ export function ProjectEditor({
     });
   };
 
-  const error = state.message && !state.ok ? state.message : deleteError;
+  const error = state.message && !state.ok ? state.message : (state.warning ?? deleteError);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -301,8 +305,39 @@ export function ProjectEditor({
             </button>
           </fieldset>
 
-          {project && (
+          {project ? (
             <ProjectIntegrations projectId={project.id} integrations={integrations} serviceAccountEmail={serviceAccountEmail} />
+          ) : (
+            <fieldset className="flex flex-col gap-2">
+              <legend className="section-kicker mb-2">Google Drive</legend>
+              <label className="flex cursor-pointer items-start gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={createDrive || createReport}
+                  disabled={!serviceAccountEmail || createReport}
+                  onChange={(e) => setCreateDrive(e.target.checked)}
+                  className="mt-0.5 size-4 accent-[var(--accent)]"
+                />
+                <span>
+                  Создать папку проекта
+                  <span className="block text-xs text-muted-foreground">Копия «Template Project» в PROFITAD → PROJECTS. Если папка с таким именем уже есть — подключим её.</span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={createReport}
+                  disabled={!serviceAccountEmail}
+                  onChange={(e) => setCreateReport(e.target.checked)}
+                  className="mt-0.5 size-4 accent-[var(--accent)]"
+                />
+                <span>
+                  Создать таблицу «Репорт»
+                  <span className="block text-xs text-muted-foreground">Копия шаблона в папке проекта; дашборд будет заполнять её каждый день.</span>
+                </span>
+              </label>
+              {!serviceAccountEmail && <p className="text-xs text-warning">Google ещё не настроен — создадим позже из карточки проекта.</p>}
+            </fieldset>
           )}
 
           <Field label="Заметки">
