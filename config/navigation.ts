@@ -49,6 +49,7 @@ export const allowedTabs = (tabs: SubNavItem[], p: Pick<Permissions, Capability>
 
 const EXTRA_TITLES: Record<string, string> = {
   "/settings/access": "Доступы",
+  "/settings/integrations": "Подключения",
 };
 
 /** Order used for page slide direction. */

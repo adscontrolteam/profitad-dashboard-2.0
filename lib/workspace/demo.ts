@@ -63,6 +63,9 @@ export interface AdCampaign {
   clicks: number;
   /** null when the source does not report reach. */
   frequency: number | null;
+  /** Real ad account / campaign ids (synced data only); enable pause/enable through the platform API. */
+  accountId?: string;
+  externalId?: string;
 }
 
 export interface AdsReport {

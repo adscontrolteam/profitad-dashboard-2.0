@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { setGoogleCampaignStatusAction } from "@/app/(dashboard)/ads/actions";
 import { cn } from "@/lib/cn";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { AdCampaign, CampaignStatus } from "@/lib/workspace/demo";
@@ -14,15 +15,41 @@ const STATUS: Record<CampaignStatus, { label: string; className: string }> = {
 };
 
 export function CampaignsTable({
+  projectId,
   campaigns,
   resultLabel,
   canManage,
+  live = false,
 }: {
+  projectId: string;
   campaigns: AdCampaign[];
   resultLabel: string;
   canManage: boolean;
+  /** Real Google campaigns: toggles go to the Google Ads API. */
+  live?: boolean;
 }) {
   const [overrides, setOverrides] = useState<Record<string, CampaignStatus>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
+  const toggle = (c: AdCampaign, paused: boolean) => {
+    const next: CampaignStatus = paused ? "active" : "paused";
+    if (!live) {
+      setOverrides((o) => ({ ...o, [c.id]: next }));
+      return;
+    }
+    if (c.platform !== "google" || !c.accountId || !c.externalId) return;
+    if (!window.confirm(`${paused ? "Включить" : "Поставить на паузу"} «${c.name}» в Google Ads?`)) return;
+    setBusy(c.id);
+    setError(null);
+    startTransition(async () => {
+      const r = await setGoogleCampaignStatusAction(projectId, c.accountId!, c.externalId!, paused ? "ENABLED" : "PAUSED");
+      setBusy(null);
+      if (r.ok) setOverrides((o) => ({ ...o, [c.id]: next }));
+      else setError(r.message);
+    });
+  };
 
   if (campaigns.length === 0) {
     return <p className="text-sm text-muted-foreground">За период кампаний нет.</p>;
@@ -30,6 +57,7 @@ export function CampaignsTable({
 
   return (
     <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      {error && <p role="alert" className="mb-2 text-sm font-medium text-negative">{error}</p>}
       <table className="w-full min-w-[760px] text-sm">
         <thead>
           <tr className="text-left text-xs text-muted-foreground">
@@ -73,13 +101,16 @@ export function CampaignsTable({
                 <td className="py-3 pr-3 text-right">{c.frequency?.toFixed(2) ?? "—"}</td>
                 {canManage && (
                   <td className="py-3 text-right">
-                    <button
-                      type="button"
-                      className="btn-ghost px-3 py-1 text-xs"
-                      onClick={() => setOverrides((o) => ({ ...o, [c.id]: paused ? "active" : "paused" }))}
-                    >
-                      {paused ? "Включить" : "Пауза"}
-                    </button>
+                    {(!live || (c.platform === "google" && c.externalId && status)) && (
+                      <button
+                        type="button"
+                        className="btn-ghost px-3 py-1 text-xs"
+                        disabled={busy === c.id}
+                        onClick={() => toggle(c, paused)}
+                      >
+                        {busy === c.id ? "…" : paused ? "Включить" : "Пауза"}
+                      </button>
+                    )}
                   </td>
                 )}
               </tr>

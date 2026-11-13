@@ -8,6 +8,8 @@ import { requireSection } from "@/lib/access/viewer";
 import { METRICS } from "@/lib/domain/metrics";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { getAdsReport } from "@/lib/workspace/ads-store";
+import type { AdCampaign } from "@/lib/workspace/demo";
+import { adsConfigured, campaignStatuses } from "@/lib/google/ads";
 import { resolveWorkspace } from "@/lib/workspace/context";
 import { AD_PLATFORMS, first, isAdPlatform, workspaceHref } from "@/lib/workspace/params";
 
@@ -38,6 +40,8 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
 
   const resultMetric = ws.project.kpis[0]?.metric ?? "leads";
   const report = await getAdsReport(ws.project, { from: ws.range.from, to: ws.range.to }, platform, resultMetric);
+  const campaigns = await withLiveGoogleStatus(report.campaigns);
+  const liveGoogle = report.source === "synced" && adsConfigured();
   const spend = report.days.reduce((a, d) => a + d.spend, 0);
   const results = report.days.reduce((a, d) => a + d.results, 0);
   const impressions = report.days.reduce((a, d) => a + d.impressions, 0);
@@ -94,15 +98,43 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="section-title">Кампании</h2>
           <p className="text-xs text-muted-foreground">
-            {permissions.canManageAds ? "Можно ставить на паузу и включать" : "Только просмотр"}
+            {!permissions.canManageAds
+              ? "Только просмотр"
+              : liveGoogle
+                ? "Пауза и включение уходят прямо в Google Ads"
+                : report.source === "demo"
+                  ? "Демо: пауза и включение без отправки"
+                  : "Управление появится после настройки Google Ads API"}
           </p>
         </div>
         <CampaignsTable
-          campaigns={report.campaigns}
+          projectId={ws.project.id}
+          campaigns={campaigns}
           resultLabel={resultLabel}
-          canManage={permissions.canManageAds && report.source === "demo"}
+          canManage={permissions.canManageAds && (report.source === "demo" || liveGoogle)}
+          live={liveGoogle}
         />
       </Card>
     </div>
   );
+}
+
+/** Current status straight from Google Ads for synced Google campaigns; silently skipped if the API is not set up. */
+async function withLiveGoogleStatus(campaigns: AdCampaign[]): Promise<AdCampaign[]> {
+  if (!adsConfigured()) return campaigns;
+  const accounts = [...new Set(campaigns.filter((c) => c.platform === "google" && c.accountId).map((c) => c.accountId as string))];
+  const statuses = new Map<string, Map<string, string>>();
+  await Promise.all(
+    accounts.map(async (a) => {
+      try {
+        statuses.set(a, await campaignStatuses(a));
+      } catch {
+        // keep the table usable without live status
+      }
+    }),
+  );
+  return campaigns.map((c) => {
+    const s = c.accountId && c.externalId ? statuses.get(c.accountId)?.get(c.externalId) : undefined;
+    return s ? { ...c, status: s === "ENABLED" ? "active" : "paused" } : c;
+  });
 }

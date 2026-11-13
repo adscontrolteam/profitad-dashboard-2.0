@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MetricsGrid } from "@/components/projects/metrics-grid";
+import { ProjectLeads } from "@/components/projects/project-leads";
 import { ResultCard } from "@/components/projects/result-card";
 import { SourceChips } from "@/components/projects/source-chips";
 import { Card } from "@/components/ui/card";
@@ -83,6 +84,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[proj
       )}
 
       <MetricsGrid metrics={project.metrics} />
+
+      <ProjectLeads projectId={project.id} />
     </div>
   );
 }

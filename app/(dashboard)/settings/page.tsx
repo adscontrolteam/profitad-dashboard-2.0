@@ -35,6 +35,20 @@ export default async function SettingsPage() {
           </Link>
         </Card>
       )}
+
+      {permissions.canManageAccess && (
+        <Card className="flex min-w-0 flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="section-title">Подключения</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Google Ads, Таблицы, Drive и CRM: статус ключей, синхронизация и журнал действий.
+            </p>
+          </div>
+          <Link href="/settings/integrations" className="btn-primary">
+            Открыть
+          </Link>
+        </Card>
+      )}
     </div>
   );
 }

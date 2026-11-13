@@ -8,17 +8,28 @@ import { METRICS } from "@/lib/domain/metrics";
 import type { Project } from "@/lib/domain/types";
 import { formatDate, formatMetric } from "@/lib/format";
 import type { OwnerCandidates } from "@/lib/projects/owners";
+import { INTEGRATION_LABELS } from "@/lib/integrations/kinds";
+import type { IntegrationView } from "@/lib/integrations/types";
+import { cn } from "@/lib/cn";
+import type { AdsAccountOption } from "./project-editor";
 import { ProjectEditor, type EditableProject } from "./project-editor";
 
 export function ProjectsInputs({
   projects,
   owners,
+  integrations,
+  serviceAccountEmail,
+  adsAccounts,
   canEdit,
   canCreate,
   canDelete,
 }: {
   projects: EditableProject[];
   owners: OwnerCandidates;
+  integrations: Record<string, IntegrationView[]>;
+  serviceAccountEmail: string | null;
+  /** Google Ads accounts under the MCC; null when the API is not configured. */
+  adsAccounts: AdsAccountOption[] | null;
   canEdit: boolean;
   canCreate: boolean;
   canDelete: boolean;
@@ -62,6 +73,7 @@ export function ProjectsInputs({
                   <div className="mt-1.5">
                     <StatusBadge status={project.status} />
                   </div>
+                  <IntegrationDots items={integrations[project.id] ?? []} />
                 </td>
                 <td className="bg-background/70 px-4 py-3 text-muted-foreground transition-colors group-hover:bg-muted">
                   {project.goal || "—"}
@@ -102,6 +114,9 @@ export function ProjectsInputs({
           key={editing === "new" ? "new" : editing.id}
           project={editing === "new" ? null : editing}
           owners={owners}
+          integrations={editing === "new" ? [] : (integrations[editing.id] ?? [])}
+          serviceAccountEmail={serviceAccountEmail}
+          adsAccounts={adsAccounts}
           canDelete={canDelete}
           onClose={() => setEditing(null)}
         />
@@ -126,5 +141,27 @@ function KpiList({ kpis }: { kpis: Project["kpis"] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+const SHORT: Record<IntegrationView["kind"], string> = { crm: "CRM", sheets_leads: "Лиды", sheets_report: "Репорт", drive: "Drive" };
+
+function IntegrationDots({ items }: { items: IntegrationView[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {items.map((i) => (
+        <span
+          key={i.kind}
+          title={`${INTEGRATION_LABELS[i.kind]}${i.lastError ? ` — ${i.lastError}` : ""}`}
+          className={cn(
+            "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+            i.status === "ok" ? "bg-positive/12 text-positive" : i.status === "error" ? "bg-negative/12 text-negative" : "bg-muted text-muted-foreground",
+          )}
+        >
+          {SHORT[i.kind]}
+        </span>
+      ))}
+    </div>
   );
 }

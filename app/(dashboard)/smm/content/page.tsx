@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ContentStudio } from "@/components/smm/content-studio";
+import { DriveSection } from "@/components/drive/drive-section";
 import { WorkspaceHeader } from "@/components/workspace/header";
 import { DemoNotice, EmptyProjects } from "@/components/workspace/toolbar";
 import { requireCapability } from "@/lib/access/viewer";
@@ -17,7 +18,10 @@ export default async function Page({ searchParams }: PageProps<"/smm/content">) 
       <WorkspaceHeader section="smm" pathname="/smm/content" workspace={ws} permissions={permissions} />
       <DemoNotice />
       {ws.project ? (
-        <ContentStudio key={ws.project.id} projectId={ws.project.id} projectName={ws.project.name} />
+        <>
+          <ContentStudio key={ws.project.id} projectId={ws.project.id} projectName={ws.project.name} />
+          <DriveSection projectId={ws.project.id} canUpload />
+        </>
       ) : (
         <EmptyProjects />
       )}

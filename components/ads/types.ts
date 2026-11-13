@@ -36,7 +36,12 @@ export interface CampaignDraft {
   placementList: string[];
   creativeIds: string[];
   url: string;
-  status: "draft" | "queued";
+  /** Google Search: responsive search ad texts, one per line in the form. */
+  headlines?: string[];
+  descriptions?: string[];
+  /** draft = saved here; queued = waiting for an API; launched = created in the ad account. */
+  status: "draft" | "queued" | "launched";
+  externalId?: string | null;
   createdAt: string;
 }
 

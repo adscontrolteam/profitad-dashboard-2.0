@@ -8,6 +8,8 @@ import {
 } from "@/app/(dashboard)/inputs/actions";
 import { METRICS, PLATFORM_LABELS } from "@/lib/domain/metrics";
 import type { OwnerCandidates, OwnerOption } from "@/lib/projects/owners";
+import type { IntegrationView } from "@/lib/integrations/types";
+import { ProjectIntegrations } from "./project-integrations";
 import { STATUS_META } from "@/lib/domain/statuses";
 import {
   PROJECT_STATUSES,
@@ -20,6 +22,13 @@ import {
 } from "@/lib/domain/types";
 
 export type EditableProject = Omit<Project, "metrics">;
+
+export interface AdsAccountOption {
+  id: string;
+  name: string;
+  currency: string;
+  status: string;
+}
 
 interface KpiDraft {
   metric: ResultMetric;
@@ -46,11 +55,17 @@ function currentMonth() {
 export function ProjectEditor({
   project,
   owners,
+  integrations,
+  serviceAccountEmail,
+  adsAccounts,
   canDelete,
   onClose,
 }: {
   project: EditableProject | null;
   owners: OwnerCandidates;
+  integrations: IntegrationView[];
+  serviceAccountEmail: string | null;
+  adsAccounts: AdsAccountOption[] | null;
   canDelete: boolean;
   onClose: () => void;
 }) {
@@ -248,13 +263,31 @@ export function ProjectEditor({
                     ))}
                   </select>
                 </Field>
-                <Field label={i === 0 ? "ID кабинета" : undefined}>
-                  <input
-                    value={source.accountId}
-                    placeholder="нет доступа"
-                    onChange={(e) => setSources(sources.map((s, j) => (j === i ? { ...s, accountId: e.target.value } : s)))}
-                    className="field tabular-nums"
-                  />
+                <Field label={i === 0 ? "Кабинет" : undefined}>
+                  {source.platform === "google" && adsAccounts && adsAccounts.length > 0 ? (
+                    <select
+                      value={source.accountId.replace(/\D/g, "")}
+                      onChange={(e) => setSources(sources.map((s, j) => (j === i ? { ...s, accountId: e.target.value } : s)))}
+                      className="field tabular-nums"
+                    >
+                      <option value="">Нет доступа / не выбран</option>
+                      {source.accountId && !adsAccounts.some((a) => a.id === source.accountId.replace(/\D/g, "")) && (
+                        <option value={source.accountId.replace(/\D/g, "")}>{source.accountId} (нет в MCC)</option>
+                      )}
+                      {adsAccounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name || "Без названия"} · {a.id.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")} · {a.currency}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      value={source.accountId}
+                      placeholder="нет доступа"
+                      onChange={(e) => setSources(sources.map((s, j) => (j === i ? { ...s, accountId: e.target.value } : s)))}
+                      className="field tabular-nums"
+                    />
+                  )}
                 </Field>
                 <RemoveButton label="Убрать источник" onClick={() => setSources(sources.filter((_, j) => j !== i))} />
               </div>
@@ -267,6 +300,10 @@ export function ProjectEditor({
               + Добавить источник
             </button>
           </fieldset>
+
+          {project && (
+            <ProjectIntegrations projectId={project.id} integrations={integrations} serviceAccountEmail={serviceAccountEmail} />
+          )}
 
           <Field label="Заметки">
             <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} className="field resize-y" />

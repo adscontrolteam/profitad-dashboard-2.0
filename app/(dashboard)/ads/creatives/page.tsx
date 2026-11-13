@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { CreativesStudio } from "@/components/ads/creatives-studio";
+import { DriveSection } from "@/components/drive/drive-section";
 import { WorkspaceHeader } from "@/components/workspace/header";
 import { DemoNotice, EmptyProjects } from "@/components/workspace/toolbar";
 import { requireCapability } from "@/lib/access/viewer";
@@ -17,7 +18,10 @@ export default async function Page({ searchParams }: PageProps<"/ads/creatives">
       <WorkspaceHeader section="ads" pathname="/ads/creatives" workspace={ws} permissions={permissions} />
       <DemoNotice />
       {ws.project ? (
-        <CreativesStudio key={ws.project.id} projectId={ws.project.id} projectName={ws.project.name} />
+        <>
+          <CreativesStudio key={ws.project.id} projectId={ws.project.id} projectName={ws.project.name} />
+          <DriveSection projectId={ws.project.id} canUpload />
+        </>
       ) : (
         <EmptyProjects />
       )}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { launchGoogleSearchAction } from "@/app/(dashboard)/ads/actions";
 import { Field, Segmented, StepCard, Toast, ToggleChip } from "@/components/workspace/form";
 import { uid, useLocalState } from "@/components/workspace/use-local-state";
 import { cn } from "@/lib/cn";
@@ -51,7 +52,24 @@ function blank(): CampaignDraft {
   };
 }
 
-export function CampaignBuilder({ projectId, projectName }: { projectId: string; projectName: string }) {
+const lines = (s: string) => s.split(/\n|,/).map((x) => x.trim()).filter(Boolean);
+
+export function CampaignBuilder({
+  projectId,
+  projectName,
+  googleAccountId,
+  googleReady,
+}: {
+  projectId: string;
+  projectName: string;
+  /** Google Ads account of the project (from Inputs); null = none linked. */
+  googleAccountId: string | null;
+  /** The dashboard has Google Ads API credentials. */
+  googleReady: boolean;
+}) {
+  const [headlinesText, setHeadlinesText] = useState("");
+  const [descriptionsText, setDescriptionsText] = useState("");
+  const [launching, startLaunch] = useTransition();
   const [drafts, setDrafts] = useLocalState<CampaignDraft[]>(`campaigns:${projectId}`, []);
   const [creatives] = useLocalState<Creative[]>(`creatives:${projectId}`, seedCreatives(projectName));
   const [form, setForm] = useState<CampaignDraft>(() => blank());
@@ -75,31 +93,88 @@ export function CampaignBuilder({ projectId, projectName }: { projectId: string;
   }, [form.startDate, form.endDate]);
   const total = form.budgetType === "daily" ? form.budget * days : form.budget;
 
+  const isGoogle = form.platform === "google";
+  const googleSearch = isGoogle && form.objective === "SEARCH";
+  const headlines = lines(headlinesText);
+  const descriptions = lines(descriptionsText);
+  const canLaunchGoogle = googleSearch && googleReady && Boolean(googleAccountId);
+
   const errors = [
     !form.budget || form.budget <= 0 ? "Укажите бюджет" : null,
     form.geo.length === 0 ? "Выберите гео" : null,
-    form.creativeIds.length === 0 ? "Добавьте хотя бы один креатив" : null,
+    !isGoogle && form.creativeIds.length === 0 ? "Добавьте хотя бы один креатив" : null,
+    googleSearch && lines(form.audience).length === 0 ? "Добавьте ключевые слова" : null,
+    googleSearch && headlines.length < 3 ? "Нужно минимум 3 заголовка" : null,
+    googleSearch && headlines.some((h) => h.length > 30) ? "Заголовки — до 30 символов" : null,
+    googleSearch && descriptions.length < 2 ? "Нужно минимум 2 описания" : null,
+    googleSearch && descriptions.some((d) => d.length > 90) ? "Описания — до 90 символов" : null,
     !/^https?:\/\/\S+\.\S+/.test(form.url) ? "Укажите ссылку (https://…)" : null,
   ].filter(Boolean) as string[];
+
+  const remember = (status: CampaignDraft["status"], externalId: string | null = null) => {
+    const draft: CampaignDraft = {
+      ...form,
+      id: form.id || uid(),
+      name,
+      headlines,
+      descriptions,
+      status,
+      externalId,
+      createdAt: form.createdAt || new Date().toISOString(),
+    };
+    setDrafts((list) => [draft, ...list.filter((d) => d.id !== draft.id)]);
+  };
+
+  /** Google Search: validate in Google (dry run) or create for real. */
+  const launchGoogle = (validateOnly: boolean) => {
+    if (errors.length) {
+      setToast(errors.join(" · "));
+      return;
+    }
+    if (!validateOnly && !window.confirm(`Создать и запустить «${name}» в Google Ads с бюджетом ${form.budget} в день?`)) return;
+    startLaunch(async () => {
+      const r = await launchGoogleSearchAction(
+        projectId,
+        googleAccountId!,
+        {
+          name,
+          dailyBudget: form.budget,
+          geo: form.geo,
+          keywords: lines(form.audience),
+          headlines,
+          descriptions,
+          finalUrl: form.url,
+          enable: true,
+        },
+        validateOnly,
+      );
+      setToast(r.message);
+      if (r.ok && !validateOnly) {
+        remember("launched", r.campaignId ?? null);
+        setForm(blank());
+        setHeadlinesText("");
+        setDescriptionsText("");
+      }
+    });
+  };
 
   const save = (status: CampaignDraft["status"]) => {
     if (status === "queued" && errors.length) {
       setToast(errors.join(" · "));
       return;
     }
-    const draft: CampaignDraft = {
-      ...form,
-      id: form.id || uid(),
-      name,
-      status,
-      createdAt: form.createdAt || new Date().toISOString(),
-    };
-    setDrafts((list) => [draft, ...list.filter((d) => d.id !== draft.id)]);
+    remember(status);
     setForm(blank());
     setToast(
-      status === "queued"
-        ? `«${name}» готова к запуску. После подключения ${form.platform === "meta" ? "Meta Marketing API" : "Google Ads API"} кампания создастся в кабинете автоматически.`
-        : `Черновик «${name}» сохранён.`,
+      status === "draft"
+        ? `Черновик «${name}» сохранён.`
+        : !isGoogle
+          ? `«${name}» сохранена к запуску. Доступ приложения Meta к API сейчас заблокирован — кампания уйдёт в кабинет после разблокировки.`
+          : !googleAccountId
+            ? `«${name}» сохранена. Привяжите кабинет Google Ads к проекту во «Вводных», чтобы запускать отсюда.`
+            : !googleReady
+              ? `«${name}» сохранена. Google Ads API ещё не настроен в «Настройки → Подключения».`
+              : `«${name}» сохранена. Из дашборда пока запускаются только поисковые кампании (Поиск).`,
     );
   };
 
@@ -133,12 +208,16 @@ export function CampaignBuilder({ projectId, projectName }: { projectId: string;
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Тип бюджета">
               <Segmented
-                value={form.budgetType}
+                value={isGoogle ? "daily" : form.budgetType}
                 onChange={(v) => set("budgetType", v)}
-                options={[
-                  { value: "daily", label: "Дневной" },
-                  { value: "lifetime", label: "На весь период" },
-                ]}
+                options={
+                  isGoogle
+                    ? [{ value: "daily" as const, label: "Дневной" }]
+                    : [
+                        { value: "daily" as const, label: "Дневной" },
+                        { value: "lifetime" as const, label: "На весь период" },
+                      ]
+                }
               />
             </Field>
             <Field label="Сумма, $">
@@ -186,7 +265,7 @@ export function CampaignBuilder({ projectId, projectName }: { projectId: string;
                 </select>
               </Field>
             </div>
-            <Field label={form.platform === "google" ? "Ключевые слова" : "Интересы / Advantage+"} hint="— через запятую">
+            <Field label={form.platform === "google" ? "Ключевые слова" : "Интересы / Advantage+"} hint={isGoogle ? "— через запятую или с новой строки, фразовое соответствие" : "— через запятую"}>
               <textarea
                 className="field min-h-20"
                 value={form.audience}
@@ -221,8 +300,36 @@ export function CampaignBuilder({ projectId, projectName }: { projectId: string;
           </StepCard>
         )}
 
-        <StepCard n={form.platform === "meta" ? 5 : 4} title="Креативы и ссылка">
+        {googleSearch && (
+          <StepCard n={4} title="Объявление (адаптивное поисковое)">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Заголовки" hint={`— по одному в строке, 3–15, до 30 симв. · ${headlines.length}`}>
+                <textarea
+                  className="field min-h-36"
+                  value={headlinesText}
+                  onChange={(e) => setHeadlinesText(e.target.value)}
+                  placeholder={"Юрист по ВНЖ в Польше\nКонсультация за 24 часа\nФиксированная цена"}
+                />
+              </Field>
+              <Field label="Описания" hint={`— по одному в строке, 2–4, до 90 симв. · ${descriptions.length}`}>
+                <textarea
+                  className="field min-h-36"
+                  value={descriptionsText}
+                  onChange={(e) => setDescriptionsText(e.target.value)}
+                  placeholder={"Подготовим документы и подадим заявление. Оставьте заявку — перезвоним сегодня."}
+                />
+              </Field>
+            </div>
+            {[...headlines.filter((h) => h.length > 30), ...descriptions.filter((d) => d.length > 90)].length > 0 && (
+              <p className="mt-2 text-xs text-negative">Есть слишком длинные строки — Google их не примет.</p>
+            )}
+          </StepCard>
+        )}
+
+        <StepCard n={form.platform === "meta" ? 5 : googleSearch ? 5 : 4} title={isGoogle ? "Ссылка" : "Креативы и ссылка"}>
           <div className="flex flex-col gap-4">
+            {!isGoogle && (
+              <>
             {creatives.length === 0 ? (
               <p className="text-sm text-muted-foreground">Креативов пока нет — подготовьте их во вкладке «Креативы».</p>
             ) : (
@@ -263,6 +370,8 @@ export function CampaignBuilder({ projectId, projectName }: { projectId: string;
                 })}
               </div>
             )}
+              </>
+            )}
             <Field label="Ссылка назначения" hint="— UTM добавятся автоматически">
               <input className="field" type="url" placeholder="https://site.com/landing" value={form.url} onChange={(e) => set("url", e.target.value)} />
             </Field>
@@ -290,13 +399,35 @@ export function CampaignBuilder({ projectId, projectName }: { projectId: string;
             </ul>
           )}
           <div className="mt-5 flex flex-wrap gap-2">
-            <button type="button" className="btn-primary" onClick={() => save("queued")}>
-              Запустить
-            </button>
-            <button type="button" className="btn-ghost border border-border" onClick={() => save("draft")}>
+            {canLaunchGoogle ? (
+              <>
+                <button type="button" className="btn-primary" disabled={launching} onClick={() => launchGoogle(false)}>
+                  {launching ? "Отправляю…" : "Запустить в Google Ads"}
+                </button>
+                <button type="button" className="btn-ghost border border-border" disabled={launching} onClick={() => launchGoogle(true)}>
+                  Проверить в Google
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn-primary" onClick={() => save("queued")}>
+                Запустить
+              </button>
+            )}
+            <button type="button" className="btn-ghost border border-border" disabled={launching} onClick={() => save("draft")}>
               В черновик
             </button>
           </div>
+          <p className="mt-3 text-xs leading-5 text-muted-foreground">
+            {canLaunchGoogle
+              ? `Кампания создастся в кабинете ${googleAccountId} со стратегией «Максимум конверсий» и сразу начнёт показы.`
+              : isGoogle && !googleAccountId
+                ? "Кабинет Google Ads не привязан к проекту — добавьте его во «Вводных»."
+                : isGoogle && !googleReady
+                  ? "Google Ads API не настроен — пока сохраняем как задание."
+                  : isGoogle
+                    ? "Из дашборда запускаются поисковые кампании; остальные типы — сохраняем как задание."
+                    : "Meta API сейчас заблокирован — кампания сохранится и уйдёт в кабинет после разблокировки."}
+          </p>
         </section>
 
         <section className="rounded-[var(--radius)] border border-border bg-card p-5 shadow-[var(--shadow)]">
@@ -312,17 +443,25 @@ export function CampaignBuilder({ projectId, projectName }: { projectId: string;
                     <span
                       className={cn(
                         "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                        d.status === "queued" ? "bg-positive/12 text-positive" : "bg-muted text-muted-foreground",
+                        d.status === "launched"
+                        ? "bg-positive/12 text-positive"
+                        : d.status === "queued"
+                          ? "bg-warning/14 text-warning"
+                          : "bg-muted text-muted-foreground",
                       )}
                     >
-                      {d.status === "queued" ? "к запуску" : "черновик"}
+                      {d.status === "launched" ? "запущена" : d.status === "queued" ? "к запуску" : "черновик"}
                     </span>
                     <span className="text-xs text-muted-foreground tabular-nums">
                       {d.platform === "meta" ? "Meta" : "Google"} · {formatCurrency(d.budget)}
                       {d.budgetType === "daily" ? "/день" : ""}
                     </span>
                     <span className="ml-auto flex gap-1">
-                      <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={() => setForm(d)}>
+                      <button type="button" className="btn-ghost px-2.5 py-1 text-xs" onClick={() => {
+                          setForm(d);
+                          setHeadlinesText((d.headlines ?? []).join("\n"));
+                          setDescriptionsText((d.descriptions ?? []).join("\n"));
+                        }}>
                         Открыть
                       </button>
                       <button

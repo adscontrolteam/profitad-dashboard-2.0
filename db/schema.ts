@@ -9,7 +9,9 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { IntegrationKind } from "@/lib/integrations/kinds";
 import type { Kpi, ProjectStatus, TrafficPlatform, TrafficSource } from "@/lib/domain/types";
 import type { DealStage } from "@/lib/sales/stages";
 import type { TaskStage } from "@/lib/tasks/stages";
@@ -149,4 +151,78 @@ export const adMetricsDaily = pgTable(
     primaryKey({ columns: [t.date, t.platform, t.accountId, t.campaignId] }),
     index("ad_metrics_project_date_idx").on(t.projectId, t.date),
   ],
+);
+
+/**
+ * A project's external connection: CRM, Google Sheets (leads in / daily report out), Google Drive.
+ * One row per project and kind. `config` holds non-secret settings; `secret` is AES-GCM encrypted
+ * (see lib/crypto.ts) and never leaves the server.
+ */
+export const projectIntegrations = pgTable(
+  "project_integrations",
+  {
+    projectId: text("project_id").notNull(),
+    kind: text("kind").$type<IntegrationKind>().notNull(),
+    config: jsonb("config").$type<Record<string, unknown>>().notNull().default({}),
+    secret: text("secret"),
+    /** ok | error | pending */
+    status: text("status").notNull().default("pending"),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedBy: text("updated_by"),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.kind] })],
+);
+
+export type ProjectIntegrationRow = typeof projectIntegrations.$inferSelect;
+
+/** Leads from CRMs, webhooks and lead sheets; re-imports update the same row by (project, source, external id). */
+export const leads = pgTable(
+  "leads",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    /** webhook | kommo | bitrix24 | sheet */
+    source: text("source").notNull(),
+    externalId: text("external_id").notNull(),
+    leadAt: timestamp("lead_at", { withTimezone: true }).notNull(),
+    name: text("name").notNull().default(""),
+    phone: text("phone").notNull().default(""),
+    email: text("email").notNull().default(""),
+    /** Stage/status as named in the source (e.g. a Kommo pipeline status). */
+    status: text("status").notNull().default(""),
+    /** new | qualified | won | lost | junk — normalized where the source allows. */
+    outcome: text("outcome").notNull().default("new"),
+    value: doublePrecision("value"),
+    campaign: text("campaign").notNull().default(""),
+    utm: jsonb("utm").$type<Record<string, string>>().notNull().default({}),
+    raw: jsonb("raw").$type<unknown>(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("leads_source_external_idx").on(t.projectId, t.source, t.externalId),
+    index("leads_project_time_idx").on(t.projectId, t.leadAt),
+  ],
+);
+
+export type LeadRow = typeof leads.$inferSelect;
+
+/** Every action that changes something outside the dashboard (ad platforms, sheets, drive). */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: text("id").primaryKey(),
+    at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
+    actorEmail: text("actor_email").notNull(),
+    action: text("action").notNull(),
+    projectId: text("project_id"),
+    target: text("target").notNull().default(""),
+    payload: jsonb("payload").$type<unknown>(),
+    ok: boolean("ok").notNull(),
+    result: text("result").notNull().default(""),
+  },
+  (t) => [index("audit_log_at_idx").on(t.at)],
 );

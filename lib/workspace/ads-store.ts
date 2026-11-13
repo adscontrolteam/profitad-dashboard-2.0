@@ -60,6 +60,8 @@ export async function getAdsReport(
       impressions: 0,
       clicks: 0,
       frequency: null,
+      accountId: row.accountId,
+      externalId: row.campaignId,
     };
     c.spend += row.spend;
     c.results += result(row);
