@@ -30,6 +30,7 @@ export function TaskDrawer({
   team,
   viewerEmail,
   canModerate,
+  defaultAssignee = null,
   onClose,
 }: {
   task: Task | null;
@@ -38,6 +39,8 @@ export function TaskDrawer({
   team: TeamMember[];
   viewerEmail: string;
   canModerate: boolean;
+  /** Pre-selected assignee for a new task. */
+  defaultAssignee?: string | null;
   onClose: () => void;
 }) {
   const [state, formAction, saving] = useActionState(async (prev: TaskActionState, formData: FormData) => {
@@ -124,7 +127,7 @@ export function TaskDrawer({
               </select>
             </Field>
             <Field label="Исполнитель">
-              <select name="assigneeEmail" defaultValue={task?.assigneeEmail ?? ""} className="field">
+              <select name="assigneeEmail" defaultValue={task ? (task.assigneeEmail ?? "") : (defaultAssignee ?? "")} className="field">
                 <option value="">Не назначен</option>
                 {assigneeOptions.map((m) => (
                   <option key={m.email} value={m.email}>

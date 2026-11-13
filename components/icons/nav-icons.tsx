@@ -33,6 +33,15 @@ function DashboardIcon(props: IconProps) {
   );
 }
 
+function ProfileIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </IconFrame>
+  );
+}
+
 function AdsIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
@@ -88,6 +97,7 @@ function SettingsIcon(props: IconProps) {
 }
 
 export const NAV_ICONS: Record<AppRoute, (props: IconProps) => ReactNode> = {
+  "/profile": ProfileIcon,
   "/": DashboardIcon,
   "/ads": AdsIcon,
   "/smm": SmmIcon,

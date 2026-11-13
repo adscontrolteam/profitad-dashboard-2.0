@@ -1,6 +1,6 @@
 import type { Permissions, Section } from "@/lib/access/roles";
 
-export type AppRoute = "/" | "/ads" | "/smm" | "/inputs" | "/sales" | "/tasks" | "/settings";
+export type AppRoute = "/profile" | "/" | "/ads" | "/smm" | "/inputs" | "/sales" | "/tasks" | "/settings";
 
 export type Capability = "canManageAds" | "canPublishContent";
 
@@ -34,6 +34,7 @@ export const SMM_TABS: SubNavItem[] = [
 ];
 
 export const NAV_ITEMS: NavItem[] = [
+  { label: "Профиль", href: "/profile" },
   { label: "Дашборд", href: "/", section: "dashboard" },
   { label: "Реклама", href: "/ads", section: "ads", children: ADS_TABS },
   { label: "SMM", href: "/smm", section: "smm", children: SMM_TABS },

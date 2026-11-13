@@ -10,6 +10,7 @@ import { getGrant } from "./store";
 export interface Viewer {
   email: string;
   name: string | null;
+  imageUrl: string | null;
   permissions: Permissions;
 }
 
@@ -31,15 +32,16 @@ export const getViewerState = cache(async (): Promise<ViewerState> => {
 
   const email = normalizeEmail(primary.emailAddress);
   const name = user.fullName || user.firstName || null;
+  const imageUrl = user.imageUrl ?? null;
 
   if (isAdminEmail(email)) {
-    return { status: "ok", viewer: { email, name, permissions: permissionsFor("admin") } };
+    return { status: "ok", viewer: { email, name, imageUrl, permissions: permissionsFor("admin") } };
   }
 
   const grant = await getGrant(email);
   if (!grant?.role) return { status: "no-access", email };
 
-  return { status: "ok", viewer: { email, name, permissions: permissionsFor(grant.role, grant) } };
+  return { status: "ok", viewer: { email, name, imageUrl, permissions: permissionsFor(grant.role, grant) } };
 });
 
 export async function requireViewer(): Promise<Viewer> {

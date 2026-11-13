@@ -31,6 +31,7 @@ export function TaskBoard({
   today,
   viewerEmail,
   canModerate,
+  personal = false,
 }: {
   tasks: Task[];
   projects: TaskProject[];
@@ -38,6 +39,8 @@ export function TaskBoard({
   today: string;
   viewerEmail: string;
   canModerate: boolean;
+  /** Board of the viewer's own tasks (profile): no assignee filter, new tasks go to the viewer. */
+  personal?: boolean;
 }) {
   const [optimisticTasks, applyChange] = useOptimistic(
     tasks,
@@ -137,6 +140,7 @@ export function TaskBoard({
             </option>
           ))}
         </select>
+        {!personal && (
         <select
           value={assigneeFilter}
           onChange={(e) => setAssigneeFilter(e.target.value)}
@@ -154,6 +158,7 @@ export function TaskBoard({
               </option>
             ))}
         </select>
+        )}
         <button
           type="button"
           className="btn-primary ml-auto"
@@ -291,6 +296,7 @@ export function TaskBoard({
           team={team}
           viewerEmail={viewerEmail}
           canModerate={canModerate}
+          defaultAssignee={personal ? viewerEmail : null}
           onClose={() => setDrawer(null)}
         />
       )}
