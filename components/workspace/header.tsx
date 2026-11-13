@@ -2,7 +2,8 @@ import { allowedTabs, ADS_TABS, SMM_TABS } from "@/config/navigation";
 import type { Permissions } from "@/lib/access/roles";
 import type { Workspace } from "@/lib/workspace/context";
 import { ProjectSelect } from "./project-select";
-import { RangePicker, SectionTabs } from "./toolbar";
+import { PeriodControl } from "./period-control";
+import { SectionTabs } from "./toolbar";
 
 /**
  * Top of every Ads/SMM page: project dropdown and (optionally) period.
@@ -35,7 +36,7 @@ export function WorkspaceHeader({
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ProjectSelect projects={workspace.projects} current={workspace.project?.id} path={pathname} query={query} />
-        {withRange && <RangePicker path={pathname} query={query} current={workspace.range.value} />}
+        {withRange && <PeriodControl path={pathname} query={query} period={workspace.range} />}
       </div>
       {children}
     </div>

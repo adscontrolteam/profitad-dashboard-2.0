@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { getDb } from "@/db";
 import { adMetricsDaily } from "@/db/schema";
@@ -13,17 +13,13 @@ import type { AdPlatformFilter } from "./params";
  */
 export async function getAdsReport(
   project: { id: string; name: string },
-  days: number,
+  window: { from: string; to: string },
   platform: AdPlatformFilter,
   resultMetric: ResultMetric,
 ): Promise<AdsReport> {
   "use cache";
   cacheLife("minutes");
   cacheTag(TAGS.project(project.id));
-
-  const since = new Date();
-  since.setUTCDate(since.getUTCDate() - (days - 1));
-  const sinceIso = since.toISOString().slice(0, 10);
 
   const platforms = platform === "all" ? (["meta", "google", "tiktok"] as const) : [platform];
   const rows = await getDb()
@@ -32,13 +28,14 @@ export async function getAdsReport(
     .where(
       and(
         eq(adMetricsDaily.projectId, project.id),
-        gte(adMetricsDaily.date, sinceIso),
+        gte(adMetricsDaily.date, window.from),
+        lte(adMetricsDaily.date, window.to),
         inArray(adMetricsDaily.platform, [...platforms]),
       ),
     )
     .orderBy(asc(adMetricsDaily.date));
 
-  if (rows.length === 0) return demoAdsReport(project.id, project.name, days, platform);
+  if (rows.length === 0) return demoAdsReport(project.id, project.name, window, platform);
 
   const result = (row: (typeof rows)[number]) => Number(row[resultMetric] ?? 0);
   const byDay = new Map<string, AdDay>();

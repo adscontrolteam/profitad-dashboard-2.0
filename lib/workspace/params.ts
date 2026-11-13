@@ -9,8 +9,49 @@ export const RANGES = [
 
 export type RangeValue = (typeof RANGES)[number]["value"];
 
-export function parseRange(value: unknown): (typeof RANGES)[number] {
-  return RANGES.find((r) => r.value === value) ?? RANGES[1];
+/** Longest custom range, to keep queries and charts reasonable. */
+export const MAX_RANGE_DAYS = 730;
+
+export interface Period {
+  /** Preset value, or null for a custom from–to range. */
+  preset: RangeValue | null;
+  from: string;
+  to: string;
+  days: number;
+  /** «30 дней» or «14 окт. — 20 окт.» */
+  label: string;
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const DAY = 86_400_000;
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+const shortDate = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", timeZone: "UTC" });
+
+export const todayIso = () => isoDay(new Date());
+
+export function daysBetween(from: string, to: string) {
+  return Math.round((Date.parse(to) - Date.parse(from)) / DAY) + 1;
+}
+
+export function shiftIso(iso: string, days: number) {
+  return isoDay(new Date(Date.parse(iso) + days * DAY));
+}
+
+/** `?from=&to=` wins over `?range=`; invalid or reversed dates fall back to the preset. */
+export function parsePeriod(range: unknown, from: unknown, to: unknown): Period {
+  const today = todayIso();
+  if (typeof from === "string" && typeof to === "string" && ISO_DATE.test(from) && ISO_DATE.test(to)) {
+    let start = from <= to ? from : to;
+    let end = from <= to ? to : from;
+    if (end > today) end = today;
+    if (start > end) start = end;
+    if (daysBetween(start, end) > MAX_RANGE_DAYS) start = shiftIso(end, -(MAX_RANGE_DAYS - 1));
+    const sameYear = start.slice(0, 4) === end.slice(0, 4);
+    const fmt = (iso: string) => shortDate.format(new Date(iso)) + (sameYear ? "" : ` ${iso.slice(0, 4)}`);
+    return { preset: null, from: start, to: end, days: daysBetween(start, end), label: `${fmt(start)} — ${fmt(end)}` };
+  }
+  const preset = RANGES.find((r) => r.value === range) ?? RANGES[1];
+  return { preset: preset.value, from: shiftIso(today, -(preset.days - 1)), to: today, days: preset.days, label: preset.label };
 }
 
 export const SOCIAL_NETWORKS = [

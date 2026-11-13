@@ -6,7 +6,7 @@ import { isNavItemActive, type NavItem } from "@/config/navigation";
 import { cn } from "@/lib/cn";
 
 /** Selection carried between the sub-tabs of a section. */
-const KEPT_PARAMS = ["p", "range"];
+const KEPT_PARAMS = ["p", "range", "from", "to"];
 
 /** Sub-tabs of the current section (Аналитика / Сборка кампаний / …), shown in the top bar on desktop. */
 export function HeaderTabs({ items, className }: { items: NavItem[]; className?: string }) {

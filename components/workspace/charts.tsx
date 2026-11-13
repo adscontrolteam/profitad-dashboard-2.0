@@ -38,6 +38,7 @@ export function AreaChart({
   });
   const area = `${line} L${W},${H} L0,${H} Z`;
   const peak = points.indexOf(max);
+  const peakPct = (peak / Math.max(1, points.length - 1)) * 100;
   const ticks = [1, 0.66, 0.33];
 
   return (
@@ -64,8 +65,12 @@ export function AreaChart({
       </svg>
       {points.length > 0 && (
         <span
-          className="absolute -translate-x-1/2 -translate-y-full rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap text-accent-foreground"
-          style={{ left: `${(peak / Math.max(1, points.length - 1)) * 100}%`, top: `${(1 - max / max) * 100 + 4}%` }}
+          className={cn(
+            "absolute top-[4%] -translate-y-full rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap text-accent-foreground",
+            // Keep the label inside the chart when the peak is near an edge.
+            peakPct > 85 ? "-translate-x-full" : peakPct < 15 ? "translate-x-0" : "-translate-x-1/2",
+          )}
+          style={{ left: `${peakPct}%` }}
         >
           {labels[peak] ? `${formatShortDate(labels[peak])}: ` : ""}
           {format(max)}

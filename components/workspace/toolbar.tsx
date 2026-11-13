@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
-import { RANGES, workspaceHref } from "@/lib/workspace/params";
+import { workspaceHref } from "@/lib/workspace/params";
 
 type Query = Record<string, string | undefined>;
 
@@ -58,20 +58,6 @@ export function SectionTabs({
     <PillTabs
       label="Разделы"
       items={tabs.map((t) => ({ href: workspaceHref(t.href, query), label: t.label, active: t.href === pathname }))}
-    />
-  );
-}
-
-export function RangePicker({ path, query, current }: { path: string; query: Query; current: string }) {
-  return (
-    <PillTabs
-      label="Период"
-      className="w-fit"
-      items={RANGES.map((r) => ({
-        href: workspaceHref(path, query, { range: r.value === "30" ? undefined : r.value }),
-        label: r.label,
-        active: r.value === current,
-      }))}
     />
   );
 }

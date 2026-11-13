@@ -2,7 +2,7 @@
  * Demo numbers for the Ads and SMM workspaces until the platform APIs are connected.
  * Deterministic per project, so a page looks the same on every reload.
  */
-import type { SocialNetwork } from "./params";
+import { shiftIso, type SocialNetwork } from "./params";
 
 function hash(input: string) {
   let h = 2166136261;
@@ -24,17 +24,21 @@ function rng(seed: string) {
   };
 }
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+interface DateWindow {
+  from: string;
+  to: string;
+}
 
-function lastDays(days: number, today = new Date()) {
+function datesIn({ from, to }: DateWindow) {
   const out: string[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setUTCDate(d.getUTCDate() - i);
-    out.push(iso(d));
-  }
+  for (let d = from; d <= to; d = shiftIso(d, 1)) out.push(d);
   return out;
 }
+
+/** Day number since epoch: drives the smooth waves, so any window of dates is stable. */
+const dayIndex = (date: string) => Math.floor(Date.parse(date) / 86_400_000);
+/** Stable 0..1 noise per key. */
+const noise = (key: string) => hash(key) / 4294967296;
 
 /* ---------- Ads ---------- */
 
@@ -71,7 +75,12 @@ export interface AdsReport {
 const CAMPAIGN_STEMS = ["Quiz_CONV", "Lead_Form", "Retarget_7d", "Video_Views", "Search_Brand", "PMax_Sales"];
 const GEOS = ["ES", "IT", "PL", "DE", "UA"];
 
-export function demoAdsReport(projectId: string, projectName: string, days: number, platform: "all" | "meta" | "google"): AdsReport {
+export function demoAdsReport(
+  projectId: string,
+  projectName: string,
+  window: DateWindow,
+  platform: "all" | "meta" | "google",
+): AdsReport {
   const r = rng(`ads:${projectId}`);
   const prefix = projectName.replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_|_$/g, "").slice(0, 14) || "Project";
   const base = 40 + r() * 140;
@@ -101,15 +110,13 @@ export function demoAdsReport(projectId: string, projectName: string, days: numb
   const campaignsIn = allCampaigns.filter((c) => platform === "all" || c.platform === platform);
   const weightSum = campaignsIn.reduce((a, c) => a + c.weight, 0);
 
-  const dayRng = rng(`ads-days:${projectId}`);
-  const allDates = lastDays(365);
-  const series = allDates.map((date, i) => {
+  const series = datesIn(window).map((date) => {
+    const i = dayIndex(date);
     const wave = 1 + 0.35 * Math.sin(i / 9) + 0.2 * Math.sin(i / 3.3);
-    return { date, factor: Math.max(0.15, wave * (0.6 + dayRng() * 0.8)) };
+    return { date, factor: Math.max(0.15, wave * (0.6 + noise(`ads:${projectId}:${date}`) * 0.8)) };
   });
-  const window = series.slice(-days);
 
-  const daysOut: AdDay[] = window.map(({ date, factor }) => {
+  const daysOut: AdDay[] = series.map(({ date, factor }) => {
     const spend = base * factor * weightSum;
     const results = Math.round(spend / (cpr * (0.8 + ((hash(date) % 40) / 100))));
     const impressions = Math.round((spend / 3.6) * 1000);
@@ -202,28 +209,35 @@ export function demoConnectedNetworks(projectId: string): SocialNetwork[] {
   return out;
 }
 
-export function demoSmmReport(projectId: string, projectName: string, network: SocialNetwork, days: number): SmmReport {
+export function demoSmmReport(
+  projectId: string,
+  projectName: string,
+  network: SocialNetwork,
+  window: DateWindow,
+): SmmReport {
   const connected = demoConnectedNetworks(projectId).includes(network);
   const r = rng(`smm:${projectId}:${network}`);
   const handle = `@${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "") || "brand"}${network === "threads" ? ".threads" : ""}`;
   const scale = network === "instagram" ? 1400 : network === "tiktok" ? 2200 : network === "threads" ? 420 : 300;
   const base = scale * (0.4 + r());
 
-  const all = lastDays(365 + days).map((date, i) => {
-    const spike = r() > 0.93 ? 3 + r() * 5 : 1;
-    const views = Math.round(base * (0.3 + r() * 0.9) * spike * (1 + i / 900));
-    const posts = r() > 0.55 ? 1 + Math.floor(r() * 2) : 0;
+  const day = (date: string): SmmDay => {
+    const d = rng(`smm:${projectId}:${network}:${date}`);
+    const spike = d() > 0.93 ? 3 + d() * 5 : 1;
+    const views = Math.round(base * (0.3 + d() * 0.9) * spike * Math.max(0.4, 1 + (dayIndex(date) - 20000) / 900));
+    const posts = d() > 0.55 ? 1 + Math.floor(d() * 2) : 0;
     return {
       date,
       views,
-      likes: Math.round(views * (0.008 + r() * 0.02)),
-      comments: Math.round(views * (0.001 + r() * 0.004)),
+      likes: Math.round(views * (0.008 + d() * 0.02)),
+      comments: Math.round(views * (0.001 + d() * 0.004)),
       posts,
     };
-  });
+  };
 
-  const current = all.slice(-days);
-  const prev = all.slice(-days * 2, -days);
+  const current = datesIn(window).map(day);
+  const length = current.length;
+  const prev = datesIn({ from: shiftIso(window.from, -length), to: shiftIso(window.from, -1) }).map(day);
   const followers = Math.round(base * 3.2 + r() * 4000);
   const top = Array.from({ length: 5 }, (_, i) => {
     const views = Math.round(base * (6 - i) * (1.6 + r() * 1.2));

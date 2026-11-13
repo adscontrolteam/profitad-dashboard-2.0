@@ -37,7 +37,7 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
   if (!ws.project) return <div className="flex flex-col gap-5">{header}<EmptyProjects /></div>;
 
   const resultMetric = ws.project.kpis[0]?.metric ?? "leads";
-  const report = await getAdsReport(ws.project, ws.range.days, platform, resultMetric);
+  const report = await getAdsReport(ws.project, { from: ws.range.from, to: ws.range.to }, platform, resultMetric);
   const spend = report.days.reduce((a, d) => a + d.spend, 0);
   const results = report.days.reduce((a, d) => a + d.results, 0);
   const impressions = report.days.reduce((a, d) => a + d.impressions, 0);
@@ -66,7 +66,7 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
       {report.source === "demo" && <DemoNotice />}
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <KpiTile label="Расход" value={formatCurrency(spend)} hint={`за ${ws.range.label.toLowerCase()}`} />
+        <KpiTile label="Расход" value={formatCurrency(spend)} hint={ws.range.preset ? `за ${ws.range.label.toLowerCase()}` : ws.range.label} />
         <KpiTile label={resultLabel} value={formatNumber(results)} hint="главная цель кампаний" />
         <KpiTile label="Цена результата" value={results ? formatCurrency(spend / results) : "—"} hint="расход / результаты" />
         <KpiTile label="CTR" value={impressions ? pct.format(clicks / impressions) : "—"} hint={`кликов ${formatNumber(clicks)}`} />
