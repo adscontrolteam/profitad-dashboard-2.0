@@ -1,11 +1,13 @@
-/** Shared query params of the Ads and SMM workspaces: `?p=<projectId>&range=30&net=threads`. */
+/** Shared query params of the Ads and SMM workspaces: `?p=<projectId>&range=week&net=threads`. */
 
+/** Calendar periods: this week (Monday–Sunday), this month, the previous month. */
 export const RANGES = [
-  { value: "7", label: "7 дней", days: 7 },
-  { value: "30", label: "30 дней", days: 30 },
-  { value: "90", label: "90 дней", days: 90 },
-  { value: "365", label: "Год", days: 365 },
+  { value: "week", label: "Неделя", phrase: "за эту неделю" },
+  { value: "month", label: "Месяц", phrase: "за этот месяц" },
+  { value: "prev", label: "Прошлый месяц", phrase: "за прошлый месяц" },
 ] as const;
+
+export const DEFAULT_RANGE: (typeof RANGES)[number]["value"] = "month";
 
 export type RangeValue = (typeof RANGES)[number]["value"];
 
@@ -18,8 +20,10 @@ export interface Period {
   from: string;
   to: string;
   days: number;
-  /** «30 дней» or «14 окт. — 20 окт.» */
+  /** «Месяц» or «14 окт. — 20 окт.» */
   label: string;
+  /** For sentences: «за этот месяц» or «14 окт. — 20 окт.» */
+  phrase: string;
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -48,10 +52,24 @@ export function parsePeriod(range: unknown, from: unknown, to: unknown): Period 
     if (daysBetween(start, end) > MAX_RANGE_DAYS) start = shiftIso(end, -(MAX_RANGE_DAYS - 1));
     const sameYear = start.slice(0, 4) === end.slice(0, 4);
     const fmt = (iso: string) => shortDate.format(new Date(iso)) + (sameYear ? "" : ` ${iso.slice(0, 4)}`);
-    return { preset: null, from: start, to: end, days: daysBetween(start, end), label: `${fmt(start)} — ${fmt(end)}` };
+    const label = `${fmt(start)} — ${fmt(end)}`;
+    return { preset: null, from: start, to: end, days: daysBetween(start, end), label, phrase: label };
   }
-  const preset = RANGES.find((r) => r.value === range) ?? RANGES[1];
-  return { preset: preset.value, from: shiftIso(today, -(preset.days - 1)), to: today, days: preset.days, label: preset.label };
+  const preset = RANGES.find((r) => r.value === range) ?? RANGES.find((r) => r.value === DEFAULT_RANGE)!;
+  let start: string;
+  let end = today;
+  if (preset.value === "week") {
+    // Monday of the current week; the week runs to Sunday, data exists up to today.
+    const weekday = (new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7;
+    start = shiftIso(today, -weekday);
+  } else if (preset.value === "prev") {
+    const firstOfThis = `${today.slice(0, 7)}-01`;
+    end = shiftIso(firstOfThis, -1);
+    start = `${end.slice(0, 7)}-01`;
+  } else {
+    start = `${today.slice(0, 7)}-01`;
+  }
+  return { preset: preset.value, from: start, to: end, days: daysBetween(start, end), label: preset.label, phrase: preset.phrase };
 }
 
 export const SOCIAL_NETWORKS = [

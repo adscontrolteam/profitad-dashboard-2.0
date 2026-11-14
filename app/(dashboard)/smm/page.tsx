@@ -88,7 +88,7 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
             <Card className="min-w-0">
               <div className="flex flex-wrap items-start gap-x-10 gap-y-4">
                 <div>
-                  <p className="text-[13px] text-muted-foreground">Просмотры · {ws.range.preset ? ws.range.label.toLowerCase() : ws.range.label}</p>
+                  <p className="text-[13px] text-muted-foreground">Просмотры · {ws.range.phrase}</p>
                   <p className="mt-1 font-[family-name:var(--font-manrope)] text-[40px] leading-[44px] font-bold tracking-[-0.04em] tabular-nums">
                     {formatCompact(views)}
                   </p>

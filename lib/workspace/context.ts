@@ -1,7 +1,7 @@
 import type { Permissions } from "@/lib/access/roles";
 import { getVisibleProjects } from "@/lib/data";
 import type { ProjectWithStats } from "@/lib/domain/types";
-import { first, parsePeriod, type Period } from "./params";
+import { DEFAULT_RANGE, first, parsePeriod, type Period } from "./params";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -25,7 +25,7 @@ export async function resolveWorkspace(searchParams: SearchParams, permissions: 
     project,
     range,
     query: range.preset
-      ? { p: project?.id, range: range.preset === "30" ? undefined : range.preset }
+      ? { p: project?.id, range: range.preset === DEFAULT_RANGE ? undefined : range.preset }
       : { p: project?.id, from: range.from, to: range.to },
   };
 }

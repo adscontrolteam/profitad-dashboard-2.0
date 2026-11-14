@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { cn } from "@/lib/cn";
-import { MAX_RANGE_DAYS, RANGES, shiftIso, todayIso, workspaceHref, type Period } from "@/lib/workspace/params";
+import { DEFAULT_RANGE, MAX_RANGE_DAYS, RANGES, shiftIso, todayIso, workspaceHref, type Period } from "@/lib/workspace/params";
 import { PillTabs } from "./toolbar";
 
 type Query = Record<string, string | undefined>;
@@ -73,7 +73,7 @@ export function PeriodControl({ path, query, period }: { path: string; query: Qu
           label="Период"
           className="w-fit"
           items={RANGES.map((r) => ({
-            href: workspaceHref(path, base, { range: r.value === "30" ? undefined : r.value }),
+            href: workspaceHref(path, base, { range: r.value === DEFAULT_RANGE ? undefined : r.value }),
             label: r.label,
             active: r.value === period.preset,
           }))}
