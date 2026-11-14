@@ -527,3 +527,18 @@ export const finBuyerRates = pgTable("fin_buyer_rates", {
   rate: doublePrecision("rate").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+/** Terms of one month that differ from the project's usual ones (a discount, a raised fix, another %). null = as usual. */
+export const finTermsMonthly = pgTable(
+  "fin_terms_monthly",
+  {
+    projectId: text("project_id").notNull(),
+    /** YYYY-MM */
+    month: text("month").notNull(),
+    fixAmount: doublePrecision("fix_amount"),
+    sharePct: doublePrecision("share_pct"),
+    note: text("note").notNull().default(""),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.month] })],
+);

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PlanFactChart } from "@/components/finance/charts";
+import { MonthTermsButton } from "@/components/finance/month-terms";
 import { TermsButton } from "@/components/finance/terms-editor";
 import { CardHead, dateLabel, Empty, KpiTile, monthLabel, Pill, Table } from "@/components/finance/ui";
 import { Card, StatTile } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { money, toBase } from "@/lib/finance/fx";
 import { KPI_LABEL, KPI_TONE, termsSummary } from "@/lib/finance/labels";
 import { buildFinanceReport } from "@/lib/finance/report";
 import { formatNumber } from "@/lib/format";
+import { addMonths } from "@/lib/projects/plans";
 
 export const metadata: Metadata = { title: "Financial · Клиент" };
 
@@ -119,7 +121,15 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
       </div>
 
       <Card>
-        <CardHead title="По месяцам: результаты и деньги" hint="Результаты клиента, наш доход по условиям, оплаты и затраты на команду" />
+        <CardHead title="По месяцам: результаты и деньги" hint="Результаты клиента, наш доход по условиям, оплаты и затраты на команду">
+          <MonthTermsButton
+            projectId={p.id}
+            projectName={p.name}
+            months={[...[3, 2, 1].map((n) => addMonths(r.now, n)), ...months.map((m) => m.month)].filter((m) => !p.terms || m >= p.terms.startMonth)}
+            overrides={p.overrides}
+            usual={p.terms ? { fixAmount: p.terms.fixAmount, sharePct: p.terms.sharePct, currency: p.terms.currency } : null}
+          />
+        </CardHead>
         <Table>
           <thead>
             <tr>
@@ -145,6 +155,11 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
                   <td className="font-semibold">
                     {monthLabel(m.month)}
                     {m.forecast && <span className="ml-1 text-xs font-normal text-muted-foreground">идёт</span>}
+                    {p.overrides.some((o) => o.month === m.month) && (
+                      <span className="ml-1 text-xs font-normal text-warning" title={p.overrides.find((o) => o.month === m.month)?.note || "Условия месяца изменены"}>
+                        свои условия
+                      </span>
+                    )}
                   </td>
                   <td className="text-right tabular-nums">{k?.plan != null ? formatNumber(k.plan) : "—"}</td>
                   <td className="text-right tabular-nums">{k ? formatNumber(k.fact) : "—"}</td>

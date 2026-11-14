@@ -8,6 +8,7 @@ import { SHARE_BASES, type ShareBase } from "@/lib/finance/rules";
 import {
   archiveMethod,
   saveBuyerRate,
+  saveMonthTerms,
   deleteExpense,
   deleteInvoice,
   markPayout,
@@ -291,4 +292,25 @@ export async function saveBuyerRateAction(_prev: FinState, f: FormData): Promise
   await saveBuyerRate(projectId, rate);
   refresh();
   return { ok: true, message: "Ставка сохранена." };
+}
+
+/* ---------------- terms of single months ---------------- */
+
+export async function saveMonthTermsAction(_prev: FinState, f: FormData): Promise<FinState> {
+  await guard();
+  const projectId = text(f, "projectId", 80);
+  if (!projectId) return { ok: false, message: "Нет проекта." };
+  const months = f.getAll("month").map(String).filter((m) => MONTH.test(m));
+  const rows = [];
+  for (const month of months) {
+    const fix = num(f, `fix_${month}`);
+    const pct = num(f, `pct_${month}`);
+    if (fix === "bad" || pct === "bad" || (fix !== null && fix < 0) || (pct !== null && (pct < 0 || pct > 100))) {
+      return { ok: false, message: `Проверьте числа за ${month}.` };
+    }
+    rows.push({ month, fixAmount: fix, sharePct: pct, note: text(f, `note_${month}`, 300) });
+  }
+  await saveMonthTerms(projectId, rows);
+  refresh();
+  return { ok: true, message: "Условия по месяцам сохранены." };
 }

@@ -12,6 +12,7 @@ import {
   listBuyerRates,
   listExpenses,
   listInvoices,
+  listMonthTerms,
   listPayouts,
   listPlans,
   listStaff,
@@ -19,6 +20,7 @@ import {
   type AgencyPlan,
   type Expense,
   type Invoice,
+  type MonthTerms,
   type Payout,
   type Staff,
 } from "./store";
@@ -91,6 +93,8 @@ export interface ProjectFin {
   buyerRate: number | null;
   startMonth: string;
   terms: Terms | null;
+  /** Months whose terms differ from the usual ones. */
+  overrides: MonthTerms[];
   months: ProjectFinMonth[];
 }
 
@@ -165,7 +169,7 @@ export const expenseActive = (e: Expense, month: string) =>
 
 export async function buildFinanceReport(): Promise<FinanceReport> {
   const now = currentMonth();
-  const [allProjects, terms, invoices, expenses, staff, payouts, plans, rates, buyerRates] = await Promise.all([
+  const [allProjects, terms, invoices, expenses, staff, payouts, plans, rates, buyerRates, monthTerms] = await Promise.all([
     getProjects(),
     listTerms(),
     listInvoices(),
@@ -175,6 +179,7 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     listPlans(),
     getRates(),
     listBuyerRates(),
+    listMonthTerms(),
   ]);
   const inBase = (x: Invoice) => invoiceIn(x, BASE_CURRENCY, (a, f, t) => convert(a, f, t, rates));
   const termsBy = new Map(terms.map((t) => [t.projectId, t]));
@@ -197,6 +202,7 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
       const hist = monthsBetween(monthStart(histFrom), monthStart(now));
       const data = await Promise.all(hist.map((m) => loadProjectMonth(p.id, m)));
       const t = termsBy.get(p.id) ?? null;
+      const overrides = monthTerms.filter((x) => x.projectId === p.id);
       const rows: ProjectFinMonth[] = hist.map((month, i) => {
         const d = data[i];
         const forecast = month === now;
@@ -206,7 +212,10 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
           const scale = forecast && d && d.elapsed > 0 ? 1 / d.elapsed : 1;
           const rev = d?.revenue == null ? null : convert(d.revenue * scale, cur, t.currency, rates);
           const spend = d?.spend == null ? null : convert(d.spend * scale, cur, t.currency, rates);
-          accrual = accrue(t, rev, spend);
+          // A month can have its own fix / % (set in «Условия по месяцам»).
+          const o = overrides.find((x) => x.month === month);
+          const pct = o?.sharePct ?? t.sharePct;
+          accrual = accrue({ ...t, fixAmount: o?.fixAmount ?? t.fixAmount, sharePct: pct, shareBase: t.shareBase ?? (pct ? "client_profit" : null) }, rev, spend);
         }
         const inv = invoices.filter((x) => x.projectId === p.id && x.month === month && x.status !== "cancelled");
         return {
@@ -230,6 +239,7 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
         buyerRate: buyerRates.get(p.id) ?? t?.buyerRate ?? defaultBuyerRate(p.sources.length),
         startMonth,
         terms: t,
+        overrides,
         months: rows,
       };
     }),

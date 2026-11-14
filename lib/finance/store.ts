@@ -9,6 +9,7 @@ import {
   finPlans,
   finStaff,
   finTerms,
+  finTermsMonthly,
   type FinExpenseRow,
   type FinInvoiceRow,
   type FinPaymentMethodRow,
@@ -227,4 +228,32 @@ export async function saveBuyerRate(projectId: string, rate: number | null) {
 export function invoiceIn(i: Pick<Invoice, "total" | "currency" | "contractCurrency" | "fxRate">, to: string, convert: (amount: number, from: string, to: string) => number) {
   if (i.contractCurrency && i.fxRate && i.fxRate > 0) return convert(i.total / i.fxRate, i.contractCurrency, to);
   return convert(i.total, i.currency, to);
+}
+
+/* ---------- terms of single months ---------- */
+
+export interface MonthTerms {
+  projectId: string;
+  month: string;
+  fixAmount: number | null;
+  sharePct: number | null;
+  note: string;
+}
+
+export async function listMonthTerms(): Promise<MonthTerms[]> {
+  const rows = await getDb().select().from(finTermsMonthly);
+  return rows.map((r) => ({ projectId: r.projectId, month: r.month, fixAmount: r.fixAmount, sharePct: r.sharePct, note: r.note }));
+}
+
+/** Saves the months given; a month with nothing set goes back to the usual terms. */
+export async function saveMonthTerms(projectId: string, months: Omit<MonthTerms, "projectId">[]) {
+  const db = getDb();
+  for (const m of months) {
+    if (m.fixAmount === null && m.sharePct === null && !m.note) {
+      await db.delete(finTermsMonthly).where(and(eq(finTermsMonthly.projectId, projectId), eq(finTermsMonthly.month, m.month)));
+      continue;
+    }
+    const values = { projectId, ...m, updatedAt: new Date() };
+    await db.insert(finTermsMonthly).values(values).onConflictDoUpdate({ target: [finTermsMonthly.projectId, finTermsMonthly.month], set: values });
+  }
 }
