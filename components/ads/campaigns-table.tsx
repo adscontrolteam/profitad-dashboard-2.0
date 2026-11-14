@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { setGoogleCampaignStatusAction } from "@/app/(dashboard)/ads/actions";
 import { cn } from "@/lib/cn";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import { formatMetric, formatNumber } from "@/lib/format";
 import type { AdCampaign, CampaignStatus } from "@/lib/workspace/demo";
 
 const pct = new Intl.NumberFormat("ru-RU", { style: "percent", maximumFractionDigits: 2 });
@@ -20,14 +20,18 @@ export function CampaignsTable({
   resultLabel,
   canManage,
   live = false,
+  currency = null,
 }: {
   projectId: string;
+  /** Currency of the project's ad account. */
+  currency?: string | null;
   campaigns: AdCampaign[];
   resultLabel: string;
   canManage: boolean;
   /** Real Google campaigns: toggles go to the Google Ads API. */
   live?: boolean;
 }) {
+  const formatCurrency = (v: number) => formatMetric(v, "currency", currency);
   const [overrides, setOverrides] = useState<Record<string, CampaignStatus>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

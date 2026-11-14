@@ -9,7 +9,7 @@ import { WorkspaceHeader } from "@/components/workspace/header";
 import { DemoNotice, EmptyProjects, PillTabs } from "@/components/workspace/toolbar";
 import { requireSection } from "@/lib/access/viewer";
 import { METRICS } from "@/lib/domain/metrics";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import { formatMetric, formatNumber } from "@/lib/format";
 import { getAdsReport } from "@/lib/workspace/ads-store";
 import type { AdCampaign } from "@/lib/workspace/demo";
 import { adsConfigured, campaignStatuses } from "@/lib/google/ads";
@@ -41,6 +41,9 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
 
   if (!ws.project) return <div className="flex flex-col gap-5">{header}<EmptyProjects /></div>;
 
+  // Money on ad pages is in the currency of the project's ad account, set in «Вводные».
+  const currency = ws.project.agent.currency;
+  const formatCurrency = (v: number) => formatMetric(v, "currency", currency);
   const resultMetric = ws.project.kpis[0]?.metric ?? "leads";
   const report = await getAdsReport(ws.project, { from: ws.range.from, to: ws.range.to }, platform, resultMetric);
   const campaigns = await withLiveGoogleStatus(report.campaigns);
@@ -119,6 +122,7 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
         </div>
         <CampaignsTable
           projectId={ws.project.id}
+          currency={currency}
           campaigns={campaigns}
           resultLabel={resultLabel}
           canManage={permissions.canManageAds && (report.source === "demo" || liveGoogle)}

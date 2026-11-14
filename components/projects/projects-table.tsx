@@ -44,10 +44,10 @@ export function ProjectsTable({ projects }: { projects: ProjectWithStats[] }) {
                       const format = METRICS[r.kpi.metric].format;
                       return (
                         <p key={r.kpi.metric} className="whitespace-nowrap">
-                          <span className="font-semibold">{formatMetric(r.fact, format)}</span>
+                          <span className="font-semibold">{formatMetric(r.fact, format, p.agent.currency)}</span>
                           <span className="text-muted-foreground">
                             {" "}
-                            / {formatMetric(r.kpi.plan, format)} · {METRICS[r.kpi.metric].label.toLowerCase()}
+                            / {formatMetric(r.kpi.plan, format, p.agent.currency)} · {METRICS[r.kpi.metric].label.toLowerCase()}
                           </span>
                         </p>
                       );

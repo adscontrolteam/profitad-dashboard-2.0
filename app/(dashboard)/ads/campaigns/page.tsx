@@ -25,6 +25,7 @@ export default async function Page({ searchParams }: PageProps<"/ads/campaigns">
           key={ws.project.id}
           projectId={ws.project.id}
           projectName={ws.project.name}
+          currency={ws.project.agent.currency}
           googleAccountId={ws.project.sources.find((s) => s.platform === "google" && s.accountId)?.accountId.replace(/\D/g, "") || null}
           googleReady={adsConfigured()}
         />

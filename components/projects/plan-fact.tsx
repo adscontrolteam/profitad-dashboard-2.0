@@ -6,7 +6,7 @@ import { paceLevel } from "@/lib/domain/stats";
 import { GOAL_LEVELS, type KpiStats } from "@/lib/domain/types";
 import { formatMetric, formatPercent } from "@/lib/format";
 
-export function PlanFact({ result, elapsed }: { result: KpiStats; elapsed: number }) {
+export function PlanFact({ result, elapsed, currency = null }: { result: KpiStats; elapsed: number; currency?: string | null }) {
   const { kpi } = result;
   const level = paceLevel(result.pace);
   const format = METRICS[kpi.metric].format;
@@ -19,8 +19,8 @@ export function PlanFact({ result, elapsed }: { result: KpiStats; elapsed: numbe
             План / факт · {METRICS[kpi.metric].label.toLowerCase()}
           </p>
           <p className="mt-1 font-display text-2xl font-extrabold tracking-[-0.03em] tabular-nums">
-            {formatMetric(result.fact, format)}
-            <span className="text-muted-foreground"> / {formatMetric(kpi.plan, format)}</span>
+            {formatMetric(result.fact, format, currency)}
+            <span className="text-muted-foreground"> / {formatMetric(kpi.plan, format, currency)}</span>
           </p>
         </div>
         <p className={cn("font-display text-2xl font-extrabold tracking-[-0.03em] tabular-nums", SIGNAL_TEXT[level])}>
@@ -28,7 +28,7 @@ export function PlanFact({ result, elapsed }: { result: KpiStats; elapsed: numbe
         </p>
       </div>
       <ProgressBar value={result.progress ?? 0} marker={elapsed} pace={result.pace} />
-      <GoalLevels result={result} />
+      <GoalLevels result={result} currency={currency} />
       <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
         <span>Прошло {formatPercent(elapsed)} периода</span>
         {result.pace === null ? (
@@ -47,7 +47,7 @@ export function PlanFact({ result, elapsed }: { result: KpiStats; elapsed: numbe
  * Б / Б+ / С: which goal levels are already reached and which one the pace leads to by the end of the period.
  * Hidden when only Б is set — the bar above says it all.
  */
-function GoalLevels({ result }: { result: KpiStats }) {
+function GoalLevels({ result, currency }: { result: KpiStats; currency: string | null }) {
   const format = METRICS[result.kpi.metric].format;
   const levels = GOAL_LEVELS.map((lv) => ({ label: lv.label, value: (result.kpi[lv.plan] as number | null | undefined) ?? null })).filter(
     (lv): lv is { label: "Б" | "Б+" | "С"; value: number } => lv.value !== null && lv.value > 0,
@@ -68,7 +68,7 @@ function GoalLevels({ result }: { result: KpiStats }) {
             )}
             title={done ? "Цель достигнута" : heading?.label === lv.label ? "Темп ведёт к этой цели" : undefined}
           >
-            {lv.label} {formatMetric(lv.value, format)}
+            {lv.label} {formatMetric(lv.value, format, currency)}
             {done ? " ✓" : ""}
           </span>
         );

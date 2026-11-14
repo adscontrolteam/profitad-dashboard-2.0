@@ -5,7 +5,7 @@ import { launchGoogleSearchAction } from "@/app/(dashboard)/ads/actions";
 import { Field, Segmented, StepCard, Toast, ToggleChip } from "@/components/workspace/form";
 import { uid, useLocalState } from "@/components/workspace/use-local-state";
 import { cn } from "@/lib/cn";
-import { formatCurrency } from "@/lib/format";
+import { formatMetric } from "@/lib/format";
 import { seedCreatives, type CampaignDraft, type Creative } from "./types";
 
 const OBJECTIVES = {
@@ -59,14 +59,18 @@ export function CampaignBuilder({
   projectName,
   googleAccountId,
   googleReady,
+  currency = null,
 }: {
   projectId: string;
+  /** Currency of the project's ad account (budgets are in it). */
+  currency?: string | null;
   projectName: string;
   /** Google Ads account of the project (from Inputs); null = none linked. */
   googleAccountId: string | null;
   /** The dashboard has Google Ads API credentials. */
   googleReady: boolean;
 }) {
+  const formatCurrency = (v: number) => formatMetric(v, "currency", currency);
   const [headlinesText, setHeadlinesText] = useState("");
   const [descriptionsText, setDescriptionsText] = useState("");
   const [launching, startLaunch] = useTransition();
@@ -223,7 +227,7 @@ export function CampaignBuilder({
                 }
               />
             </Field>
-            <Field label="Сумма, $">
+            <Field label={`Сумма, ${currency ?? "USD"}`}>
               <input
                 className="field"
                 type="number"

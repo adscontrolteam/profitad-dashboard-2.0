@@ -19,7 +19,7 @@ export function ProjectCard({ project }: { project: ProjectWithStats }) {
         <div className="flex flex-col gap-5">
           {stats.results.length > 0 ? (
             stats.results.map((result) => (
-              <PlanFact key={result.kpi.metric} result={result} elapsed={stats.elapsed} />
+              <PlanFact key={result.kpi.metric} result={result} elapsed={stats.elapsed} currency={project.agent.currency} />
             ))
           ) : (
             <p className="text-sm text-muted-foreground">Результаты и KPI не заданы — заполните во «Вводных».</p>

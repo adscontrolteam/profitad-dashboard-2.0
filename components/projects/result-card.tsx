@@ -14,7 +14,7 @@ export function ResultCard({ result, elapsed, currency = null }: { result: KpiSt
 
   return (
     <Card className="flex min-w-0 flex-col gap-4">
-      <PlanFact result={result} elapsed={elapsed} />
+      <PlanFact result={result} elapsed={elapsed} currency={currency} />
       <div className="grid grid-cols-2 gap-3">
         <StatTile label={`Цель по цене (Б) · ${unit}`}>
           {cpaPlan ? formatCurrency(cpaPlan) : "—"}
