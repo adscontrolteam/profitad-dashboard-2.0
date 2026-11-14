@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { adMetricsDaily, leads, projectIntegrations, salesRecords, type ProjectIntegrationRow } from "@/db/schema";
 import { decrypt, encrypt } from "@/lib/crypto";
@@ -59,6 +59,14 @@ export async function saveIntegration<K extends IntegrationKind>(
     .insert(projectIntegrations)
     .values(values)
     .onConflictDoUpdate({ target: [projectIntegrations.projectId, projectIntegrations.kind], set: values });
+}
+
+/** Changes only the config of an existing integration (status and secret stay). */
+export async function patchIntegrationConfig(projectId: string, kind: IntegrationKind, patch: Record<string, unknown>) {
+  await getDb()
+    .update(projectIntegrations)
+    .set({ config: sql`${projectIntegrations.config} || ${JSON.stringify(patch)}::jsonb` })
+    .where(and(eq(projectIntegrations.projectId, projectId), eq(projectIntegrations.kind, kind)));
 }
 
 export async function deleteIntegration(projectId: string, kind: IntegrationKind) {
@@ -192,7 +200,7 @@ export async function dropOtherSales(projectId: string, keep: string | null) {
  * Exceptions, both only from the first day with ad spend: leads from before the site recorded click ids (utm.untracked)
  * and leads that came from a Google page without a click id (utm.google_ref) — the owner's decision of 14.11.2026.
  */
-const FROM_ADS = sql`((${leads.utm}->>'ad') is not null or (
+export const FROM_ADS = sql`((${leads.utm}->>'ad') is not null or (
   (${leads.utm}->>'untracked' = '1' or ${leads.utm}->>'google_ref' = '1')
   and (${leads.leadAt} at time zone 'UTC')::date >= (
     select min(a.date) from ${adMetricsDaily} a where a.project_id = ${leads.projectId} and a.spend > 0

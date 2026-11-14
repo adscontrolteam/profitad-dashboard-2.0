@@ -267,10 +267,11 @@ function LeadsSheetCard({ projectId, current }: { projectId: string; current?: I
   const [url, setUrl] = useState(cfg?.url ?? "");
   const [picked, setPicked] = useState<string[]>(cfg ? leadTabsOf(cfg) : []);
   const [salesTab, setSalesTab] = useState(cfg?.salesTab ?? "");
+  const [autofill, setAutofill] = useState(Boolean(cfg?.salesAutofill));
   const [tabs, setTabs] = useState<string[]>([]);
   const { pending, result, run } = useRunner();
   const toggle = (t: string) => setPicked((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]));
-  const summary = cfg && `«${cfg.title}» · лиды: ${leadTabsOf(cfg).join(", ")}${cfg.salesTab ? ` · продажи: ${cfg.salesTab}` : ""}`;
+  const summary = cfg && `«${cfg.title}» · лиды: ${leadTabsOf(cfg).join(", ")}${cfg.salesTab ? ` · продажи: ${cfg.salesTab}${cfg.salesAutofill ? " (заполняет дашборд)" : ""}` : ""}`;
 
   return (
     <Shell kind="sheets_leads" current={current} projectId={projectId} summary={summary}>
@@ -311,11 +312,23 @@ function LeadsSheetCard({ projectId, current }: { projectId: string; current?: I
           </label>
         </div>
       )}
+      {(salesTab || cfg?.salesTab) && (
+        <label className="flex cursor-pointer items-start gap-3 text-sm">
+          <input type="checkbox" checked={autofill} onChange={(e) => setAutofill(e.target.checked)} className="mt-0.5 size-4 accent-[var(--accent)]" />
+          <span>
+            Заполнять лист продаж автоматически
+            <span className="block text-xs text-muted-foreground">
+              Новые периоды (пн–вт, ср–чт, пт–вс): лиды с рекламы — всего, целевые, нецелевые; продажи — оплаты из листов лидов. Строки,
+              заполненные вручную, не трогаем.
+            </span>
+          </span>
+        </label>
+      )}
       {(tabs.length > 0 || cfg) && (
         <SaveButton
           pending={pending}
           label="Сохранить и загрузить"
-          onClick={() => run(() => saveLeadsSheetAction(projectId, { url, tabs: picked, salesTab: salesTab || null }), (r) => r.tabs && setTabs(r.tabs))}
+          onClick={() => run(() => saveLeadsSheetAction(projectId, { url, tabs: picked, salesTab: (salesTab || cfg?.salesTab) || null, salesAutofill: autofill }), (r) => r.tabs && setTabs(r.tabs))}
         />
       )}
       <Result r={result} />

@@ -38,6 +38,10 @@ export interface SheetsLeadsConfig extends SheetConfig {
   tabs?: string[];
   /** Optional tab with sales per period: «Період», «Кількість», «Сума». */
   salesTab?: string | null;
+  /** The dashboard fills new periods of the sales tab itself (ad leads, target / non-target, payments). */
+  salesAutofill?: boolean;
+  /** First period start (YYYY-MM-DD) the dashboard owns; rows before it were kept by hand and are never touched. */
+  salesAutofillFrom?: string | null;
 }
 
 export const leadTabsOf = (cfg: SheetsLeadsConfig) => (cfg.tabs?.length ? cfg.tabs : [cfg.tab]).filter(Boolean);

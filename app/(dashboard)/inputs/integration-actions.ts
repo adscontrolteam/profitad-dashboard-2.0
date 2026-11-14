@@ -137,7 +137,7 @@ export async function rotateWebhookKeyAction(projectId: string): Promise<Integra
  */
 export async function saveLeadsSheetAction(
   projectId: string,
-  input: { url: string; tabs?: string[]; salesTab?: string | null },
+  input: { url: string; tabs?: string[]; salesTab?: string | null; salesAutofill?: boolean },
 ): Promise<IntegrationResult> {
   const viewer = await admin();
   const spreadsheetId = parseSpreadsheetId(input.url);
@@ -147,7 +147,17 @@ export async function saveLeadsSheetAction(
     const tabs = (input.tabs ?? []).filter((t) => info.tabs.includes(t));
     if (tabs.length === 0) return { ok: false, message: "Отметьте листы с лидами (одна строка — один лид).", tabs: info.tabs };
     const salesTab = input.salesTab && info.tabs.includes(input.salesTab) && !tabs.includes(input.salesTab) ? input.salesTab : null;
-    await saveIntegration(projectId, "sheets_leads", { url: input.url.trim(), spreadsheetId, title: info.title, tab: tabs[0], tabs, salesTab }, null, viewer.email);
+    // Keep the first owned period of an already running autofill; a new sales tab starts over.
+    const prev = (await getIntegration(projectId, "sheets_leads"))?.config;
+    const salesAutofill = Boolean(salesTab && input.salesAutofill);
+    const salesAutofillFrom = salesAutofill && prev?.salesTab === salesTab ? (prev?.salesAutofillFrom ?? null) : null;
+    await saveIntegration(
+      projectId,
+      "sheets_leads",
+      { url: input.url.trim(), spreadsheetId, title: info.title, tab: tabs[0], tabs, salesTab, salesAutofill, salesAutofillFrom },
+      null,
+      viewer.email,
+    );
     const sync = await trySync(projectId, "sheets_leads");
     return done(viewer, "integration.sheets_leads", projectId, { ok: true, message: `«${info.title}» подключена. ${sync}` });
   } catch (error) {

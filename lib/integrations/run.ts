@@ -3,7 +3,7 @@ import { revalidateTag } from "next/cache";
 import { TAGS } from "@/lib/data/tags";
 import { pullBitrix, pullKommo } from "./crm";
 import { readLeadsSheet, writeReport } from "./sheets";
-import { dropOtherSales, listIntegrations, markIntegration, readSecret, replaceLeads, replaceSales, upsertLeads, type IntegrationRecord } from "./store";
+import { dropOtherSales, listIntegrations, markIntegration, patchIntegrationConfig, readSecret, replaceLeads, replaceSales, upsertLeads, type IntegrationRecord } from "./store";
 import type { CrmConfig, SheetsLeadsConfig, SheetsReportConfig } from "./types";
 
 const DAY = 86_400_000;
@@ -38,12 +38,21 @@ async function run(rec: IntegrationRecord): Promise<string> {
     }
     case "sheets_leads": {
       const cfg = rec.config as SheetsLeadsConfig;
-      const { leads, sales, summary } = await readLeadsSheet(cfg);
+      let { leads, sales, summary } = await readLeadsSheet(cfg);
       const n = await replaceLeads(rec.projectId, "sheet", leads);
+      // The dashboard keeps the sales tab itself: write the owned periods, then read the tab back with them.
+      let filled = "";
+      if (cfg.salesAutofill && cfg.salesTab) {
+        const { fillSalesTab } = await import("./sales-autofill");
+        const r = await fillSalesTab(rec.projectId, cfg);
+        if (r.from && r.from !== cfg.salesAutofillFrom) await patchIntegrationConfig(rec.projectId, "sheets_leads", { salesAutofillFrom: r.from });
+        if (r.cells) ({ leads, sales, summary } = await readLeadsSheet(cfg));
+        filled = r.message ? ` · ${r.message}` : "";
+      }
       const salesSource = cfg.salesTab ? `sheet:${cfg.spreadsheetId}:${cfg.salesTab}` : null;
       await dropOtherSales(rec.projectId, salesSource);
       const s = sales && salesSource ? await replaceSales(rec.projectId, salesSource, sales) : null;
-      return `Лидов: ${n} (${summary})${s !== null ? ` · продаж за периоды: ${s}` : ""}`;
+      return `Лидов: ${n} (${summary})${s !== null ? ` · продаж за периоды: ${s}` : ""}${filled}`;
     }
     case "sheets_report": {
       const cells = await writeReport(rec.projectId, rec.config as SheetsReportConfig, 3);
