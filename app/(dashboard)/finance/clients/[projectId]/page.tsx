@@ -170,7 +170,10 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
                     {m.accrual ? (
                       <>
                         <b>{money(m.accrual.total, m.accrual.currency)}</b>
-                        {m.accrual.share > 0 && <span className="block text-[11px] text-muted-foreground">фикс {money(m.accrual.fix, m.accrual.currency)} + {money(m.accrual.share, m.accrual.currency)}</span>}
+                        {m.accrual.share > 0 && <span className="block text-[11px] text-muted-foreground">фикс {money(m.accrual.fix, m.accrual.currency)} + {money(m.accrual.share, m.accrual.currency, 2)}</span>}
+                        {m.accrual.base !== null && p.terms?.shareBase === "client_profit" && (
+                          <span className="block text-[11px] text-muted-foreground">X = {money(m.accrual.base, m.accrual.currency)}{m.forecast ? " на сегодня" : ""}</span>
+                        )}
                       </>
                     ) : (
                       "—"

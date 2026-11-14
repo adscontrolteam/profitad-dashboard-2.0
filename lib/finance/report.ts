@@ -209,9 +209,10 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
         let accrual: Accrual | null = null;
         if (t && month >= t.startMonth && month >= startMonth) {
           const cur = d?.currency ?? t.currency;
-          const scale = forecast && d && d.elapsed > 0 ? 1 / d.elapsed : 1;
-          const rev = d?.revenue == null ? null : convert(d.revenue * scale, cur, t.currency, rates);
-          const spend = d?.spend == null ? null : convert(d.spend * scale, cur, t.currency, rates);
+          // The share is counted on what has actually happened: the client's revenue comes in rare payments, so
+          // stretching a month-to-date figure to the whole month would promise money that may never come.
+          const rev = d?.revenue == null ? null : convert(d.revenue, cur, t.currency, rates);
+          const spend = d?.spend == null ? null : convert(d.spend, cur, t.currency, rates);
           // A month can have its own fix / % (set in «Условия по месяцам»).
           const o = overrides.find((x) => x.month === month);
           const pct = o?.sharePct ?? t.sharePct;

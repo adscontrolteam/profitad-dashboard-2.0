@@ -73,7 +73,7 @@ export default async function FinanceClientsPage() {
       </Card>
 
       <Card>
-        <CardHead title="Доход по клиентам" hint="Начислено по условиям. Цвет — выполнение KPI клиента; последний месяц — прогноз" />
+        <CardHead title="Доход по клиентам" hint="Начислено по условиям. Цвет — выполнение KPI клиента; в текущем месяце % считается по факту на сегодня" />
         <Table>
           <thead>
             <tr>

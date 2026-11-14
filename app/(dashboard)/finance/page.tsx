@@ -57,7 +57,7 @@ export default async function FinanceOverviewPage() {
       <div className="grid gap-3 md:grid-cols-3 lg:gap-5">
         <KpiTile label={`Доход · ${monthLabel(r.now)}`} value={money(cur.revenue)}>
           {cur.plan?.revenuePlan ? <Pill tone={cur.revenue >= cur.plan.revenuePlan ? "good" : "warning"}>{pct(cur.revenue, cur.plan.revenuePlan)} плана</Pill> : null}
-          <span>прогноз по условиям и темпу клиентов</span>
+          <span>фикс за месяц + % по факту на сегодня</span>
           <span className="w-full">
             получено {money(cur.received)}
             {delta(cur.revenue, prev?.revenue) ? ` · ${delta(cur.revenue, prev?.revenue)}` : ""}
@@ -80,7 +80,7 @@ export default async function FinanceOverviewPage() {
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-5">
         <Card>
-          <CardHead title="Доход, расходы и прибыль" hint="Текущий месяц — прогноз: зарплаты по полной ставке, % клиентов по темпу" />
+          <CardHead title="Доход, расходы и прибыль" hint="Текущий месяц — прогноз: зарплаты по полной ставке, % клиентов по факту на сегодня" />
           <PnlChart data={r.pnl} />
           <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-[3px] bg-foreground" />Доход</span>
@@ -123,7 +123,7 @@ export default async function FinanceOverviewPage() {
               <th>Клиент</th>
               <th>Условия</th>
               <th>KPI клиента</th>
-              <th className="!text-right">Доход (прогноз)</th>
+              <th className="!text-right">Доход месяца</th>
               <th>Оплата</th>
             </tr>
           </thead>
