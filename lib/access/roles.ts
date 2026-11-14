@@ -1,4 +1,4 @@
-export const SECTIONS = ["dashboard", "ads", "smm", "inputs", "sales", "tasks"] as const;
+export const SECTIONS = ["dashboard", "ads", "smm", "inputs", "sales", "tasks", "finance"] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export const SECTION_LABELS: Record<Section, string> = {
@@ -8,6 +8,7 @@ export const SECTION_LABELS: Record<Section, string> = {
   inputs: "Вводные",
   sales: "Sales",
   tasks: "Task Manager",
+  finance: "Financial",
 };
 
 export const ROLES = ["admin", "smm", "media_buyer", "sales"] as const;

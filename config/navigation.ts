@@ -1,6 +1,6 @@
 import type { Permissions, Section } from "@/lib/access/roles";
 
-export type AppRoute = "/profile" | "/" | "/ads" | "/smm" | "/inputs" | "/sales" | "/tasks" | "/settings";
+export type AppRoute = "/profile" | "/" | "/ads" | "/smm" | "/inputs" | "/sales" | "/tasks" | "/finance" | "/settings";
 
 export type Capability = "canManageAds" | "canPublishContent";
 
@@ -33,6 +33,16 @@ export const SMM_TABS: SubNavItem[] = [
   { label: "Постинг", href: "/smm/posting", capability: "canPublishContent" },
 ];
 
+/** Financial is the admin's alone: only the admin role has the «finance» section. */
+export const FINANCE_TABS: SubNavItem[] = [
+  { label: "Обзор", href: "/finance" },
+  { label: "Клиенты", href: "/finance/clients" },
+  { label: "Инвойсы", href: "/finance/invoices" },
+  { label: "Зарплаты", href: "/finance/payroll" },
+  { label: "Расходы", href: "/finance/expenses" },
+  { label: "План / Факт", href: "/finance/plan" },
+];
+
 export const NAV_ITEMS: NavItem[] = [
   { label: "Профиль", href: "/profile" },
   { label: "Дашборд", href: "/", section: "dashboard" },
@@ -41,6 +51,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Вводные", href: "/inputs", section: "inputs" },
   { label: "Sales", href: "/sales", section: "sales" },
   { label: "Task Manager", href: "/tasks", section: "tasks" },
+  { label: "Financial", href: "/finance", section: "finance", children: FINANCE_TABS },
   { label: "Настройки", href: "/settings", footer: true },
 ];
 
@@ -50,6 +61,7 @@ export const allowedTabs = (tabs: SubNavItem[], p: Pick<Permissions, Capability>
 const EXTRA_TITLES: Record<string, string> = {
   "/settings/access": "Доступы",
   "/settings/integrations": "Подключения",
+  "/finance/invoices/new": "Новый инвойс",
 };
 
 /** Order used for page slide direction. */

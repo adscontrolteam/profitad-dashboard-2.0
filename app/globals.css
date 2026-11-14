@@ -267,3 +267,23 @@ h3 {
 .signal-glow {
   box-shadow: 0 0 12px color-mix(in srgb, currentColor 45%, transparent);
 }
+
+/* Invoice printing: A4 page, no browser margins, nothing but the document. */
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  .invoice-print .invoice-doc {
+    max-width: none;
+  }
+  html:has(.invoice-print),
+  html:has(.invoice-print) body {
+    background: #fff !important;
+  }
+  .invoice-print .invoice-page {
+    box-shadow: none;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

@@ -376,3 +376,141 @@ export const auditLog = pgTable(
   },
   (t) => [index("audit_log_at_idx").on(t.at)],
 );
+
+/* ---------------------------------------------------------------- Financial (admin only) */
+
+/**
+ * Payment terms of a client project. Revenue of a month = fixAmount + sharePct% of the share base:
+ * «client_profit» = client's revenue − ad spend − fixAmount (negative → 0), «client_revenue», «ad_spend».
+ */
+export const finTerms = pgTable("fin_terms", {
+  projectId: text("project_id").primaryKey(),
+  fixAmount: doublePrecision("fix_amount").notNull().default(0),
+  currency: text("currency").notNull().default("USD"),
+  sharePct: doublePrecision("share_pct"),
+  shareBase: text("share_base").$type<"client_profit" | "client_revenue" | "ad_spend">(),
+  /** Media buyer's rate for this project (USD); null = the default by number of traffic sources. */
+  buyerRate: doublePrecision("buyer_rate"),
+  /** Day of month the invoice is due. */
+  payDay: integer("pay_day"),
+  /** YYYY-MM the terms apply from. */
+  startMonth: text("start_month").notNull(),
+  note: text("note").notNull().default(""),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedBy: text("updated_by"),
+});
+
+export type FinTermsRow = typeof finTerms.$inferSelect;
+
+/** Where clients pay: FOP account, card, crypto wallet, payment link. Details are printed on invoices. */
+export const finPaymentMethods = pgTable("fin_payment_methods", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  /** fop | card | crypto | link */
+  kind: text("kind").$type<"fop" | "card" | "crypto" | "link">().notNull(),
+  details: jsonb("details").$type<Record<string, string>>().notNull().default({}),
+  currency: text("currency").notNull().default("UAH"),
+  /** Default service line and payment purpose for invoices to this account. */
+  serviceName: text("service_name").notNull().default(""),
+  purpose: text("purpose").notNull().default(""),
+  position: integer("position").notNull().default(0),
+  archived: boolean("archived").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type FinPaymentMethodRow = typeof finPaymentMethods.$inferSelect;
+
+export interface InvoiceItem {
+  name: string;
+  qty: number;
+  amount: number;
+}
+
+/** Invoices and received payments. `document = false` — a payment recorded without an invoice. */
+export const finInvoices = pgTable(
+  "fin_invoices",
+  {
+    id: text("id").primaryKey(),
+    number: integer("number").notNull(),
+    projectId: text("project_id"),
+    /** YYYY-MM the payment is for. */
+    month: text("month").notNull(),
+    issueDate: date("issue_date").notNull(),
+    methodId: text("method_id"),
+    /** Snapshot of the payment details at issue time, so later edits of the account do not change old invoices. */
+    recipient: jsonb("recipient").$type<{ kind: string; label: string; details: Record<string, string>; payer?: string }>(),
+    currency: text("currency").notNull(),
+    items: jsonb("items").$type<InvoiceItem[]>().notNull().default([]),
+    total: doublePrecision("total").notNull(),
+    purpose: text("purpose").notNull().default(""),
+    payLink: text("pay_link").notNull().default(""),
+    document: boolean("document").notNull().default(true),
+    /** issued | paid | cancelled */
+    status: text("status").$type<"issued" | "paid" | "cancelled">().notNull().default("issued"),
+    paidDate: date("paid_date"),
+    note: text("note").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdBy: text("created_by"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("fin_invoices_month_idx").on(t.month), index("fin_invoices_project_idx").on(t.projectId)],
+);
+
+export type FinInvoiceRow = typeof finInvoices.$inferSelect;
+
+/** Agency expenses. Recurring ones repeat every month from startMonth to endMonth (null = still running). */
+export const finExpenses = pgTable("fin_expenses", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  amount: doublePrecision("amount").notNull(),
+  currency: text("currency").notNull().default("USD"),
+  recurring: boolean("recurring").notNull().default(false),
+  startMonth: text("start_month").notNull(),
+  endMonth: text("end_month"),
+  note: text("note").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type FinExpenseRow = typeof finExpenses.$inferSelect;
+
+/** Team members on payroll. Media buyers / SMM are linked to projects through the project's owner emails. */
+export const finStaff = pgTable("fin_staff", {
+  email: text("email").primaryKey(),
+  name: text("name").notNull(),
+  role: text("role").notNull().default("media_buyer"),
+  /** Fixed monthly salary on top of per-project rates (0 = none). */
+  baseSalary: doublePrecision("base_salary").notNull().default(0),
+  currency: text("currency").notNull().default("USD"),
+  /** YYYY-MM payroll is counted from. */
+  sinceMonth: text("since_month").notNull(),
+  active: boolean("active").notNull().default(true),
+  note: text("note").notNull().default(""),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type FinStaffRow = typeof finStaff.$inferSelect;
+
+/** Payroll marked as paid for a person and month (snapshot of the calculation). */
+export const finPayouts = pgTable(
+  "fin_payouts",
+  {
+    email: text("email").notNull(),
+    month: text("month").notNull(),
+    amount: doublePrecision("amount").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    breakdown: jsonb("breakdown").$type<unknown>(),
+    paidAt: timestamp("paid_at", { withTimezone: true }).defaultNow().notNull(),
+    paidBy: text("paid_by"),
+  },
+  (t) => [primaryKey({ columns: [t.email, t.month] })],
+);
+
+/** Agency plan per month, in the base currency. */
+export const finPlans = pgTable("fin_plans", {
+  month: text("month").primaryKey(),
+  revenuePlan: doublePrecision("revenue_plan"),
+  profitPlan: doublePrecision("profit_plan"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
