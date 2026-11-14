@@ -386,11 +386,44 @@ export const projectLog = pgTable(
     resolvedBy: text("resolved_by"),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     resolutionNote: text("resolution_note"),
+    /**
+     * «Фокус»: what to give attention to now. scale | stop | fix | decide; null = an ordinary log entry.
+     * An open (needs_you) entry with a focus is shown on top of the log and on the dashboard.
+     */
+    focus: text("focus").$type<"scale" | "stop" | "fix" | "decide">(),
+    /** Price of doing nothing for a week, in the project's currency. Sorts the focus list. */
+    impact: doublePrecision("impact"),
+    /** Roughly how many minutes the action takes. */
+    effortMin: integer("effort_min"),
+    /** How to undo the action. */
+    rollback: text("rollback"),
   },
   (t) => [index("project_log_project_idx").on(t.projectId, t.createdAt), index("project_log_topic_idx").on(t.projectId, t.topic, t.status)],
 );
 
 export type ProjectLogRow = typeof projectLog.$inferSelect;
+
+/**
+ * Plan of a week (Mon–Sun) per metric: the month's plan split by days, or a manual correction.
+ * Auto rows are rewritten on every sync and plan save; manual ones stay until reset. The AI agent reads this table.
+ */
+export const projectWeekPlans = pgTable(
+  "project_week_plans",
+  {
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    /** Monday, YYYY-MM-DD */
+    weekStart: text("week_start").notNull(),
+    /** leads | subscribers | sales | revenue | spend (the ad budget of the week) */
+    metric: text("metric").notNull(),
+    plan: doublePrecision("plan").notNull(),
+    manual: boolean("manual").notNull().default(false),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedBy: text("updated_by"),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.weekStart, t.metric] })],
+);
 
 /** Every action that changes something outside the dashboard (ad platforms, sheets, drive). */
 export const auditLog = pgTable(

@@ -14,4 +14,8 @@ export const toLogItems = (rows: ProjectLogRow[]): LogItem[] =>
     link: l.link,
     resolvedBy: l.resolvedBy,
     resolutionNote: l.resolutionNote,
+    focus: l.focus,
+    impact: l.impact,
+    effortMin: l.effortMin,
+    rollback: l.rollback,
   }));

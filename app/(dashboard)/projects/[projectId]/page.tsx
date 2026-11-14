@@ -10,7 +10,14 @@ import { currentMonth, monthEnd, monthOf, monthsBetween, planFor } from "@/lib/p
 import { parseProjectPeriod } from "@/lib/projects/range";
 import { firstDataDate } from "@/lib/integrations/store";
 import { first } from "@/lib/workspace/params";
+import { HealthBadge } from "@/components/projects/health-badge";
+import { projectsAttention } from "@/lib/projects/health";
 import { ResultCard } from "@/components/projects/result-card";
+import { WeekPlanCard, type WeekColumn, type WeekRow } from "@/components/projects/week-plan";
+import { listWeekOverrides } from "@/lib/projects/week-store";
+import { monthSegments, weekPlan, weekStartOf, type WeekMetric } from "@/lib/projects/weeks";
+import { METRICS } from "@/lib/domain/metrics";
+import type { ProjectWithStats } from "@/lib/domain/types";
 import { SourceChips } from "@/components/projects/source-chips";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -62,6 +69,8 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
     ]),
   );
 
+  const logItems = toLogItems(await listLog(project.id));
+
   return (
     <div className="flex flex-col gap-5">
       <ProjectMobileNav
@@ -72,6 +81,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
       />
       <div className="flex flex-wrap items-center gap-3 px-1">
         <StatusBadge status={project.status} />
+        {base.status === "active" && <ProjectHealthBadge base={base} />}
         <span className="text-sm text-muted-foreground">в работе с {formatDate(project.startDate)}</span>
         <SourceChips sources={project.sources} />
         <ProjectOwnersLine owners={project.owners} />
@@ -92,12 +102,18 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         </Card>
       )}
 
-      {/* Plan / fact on the left, the project's log next to it: always open, as tall as the cards beside it. */}
+      {/* Plan / fact on the left, the month week by week next to it. */}
       <section className="grid gap-5 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-5">
           {stats.results.length > 0 ? (
-            stats.results.map((result) => (
-              <ResultCard key={result.kpi.metric} result={result} elapsed={stats.elapsed} currency={project.agent.currency} />
+            stats.results.map((result, i) => (
+              <ResultCard
+                key={result.kpi.metric}
+                result={result}
+                elapsed={stats.elapsed}
+                currency={project.agent.currency}
+                title={i > 0 ? undefined : monthOf(period.from) === monthOf(period.to) ? "План месяца" : "План периода"}
+              />
             ))
           ) : (
             <Card>
@@ -105,16 +121,31 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
             </Card>
           )}
         </div>
-        <div className="relative min-w-0 lg:min-h-[320px]">
-          <ProjectLog
-            projectId={project.id}
-            items={toLogItems(await listLog(project.id))}
-            description="Общий лог проекта: реклама, SMM, план и доступы. Предложения и анализ агента, ошибки и проверки дашборда."
-            showArea
-            panel
-            className="max-h-[70dvh] lg:absolute lg:inset-0 lg:max-h-none"
-          />
-        </div>
+        <WeekPlanSection base={base} canEdit={permissions.canEditInputs} />
+      </section>
+
+      {/* What happened (Лог) next to what to do now (Фокус): both open, each scrolls inside its block. */}
+      <section className="grid gap-5 lg:grid-cols-2">
+        <ProjectLog
+          projectId={project.id}
+          items={logItems}
+          description="Общий лог проекта: реклама, SMM, план и доступы. Предложения и анализ агента, ошибки и проверки дашборда. Действия, которые нужно сделать сейчас, вынесены в «Фокус»."
+          showArea
+          panel
+          only="log"
+          currency={project.agent.currency}
+          className="max-h-[70dvh] lg:h-[440px] lg:max-h-none"
+        />
+        <ProjectLog
+          projectId={project.id}
+          items={logItems}
+          description="Куда дать внимание сейчас, чтобы у клиента был результат: что выключить, что починить, что масштабировать и где нужно решение. Сверху — самое дорогое по цене бездействия за неделю. Запись уходит, когда вы её решили или причина исчезла."
+          showArea
+          panel
+          only="focus"
+          currency={project.agent.currency}
+          className="max-h-[70dvh] lg:h-[440px] lg:max-h-none"
+        />
       </section>
 
       <MetricsGrid metrics={project.metrics} currency={project.agent.currency} />
@@ -131,6 +162,77 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
 
     </div>
   );
+}
+
+const SHORT_MONTHS = ["янв.", "февр.", "марта", "апр.", "мая", "июня", "июля", "авг.", "сент.", "окт.", "нояб.", "дек."];
+const FULL_MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+const dayLabel = (iso: string) => `${Number(iso.slice(8, 10))} ${SHORT_MONTHS[Number(iso.slice(5, 7)) - 1]}`;
+
+/** The current month week by week: plan (split of the month's plan or a manual number) against the fact so far. */
+async function WeekPlanSection({ base, canEdit }: { base: ProjectWithStats; canEdit: boolean }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const month = currentMonth();
+  if (base.status === "archived" || monthOf(base.startDate) > month) return null;
+  const fallback = base.plans.length ? null : { kpis: base.kpis, budgetMonth: base.agent.budgetMonth };
+  const overrides = await listWeekOverrides(base.id);
+  const thisWeek = weekStartOf(today);
+
+  // Weeks of this month only, 1st to last day; an edge piece under four days joins its neighbour (1–8, 23–30).
+  const rows: WeekRow[] = await Promise.all(
+    monthSegments(month).map(async ({ from, to, days, weeks }) => {
+      const state = today > to ? "past" : today < from ? "future" : "current";
+      const fact = state === "future" ? null : await getProject(base.id, from, to < today ? to : today);
+      const cells: WeekRow["cells"] = {};
+      for (const weekStart of weeks) {
+        const plan = weekPlan(base.plans, overrides, weekStart, monthOf(base.startDate), fallback, thisWeek, { from, to });
+        for (const [metric, value] of Object.entries(plan)) {
+          if (!value) continue;
+          const sum = (cells[metric]?.plan ?? 0) + value.plan;
+          cells[metric] = {
+            plan: Math.round(sum * 100) / 100,
+            manual: (cells[metric]?.manual ?? false) || value.manual,
+            fact: fact ? (fact.metrics[metric as WeekMetric] ?? 0) : null,
+          };
+        }
+      }
+      return {
+        id: from,
+        weeks,
+        label: `${Number(from.slice(8, 10))}–${dayLabel(to)}`,
+        state,
+        days,
+        daysPassed: state === "past" ? days : state === "future" ? 0 : Math.round((Date.parse(today) - Date.parse(from)) / 86_400_000),
+        cells,
+      };
+    }),
+  );
+
+  const metrics = [...new Set(rows.flatMap((r) => Object.keys(r.cells)))] as WeekMetric[];
+  const columns: WeekColumn[] = metrics
+    .sort((a, b) => Number(a === "spend") - Number(b === "spend"))
+    .map((metric) => ({
+      metric,
+      label: metric === "spend" ? "Бюджет" : METRICS[metric].label,
+      money: METRICS[metric].format === "currency",
+      isBudget: metric === "spend",
+    }));
+
+  return (
+    <WeekPlanCard
+      projectId={base.id}
+      monthLabel={`${FULL_MONTHS[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`}
+      columns={columns}
+      rows={rows}
+      currency={base.agent.currency}
+      canEdit={canEdit}
+    />
+  );
+}
+
+/** The same score as on the dashboard card; always for the current month, whatever period the page shows. */
+async function ProjectHealthBadge({ base }: { base: ProjectWithStats }) {
+  const attention = (await projectsAttention([base])).get(base.id);
+  return attention ? <HealthBadge health={attention.health} /> : null;
 }
 
 async function ProjectOwnersLine({ owners }: { owners: ProjectOwners }) {

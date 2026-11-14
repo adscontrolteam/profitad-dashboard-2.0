@@ -86,6 +86,9 @@ export async function syncAll() {
   // Project log: sync failures, daily checks, then the «Посмотреть Лог» reminder (at most every 3 days).
   const { logSyncResults, runProjectChecks } = await import("@/lib/log/checks");
   await logSyncResults(results.filter((r) => r.kind !== "drive"));
+  // Week plans first: the checks judge the week against them.
+  const { materializeAllWeekPlans } = await import("@/lib/projects/week-store");
+  await materializeAllWeekPlans();
   await runProjectChecks();
   const { notifyLogs } = await import("@/lib/log/notify");
   results.push(...(await notifyLogs()));

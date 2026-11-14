@@ -6,6 +6,7 @@ import { projectLog, type ProjectLogRow } from "@/db/schema";
 export type LogStatus = ProjectLogRow["status"];
 export type LogKind = "proposal" | "analysis" | "error" | "warning" | "info";
 export type LogArea = "ads" | "smm" | "project";
+export type LogFocus = "scale" | "stop" | "fix" | "decide";
 
 export interface LogEntry {
   title: string;
@@ -13,6 +14,12 @@ export interface LogEntry {
   kind: LogKind;
   link?: string | null;
   area?: LogArea;
+  /** «Фокус»: the entry is an action to take now. See project_log.focus. */
+  focus?: LogFocus | null;
+  /** Price of doing nothing for a week, in the project's currency. */
+  impact?: number | null;
+  effortMin?: number | null;
+  rollback?: string | null;
 }
 
 export async function addLog(projectId: string, entry: LogEntry & { status: LogStatus; source?: "dashboard" | "agent"; topic?: string | null }) {
@@ -29,6 +36,10 @@ export async function addLog(projectId: string, entry: LogEntry & { status: LogS
       status: entry.status,
       topic: entry.topic ?? null,
       link: entry.link ?? null,
+      focus: entry.focus ?? null,
+      impact: entry.impact ?? null,
+      effortMin: entry.effortMin ?? null,
+      rollback: entry.rollback ?? null,
     });
 }
 
@@ -46,10 +57,21 @@ export async function condition(projectId: string, topic: string, active: boolea
     .limit(1);
   if (active) {
     if (!open) return addLog(projectId, { ...entry, status: "needs_you", topic });
-    if (open.title !== entry.title || open.body !== (entry.body ?? "")) {
+    const focusChanged = (entry.focus ?? null) !== open.focus || (entry.impact ?? null) !== open.impact;
+    if (open.title !== entry.title || open.body !== (entry.body ?? "") || focusChanged) {
       await db
         .update(projectLog)
-        .set({ title: entry.title.slice(0, 300), body: (entry.body ?? "").slice(0, 4000), link: entry.link ?? open.link, area: entry.area ?? open.area, updatedAt: new Date() })
+        .set({
+          title: entry.title.slice(0, 300),
+          body: (entry.body ?? "").slice(0, 4000),
+          link: entry.link ?? open.link,
+          area: entry.area ?? open.area,
+          focus: entry.focus ?? null,
+          impact: entry.impact ?? null,
+          effortMin: entry.effortMin ?? null,
+          rollback: entry.rollback ?? null,
+          updatedAt: new Date(),
+        })
         .where(eq(projectLog.id, open.id));
     }
     return;
@@ -66,6 +88,17 @@ export async function condition(projectId: string, topic: string, active: boolea
 export async function listLog(projectId: string, area?: LogArea, limit = 100) {
   const where = area ? and(eq(projectLog.projectId, projectId), eq(projectLog.area, area)) : eq(projectLog.projectId, projectId);
   return getDb().select().from(projectLog).where(where).orderBy(desc(projectLog.updatedAt)).limit(limit);
+}
+
+/** Open «Фокус» entries of several projects, the costliest first — for the dashboard's «куда дать внимание». */
+export async function listFocus(projectIds: string[], limit = 12) {
+  if (projectIds.length === 0) return [];
+  return getDb()
+    .select()
+    .from(projectLog)
+    .where(and(inArray(projectLog.projectId, projectIds), eq(projectLog.status, "needs_you"), sql`${projectLog.focus} is not null`))
+    .orderBy(sql`${projectLog.impact} desc nulls last`, desc(projectLog.updatedAt))
+    .limit(limit);
 }
 
 export async function logCounts(projectId: string) {

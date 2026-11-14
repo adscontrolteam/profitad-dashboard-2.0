@@ -7,6 +7,7 @@ import { useState, useSyncExternalStore, useTransition } from "react";
 import { resolveLogAction } from "@/app/(dashboard)/log-actions";
 import { Segmented } from "@/components/workspace/form";
 import { cn } from "@/lib/cn";
+import { byImpact, FOCUS, formatImpact, type FocusKey } from "@/lib/log/focus";
 
 export interface LogItem {
   id: string;
@@ -20,6 +21,10 @@ export interface LogItem {
   link: string | null;
   resolvedBy: string | null;
   resolutionNote: string | null;
+  focus: FocusKey | null;
+  impact: number | null;
+  effortMin: number | null;
+  rollback: string | null;
 }
 
 const KIND: Record<string, { label: string; className: string }> = {
@@ -53,6 +58,8 @@ export function ProjectLog({
   description = "Предложения, анализ и ошибки — от агента и от проверок дашборда.",
   showArea = false,
   panel = false,
+  only = "all",
+  currency = null,
   className,
 }: {
   projectId: string;
@@ -62,9 +69,18 @@ export function ProjectLog({
   showArea?: boolean;
   /** Project page: always open, a list that scrolls inside the block, with search by words. */
   panel?: boolean;
+  /**
+   * The project page shows two blocks side by side: «Лог» (everything that happened) and «Фокус»
+   * (actions to take now). "focus" keeps only entries with an action, "log" only those without.
+   */
+  only?: "all" | "log" | "focus";
+  /** Project currency, for the price of inaction of «Фокус» entries. */
+  currency?: string | null;
   className?: string;
 }) {
-  const waiting = items.filter((i) => i.status === "needs_you").length;
+  const isFocus = only === "focus";
+  const scoped = isFocus ? items.filter((i) => i.focus) : only === "log" ? items.filter((i) => !i.focus) : items;
+  const waiting = scoped.filter((i) => i.status === "needs_you").length;
   const [filter, setFilter] = useState<"needs_you" | "auto" | "all">(waiting ? "needs_you" : "all");
   // Always folded; the «Посмотреть Лог» link from Telegram (#log) opens it.
   const openedByLink = useSyncExternalStore(subscribeHash, () => window.location.hash === "#log", () => false);
@@ -73,22 +89,24 @@ export function ProjectLog({
   const [searching, setSearching] = useState(false);
   const [search, setSearch] = useState("");
   const words = search.toLowerCase().split(/\s+/).filter(Boolean);
-  const byStatus = filter === "all" ? items : filter === "auto" ? items.filter((i) => i.status === "auto") : items.filter((i) => i.status === "needs_you");
+  const byStatus = filter === "all" ? scoped : scoped.filter((i) => i.status === filter);
+  // Actions are read by cost: the dearest to leave undone comes first.
+  const ordered = isFocus ? byImpact(byStatus) : byStatus;
   const shown = words.length
-    ? byStatus.filter((i) => {
+    ? ordered.filter((i) => {
         const text = `${i.title} ${i.body} ${i.resolutionNote ?? ""} ${KIND[i.kind]?.label ?? ""} ${AREA[i.area]}`.toLowerCase();
         return words.every((w) => text.includes(w));
       })
-    : byStatus;
+    : ordered;
   const list =
     shown.length === 0 ? (
       <p className="text-sm text-muted-foreground">
-        {words.length ? "По этим словам ничего не найдено." : filter === "needs_you" ? "Решений от вас сейчас не ждём." : "Записей пока нет."}
+        {words.length ? "По этим словам ничего не найдено." : filter === "needs_you" ? (isFocus ? "Сейчас ничего не горит: действий от вас не ждём." : "Решений от вас сейчас не ждём.") : "Записей пока нет."}
       </p>
     ) : (
       <ul className="flex flex-col divide-y divide-border">
         {shown.map((item) => (
-          <LogRow key={item.id} projectId={projectId} item={item} showArea={showArea} />
+          <LogRow key={item.id} projectId={projectId} item={item} showArea={showArea} currency={currency} />
         ))}
       </ul>
     );
@@ -96,7 +114,7 @@ export function ProjectLog({
   if (panel) {
     return (
       <section
-        id="log"
+        id={isFocus ? "focus" : "log"}
         className={cn(
           "flex min-h-0 min-w-0 scroll-mt-24 flex-col rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-5 lg:p-6",
           className,
@@ -104,7 +122,7 @@ export function ProjectLog({
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h2 className="section-title flex items-center gap-2">
-            Лог
+            {isFocus ? "Фокус" : "Лог"}
             {waiting > 0 && (
               <span className="size-2.5 rounded-full bg-negative shadow-[0_0_0_3px_color-mix(in_oklab,var(--negative)_25%,transparent)]" title={`Ждёт вашего решения: ${waiting}`} aria-label={`Ждёт вашего решения: ${waiting}`} />
             )}
@@ -122,7 +140,7 @@ export function ProjectLog({
             />
             <button
               type="button"
-              aria-label="Поиск по логу"
+              aria-label={isFocus ? "Поиск по фокусу" : "Поиск по логу"}
               aria-pressed={searching}
               title="Поиск по словам"
               onClick={() => {
@@ -200,7 +218,7 @@ export function ProjectLog({
   );
 }
 
-function LogRow({ projectId, item, showArea }: { projectId: string; item: LogItem; showArea: boolean }) {
+function LogRow({ projectId, item, showArea, currency }: { projectId: string; item: LogItem; showArea: boolean; currency: string | null }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
@@ -212,13 +230,26 @@ function LogRow({ projectId, item, showArea }: { projectId: string; item: LogIte
     <li className="flex flex-col gap-1.5 py-3">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="tabular-nums text-muted-foreground">{when(item.at)}</span>
+        {item.focus && <span className={cn("rounded-full px-2 py-0.5 font-semibold", FOCUS[item.focus].className)}>{FOCUS[item.focus].label}</span>}
         <span className={cn("rounded-full px-2 py-0.5 font-medium", kind.className)}>{kind.label}</span>
         {showArea && <span className="rounded-full border border-border px-2 py-0.5 text-muted-foreground">{AREA[item.area]}</span>}
         <span className="text-muted-foreground">{item.source === "agent" ? "агент" : "дашборд"}</span>
         <span className={cn("ml-auto font-medium", STATUS[item.status].className)}>{STATUS[item.status].label}</span>
       </div>
       <p className="text-sm font-semibold">{item.title}</p>
+      {item.focus && (item.impact !== null || item.effortMin !== null) && (
+        <p className="text-xs text-muted-foreground">
+          {item.impact !== null && (
+            <>
+              цена бездействия ≈ <span className="font-semibold text-foreground tabular-nums">{formatImpact(item.impact, currency)}</span> в неделю
+            </>
+          )}
+          {item.impact !== null && item.effortMin !== null && " · "}
+          {item.effortMin !== null && `займёт ≈ ${item.effortMin} мин`}
+        </p>
+      )}
       {item.body && <p className="whitespace-pre-line text-sm text-muted-foreground">{item.body}</p>}
+      {item.focus && item.rollback && <p className="text-xs text-muted-foreground/80">Откат: {item.rollback}</p>}
       {item.status !== "needs_you" && item.resolutionNote && (
         <p className="text-xs text-muted-foreground/80">
           → {item.resolutionNote}

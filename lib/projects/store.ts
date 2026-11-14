@@ -89,6 +89,9 @@ export async function savePlan(projectId: string, plan: MonthPlan, actorEmail: s
       set: { kpis: sql`excluded.kpis`, budgetMonth: sql`excluded.budget_month`, updatedAt: new Date(), updatedBy: actorEmail },
     });
   await syncCurrentPlan(projectId);
+  // The week's plan is the month's plan split by days: keep the agent's copy in step.
+  const { materializeWeekPlans } = await import("./week-store");
+  await materializeWeekPlans(projectId).catch((error) => console.error("week plans failed", projectId, error));
 }
 
 /** projects.kpis / budget_month = the plan in force this month (run on save and when a month starts). */

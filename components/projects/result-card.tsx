@@ -6,7 +6,18 @@ import { formatMetric } from "@/lib/format";
 import { PlanFact } from "./plan-fact";
 
 /** One tracked result: plan/fact with pace, plus target vs actual cost per result. */
-export function ResultCard({ result, elapsed, currency = null }: { result: KpiStats; elapsed: number; currency?: string | null }) {
+export function ResultCard({
+  result,
+  elapsed,
+  currency = null,
+  title,
+}: {
+  result: KpiStats;
+  elapsed: number;
+  currency?: string | null;
+  /** Heading of the block, e.g. «План месяца». */
+  title?: string;
+}) {
   const formatCurrency = (v: number) => formatMetric(v, "currency", currency);
   const { cpaPlan } = result.kpi;
   const cpaDelta = cpaPlan && result.cpaFact !== null ? (result.cpaFact - cpaPlan) / cpaPlan : null;
@@ -14,6 +25,7 @@ export function ResultCard({ result, elapsed, currency = null }: { result: KpiSt
 
   return (
     <Card className="flex min-w-0 flex-col gap-4">
+      {title && <h2 className="section-title">{title}</h2>}
       <PlanFact result={result} elapsed={elapsed} currency={currency} />
       <div className="grid grid-cols-2 gap-3">
         <StatTile label={`Цель по цене (Б) · ${unit}`}>
