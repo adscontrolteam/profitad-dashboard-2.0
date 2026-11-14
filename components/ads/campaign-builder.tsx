@@ -95,6 +95,9 @@ export function CampaignBuilder({
 
   const isGoogle = form.platform === "google";
   const googleSearch = isGoogle && form.objective === "SEARCH";
+  // Library items of the chosen platform; old items without a platform are Meta creatives.
+  const savedAds = creatives.filter((c) => c.kind === "ad");
+  const platformCreatives = creatives.filter((c) => c.kind !== "ad" && (c.platform ?? "meta") === form.platform);
   const headlines = lines(headlinesText);
   const descriptions = lines(descriptionsText);
   const canLaunchGoogle = googleSearch && googleReady && Boolean(googleAccountId);
@@ -302,6 +305,24 @@ export function CampaignBuilder({
 
         {googleSearch && (
           <StepCard n={4} title="Объявление (адаптивное поисковое)">
+            {savedAds.length > 0 && (
+              <div className="mb-4 flex flex-wrap items-center gap-1.5">
+                <span className="mr-1 text-xs text-muted-foreground">Из «Креативов»:</span>
+                {savedAds.map((ad) => (
+                  <button
+                    key={ad.id}
+                    type="button"
+                    className="rounded-full border border-border px-3 py-1 text-xs font-medium hover:bg-muted"
+                    onClick={() => {
+                      setHeadlinesText((ad.headlines ?? []).join("\n"));
+                      setDescriptionsText((ad.descriptions ?? []).join("\n"));
+                    }}
+                  >
+                    {ad.name}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Заголовки" hint={`— по одному в строке, 3–15, до 30 симв. · ${headlines.length}`}>
                 <textarea
@@ -330,11 +351,11 @@ export function CampaignBuilder({
           <div className="flex flex-col gap-4">
             {!isGoogle && (
               <>
-            {creatives.length === 0 ? (
+            {platformCreatives.length === 0 ? (
               <p className="text-sm text-muted-foreground">Креативов пока нет — подготовьте их во вкладке «Креативы».</p>
             ) : (
               <div className="grid gap-2 sm:grid-cols-2">
-                {creatives.map((c) => {
+                {platformCreatives.map((c) => {
                   const on = form.creativeIds.includes(c.id);
                   return (
                     <button

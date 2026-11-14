@@ -27,6 +27,8 @@ const HEADERS = {
   /** A form answer kept for context (e.g. «Статус: Автономо» next to a real «Qualification» column). */
   topic: ["статус", "status", "тип", "услуга", "послуга"],
   paidAt: ["дата оплаты", "дата оплати", "оплачено", "payment date", "paid at", "paid_at"],
+  /** Set by the manager: «Так (Google)» / «Так (Meta)» / «Ні (…)». Wins over the click id; empty = by gclid/UTM. */
+  fromAds: ["реклама?", "з реклами?", "с рекламы?", "з реклами", "с рекламы", "from ads"],
 } as const;
 type Field = keyof typeof HEADERS;
 
@@ -148,6 +150,16 @@ export function parseLeadRows(tab: string, values: string[][]): ParsedTab {
     const isMeta = /facebook|instagram|meta|\bfb\b|\big\b/i.test(utm.utm_source ?? "");
     if (utm.gclid || utm.gbraid || utm.wbraid || (paidMedium && !isMeta)) utm.ad = "google";
     else if (utm.fbclid || (paidMedium && isMeta)) utm.ad = "meta";
+    // The manager knows better than a lost click id (lead before tagging, call after a Google search…).
+    const manual = norm(cell(row, "fromAds"));
+    const no = /^(ні|нет|no)([\s(,.]|$)/.test(manual);
+    if (!no && /^(так|да|yes)|реклам/.test(manual)) {
+      utm.ad = /meta|facebook|instagram|fb/.test(manual) ? "meta" : "google";
+      utm.ad_manual = "1";
+    } else if (no) {
+      delete utm.ad;
+      utm.ad_manual = "0";
+    }
     leads.push({
       externalId: "",
       leadAt,
@@ -204,6 +216,12 @@ function mergePayments(a: unknown, b: unknown): RawLead {
   });
   return { ...rb, ...ra, payments };
 }
+/** A manager's «Ні» on any of the merged rows means the lead is not from ads. */
+const manualAd = (utm: Record<string, string>) => {
+  if (utm.ad_manual === "0") delete utm.ad;
+  return utm;
+};
+
 const sumPayments = (raw: RawLead) => (raw.payments?.length ? raw.payments.reduce((x, p) => x + p.amount, 0) || null : null);
 
 /**
@@ -226,7 +244,7 @@ export function dedupeLeads(all: NormalizedLead[]): { leads: NormalizedLead[]; m
       ...keep,
       externalId: hash(key),
       leadAt: prev.leadAt < lead.leadAt ? prev.leadAt : lead.leadAt,
-      utm: { ...other.utm, ...keep.utm },
+      utm: manualAd({ ...other.utm, ...keep.utm }),
       raw: mergePayments(keep.raw, other.raw),
       value: sumPayments(mergePayments(keep.raw, other.raw)) ?? keep.value,
       campaign: keep.campaign || other.campaign,
