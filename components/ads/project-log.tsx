@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useSyncExternalStore, useTransition } from "react";
 import { resolveLogAction } from "@/app/(dashboard)/ads/actions";
 import { Segmented } from "@/components/workspace/form";
 import { cn } from "@/lib/cn";
@@ -37,37 +37,67 @@ const STATUS: Record<LogItem["status"], { label: string; className: string }> = 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" });
 
+const subscribeHash = (cb: () => void) => {
+  window.addEventListener("hashchange", cb);
+  return () => window.removeEventListener("hashchange", cb);
+};
+
 /** Proposals, analysis, errors and warnings of the project — from the dashboard's checks and from the AI agent. */
 export function ProjectLog({ projectId, items }: { projectId: string; items: LogItem[] }) {
   const waiting = items.filter((i) => i.status === "needs_you").length;
   const [filter, setFilter] = useState<"needs_you" | "auto" | "all">(waiting ? "needs_you" : "all");
+  // Always folded; the «Посмотреть Лог» link from Telegram (#log) opens it.
+  const openedByLink = useSyncExternalStore(subscribeHash, () => window.location.hash === "#log", () => false);
+  const [toggled, setToggled] = useState<boolean | null>(null);
+  const expanded = toggled ?? openedByLink;
   const shown = filter === "all" ? items : filter === "auto" ? items.filter((i) => i.status === "auto") : items.filter((i) => i.status === "needs_you");
 
   return (
     <section id="log" className="min-w-0 scroll-mt-24 rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-5 lg:p-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="section-title">Лог</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Предложения, анализ и ошибки — от агента и от проверок дашборда.</p>
+      <button
+        type="button"
+        onClick={() => setToggled(!expanded)}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-3 text-left"
+      >
+        <h2 className="section-title flex items-center gap-2">
+          Лог
+          {waiting > 0 && (
+            <span className="size-2.5 rounded-full bg-negative shadow-[0_0_0_3px_color-mix(in_oklab,var(--negative)_25%,transparent)]" title={`Ждёт вашего решения: ${waiting}`} aria-label={`Ждёт вашего решения: ${waiting}`} />
+          )}
+        </h2>
+        <span className="text-xs text-muted-foreground">
+          {waiting > 0 ? `ждёт вашего решения: ${waiting}` : items.length ? `записей: ${items.length}` : "пусто"}
+        </span>
+        <span className={cn("ml-auto text-muted-foreground transition-transform", expanded && "rotate-180")} aria-hidden>
+          ▾
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="mt-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">Предложения, анализ и ошибки — от агента и от проверок дашборда.</p>
+            <Segmented
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: "needs_you", label: `Ждёт вашего решения${waiting ? ` · ${waiting}` : ""}` },
+                { value: "auto", label: "Решено автоматически" },
+                { value: "all", label: "Все" },
+              ]}
+            />
+          </div>
+          {shown.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{filter === "needs_you" ? "Решений от вас сейчас не ждём." : "Записей пока нет."}</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-border">
+              {shown.map((item) => (
+                <LogRow key={item.id} projectId={projectId} item={item} />
+              ))}
+            </ul>
+          )}
         </div>
-        <Segmented
-          value={filter}
-          onChange={setFilter}
-          options={[
-            { value: "needs_you", label: `Ждёт вашего решения${waiting ? ` · ${waiting}` : ""}` },
-            { value: "auto", label: "Решено автоматически" },
-            { value: "all", label: "Все" },
-          ]}
-        />
-      </div>
-      {shown.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{filter === "needs_you" ? "Решений от вас сейчас не ждём." : "Записей пока нет."}</p>
-      ) : (
-        <ul className="flex flex-col divide-y divide-border">
-          {shown.map((item) => (
-            <LogRow key={item.id} projectId={projectId} item={item} />
-          ))}
-        </ul>
       )}
     </section>
   );
