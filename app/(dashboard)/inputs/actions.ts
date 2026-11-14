@@ -116,6 +116,7 @@ function parseProject(raw: unknown): ProjectInput | string {
       currency: /^[A-Z]{3}$/.test(str(data.currency, 3).toUpperCase()) ? str(data.currency, 3).toUpperCase() : null,
       budgetMonth: positive(data.budgetMonth),
       dailyReport: data.agentDailyReport !== false,
+      leadSource: data.agentLeadSource === "sheet" || data.agentLeadSource === "both" ? data.agentLeadSource : "ads",
     },
   };
 }

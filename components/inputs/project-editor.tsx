@@ -152,6 +152,7 @@ export function ProjectEditor({
     }
   };
   const [metaActions, setMetaActions] = useState(project?.agent.metaActions ?? { leads: [], subscribers: [] });
+  const [agentLeadSource, setAgentLeadSource] = useState<"ads" | "sheet" | "both">(project?.agent.leadSource ?? "ads");
   const [agentDailyReport, setAgentDailyReport] = useState(project?.agent.dailyReport ?? true);
 
   const [state, formAction, saving] = useActionState(async (prev: ProjectActionState, formData: FormData) => {
@@ -190,6 +191,7 @@ export function ProjectEditor({
     currency,
     budgetMonth,
     agentDailyReport,
+    agentLeadSource,
     createDrive: !project && (createDrive || createReport),
     createReport: !project && createReport,
   });
@@ -489,6 +491,9 @@ export function ProjectEditor({
             setLeadActions={setLeadActions}
             currency={currency}
             setCurrency={setCurrency}
+            leadSource={agentLeadSource}
+            setLeadSource={setAgentLeadSource}
+            hasLeadSheet={integrations.some((i) => i.kind === "sheets_leads" || i.kind === "crm")}
             dailyReport={agentDailyReport}
             setDailyReport={setAgentDailyReport}
           />
@@ -566,6 +571,9 @@ function AgentSettings({
   setLeadActions,
   currency,
   setCurrency,
+  leadSource,
+  setLeadSource,
+  hasLeadSheet,
   dailyReport,
   setDailyReport,
 }: {
@@ -575,6 +583,9 @@ function AgentSettings({
   setLeadActions: (v: string[]) => void;
   currency: string;
   setCurrency: (v: string) => void;
+  leadSource: "ads" | "sheet" | "both";
+  setLeadSource: (v: "ads" | "sheet" | "both") => void;
+  hasLeadSheet: boolean;
   dailyReport: boolean;
   setDailyReport: (v: boolean) => void;
 }) {
@@ -653,6 +664,33 @@ function AgentSettings({
             </div>
           </div>
         )}
+      </Field>
+      <Field label="Откуда агент берёт заявки">
+        <div className="flex flex-col gap-2">
+          {(
+            [
+              ["ads", "Кабинет Google Ads", "Отмеченные выше конверсии — то, что видит Google."],
+              ["sheet", "Таблица клиента", "Реальные лиды с рекламы (с gclid / меткой) из таблицы или CRM, без спама. По ним цена заявки и темп."],
+              ["both", "Оба источника", "Считает по таблице, кабинет показывает рядом — видно, сколько заявок Google не досчитал."],
+            ] as const
+          ).map(([value, title, hint]) => (
+            <label key={value} className="flex cursor-pointer items-start gap-3 text-sm">
+              <input
+                type="radio"
+                name="agentLeadSource"
+                checked={leadSource === value}
+                disabled={value !== "ads" && !hasLeadSheet}
+                onChange={() => setLeadSource(value)}
+                className="mt-0.5 size-4 accent-[var(--accent)]"
+              />
+              <span className={value !== "ads" && !hasLeadSheet ? "opacity-50" : undefined}>
+                {title}
+                <span className="block text-xs text-muted-foreground">{hint}</span>
+              </span>
+            </label>
+          ))}
+          {!hasLeadSheet && <span className="text-xs text-muted-foreground">Таблица станет доступна, когда в «Подключениях» проекта будет таблица лидов или CRM.</span>}
+        </div>
       </Field>
       <label className="flex cursor-pointer items-center gap-3 text-sm">
         <input type="checkbox" checked={dailyReport} onChange={(e) => setDailyReport(e.target.checked)} className="size-4 accent-[var(--accent)]" />

@@ -103,6 +103,8 @@ export interface ProjectAgentSettings {
   /** Ad account currency, e.g. EUR. */
   currency: string | null;
   budgetMonth: number | null;
+  /** Where the agent counts leads: Google Ads conversions, the client's lead sheet / CRM, or both. */
+  leadSource: "ads" | "sheet" | "both";
   /** Morning report in Telegram. */
   dailyReport: boolean;
 }

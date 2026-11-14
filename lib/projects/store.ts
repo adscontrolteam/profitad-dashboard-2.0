@@ -22,6 +22,7 @@ function toRow(input: ProjectInput) {
     leadActions: input.agent.leadActions,
     metaActions: input.agent.metaActions,
     currency: input.agent.currency,
+    agentLeadSource: input.agent.leadSource,
     agentDailyReport: input.agent.dailyReport,
   };
 }

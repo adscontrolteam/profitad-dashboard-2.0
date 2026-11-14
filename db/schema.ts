@@ -6,11 +6,13 @@ import {
   integer,
   jsonb,
   pgTable,
+  pgView,
   primaryKey,
   text,
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import type { IntegrationKind } from "@/lib/integrations/kinds";
 import type { Kpi, ProjectStatus, TrafficPlatform, TrafficSource } from "@/lib/domain/types";
 import type { DealStage } from "@/lib/sales/stages";
@@ -127,6 +129,8 @@ export const projects = pgTable("projects", {
   currency: text("currency"),
   budgetMonth: doublePrecision("budget_month"),
   agentDailyReport: boolean("agent_daily_report").notNull().default(true),
+  /** Where the AI agent counts leads: ads = Google Ads conversions (lead_actions), sheet = client's lead sheet / CRM, both. */
+  agentLeadSource: text("agent_lead_source").$type<"ads" | "sheet" | "both">().notNull().default("ads"),
   position: integer("position").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -236,6 +240,32 @@ export const leads = pgTable(
 );
 
 export type LeadRow = typeof leads.$inferSelect;
+
+/**
+ * Leads from the client's sheet / CRM per project, day and campaign, for the AI agent (role bot_sync).
+ * No names, phones or emails — only counts. «ads» = the lead carries a click id or a paid UTM.
+ * See docs/agent-contract.md.
+ */
+export const agentLeadsDaily = pgView("agent_leads_daily", {
+  projectId: text("project_id").notNull(),
+  day: date("day").notNull(),
+  campaign: text("campaign").notNull(),
+  leadsAll: integer("leads_all").notNull(),
+  leadsAds: integer("leads_ads").notNull(),
+  noAnswerAds: integer("no_answer_ads").notNull(),
+  wonAds: integer("won_ads").notNull(),
+  junk: integer("junk").notNull(),
+}).as(sql`
+  select project_id,
+         (lead_at at time zone 'UTC')::date as day,
+         coalesce(nullif(utm->>'utm_campaign', ''), nullif(campaign, ''), '') as campaign,
+         (count(*) filter (where outcome <> 'junk'))::int as leads_all,
+         (count(*) filter (where outcome <> 'junk' and utm->>'ad' is not null))::int as leads_ads,
+         (count(*) filter (where outcome = 'no_answer' and utm->>'ad' is not null))::int as no_answer_ads,
+         (count(*) filter (where outcome = 'won' and utm->>'ad' is not null))::int as won_ads,
+         (count(*) filter (where outcome = 'junk'))::int as junk
+  from leads
+  group by 1, 2, 3`);
 
 /**
  * Sales recorded outside a CRM, e.g. a «Продажи» sheet kept by the client per period (not per lead).

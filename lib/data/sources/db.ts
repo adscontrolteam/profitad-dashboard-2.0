@@ -62,6 +62,7 @@ function toProject(row: ProjectRow, metrics: Metrics, plans: MonthPlan[], range:
       // Budget of the range from the monthly plans; the project-level value is the current month's mirror.
       budgetMonth: plan.budget ?? row.budgetMonth ?? null,
       dailyReport: row.agentDailyReport ?? true,
+      leadSource: row.agentLeadSource ?? "ads",
     },
     metrics,
   };
