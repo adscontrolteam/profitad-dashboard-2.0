@@ -14,12 +14,15 @@ import {
   type ResultMetric,
   type TrafficPlatform,
 } from "@/lib/domain/types";
+import { METRICS } from "@/lib/domain/metrics";
 import { createProject, deleteProject, getProjectStatus, updateProject, type ProjectInput } from "@/lib/projects/store";
 import { getProject } from "@/lib/data";
 import { listOwnerCandidates } from "@/lib/projects/owners";
 import { archiveProjectTasks } from "@/lib/tasks/store";
 import { audit } from "@/lib/audit";
 import { ensureProjectFolder, ensureReport } from "@/lib/integrations/provision";
+
+const METRIC_LABELS: Record<string, string> = Object.fromEntries(Object.entries(METRICS).map(([k, v]) => [k, v.label]));
 
 export interface ProjectActionState {
   ok: boolean;
@@ -59,7 +62,20 @@ function parseProject(raw: unknown): ProjectInput | string {
     if (!RESULT_METRICS.includes(metric)) return "Выберите метрику результата.";
     if (kpis.some((k) => k.metric === metric)) return "Один и тот же результат указан дважды.";
     const k = item as Record<string, unknown>;
-    kpis.push({ metric, plan: positive(k.plan), cpaPlan: positive(k.cpaPlan) });
+    kpis.push({
+      metric,
+      plan: positive(k.plan),
+      cpaPlan: positive(k.cpaPlan),
+      planPlus: positive(k.planPlus),
+      cpaPlus: positive(k.cpaPlus),
+      planSuper: positive(k.planSuper),
+      cpaSuper: positive(k.cpaSuper),
+    });
+    const last = kpis[kpis.length - 1];
+    const label = METRIC_LABELS[metric] ?? metric;
+    if (last.plan !== null && last.planPlus && last.planPlus < last.plan) return `${label}: цель Б+ должна быть больше Б.`;
+    if (last.planSuper && ((last.planPlus && last.planSuper < last.planPlus) || (last.plan !== null && last.planSuper < last.plan)))
+      return `${label}: цель С должна быть больше Б+ и Б.`;
   }
 
   const sources = [];

@@ -99,7 +99,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
       {stats.results.length > 0 ? (
         <section className="grid gap-5 lg:grid-cols-2">
           {stats.results.map((result) => (
-            <ResultCard key={result.kpi.metric} result={result} elapsed={stats.elapsed} />
+            <ResultCard key={result.kpi.metric} result={result} elapsed={stats.elapsed} currency={project.agent.currency} />
           ))}
         </section>
       ) : (

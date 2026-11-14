@@ -1,4 +1,4 @@
-import type { Kpi, MonthPlan } from "@/lib/domain/types";
+import { GOAL_LEVELS, type Kpi, type MonthPlan } from "@/lib/domain/types";
 
 const DAY = 86_400_000;
 
@@ -44,8 +44,9 @@ export function planForRange(
   fallback: Omit<MonthPlan, "month"> | null,
 ): { kpis: Kpi[]; budget: number | null; carried: boolean } {
   const order: Kpi["metric"][] = [];
-  const amount = new Map<Kpi["metric"], number | null>();
-  const price = new Map<Kpi["metric"], number | null>();
+  // Per metric and goal level (Б / Б+ / С): prorated amount, latest price.
+  const amount = new Map<string, number | null>();
+  const price = new Map<string, number | null>();
   let budget: number | null = null;
   let carried = false;
   const months = monthsBetween(from, to);
@@ -59,9 +60,13 @@ export function planForRange(
     if (p.budgetMonth !== null) budget = (budget ?? 0) + p.budgetMonth * share;
     for (const k of p.kpis) {
       if (!order.includes(k.metric)) order.push(k.metric);
-      if (k.plan !== null) amount.set(k.metric, (amount.get(k.metric) ?? 0) + k.plan * share);
-      else if (!amount.has(k.metric)) amount.set(k.metric, null);
-      if (k.cpaPlan !== null) price.set(k.metric, k.cpaPlan);
+      for (const lv of GOAL_LEVELS) {
+        const key = `${k.metric}:${lv.key}`;
+        const v = (k[lv.plan] as number | null | undefined) ?? null;
+        if (v !== null) amount.set(key, (amount.get(key) ?? 0) + v * share);
+        const c = (k[lv.cpa] as number | null | undefined) ?? null;
+        if (c !== null) price.set(key, c);
+      }
     }
   }
   // The latest month's order decides which result is the primary one.
@@ -69,7 +74,14 @@ export function planForRange(
   const primaryOrder = [...(last?.kpis.map((k) => k.metric) ?? []), ...order].filter((m, i, all) => all.indexOf(m) === i);
   const round = (v: number | null | undefined) => (v === null || v === undefined ? null : Math.round(v * 100) / 100);
   return {
-    kpis: primaryOrder.map((metric) => ({ metric, plan: round(amount.get(metric)), cpaPlan: price.get(metric) ?? null })),
+    kpis: primaryOrder.map((metric) => {
+      const kpi: Kpi = { metric, plan: null, cpaPlan: null };
+      for (const lv of GOAL_LEVELS) {
+        (kpi as unknown as Record<string, number | null>)[lv.plan] = round(amount.get(`${metric}:${lv.key}`));
+        (kpi as unknown as Record<string, number | null>)[lv.cpa] = price.get(`${metric}:${lv.key}`) ?? null;
+      }
+      return kpi;
+    }),
     budget: round(budget),
     carried,
   };

@@ -33,11 +33,24 @@ export type IsoDate = string;
 
 export interface Kpi {
   metric: ResultMetric;
-  /** Planned amount for the period; null = not set yet. */
+  /** Goal «Б» — the minimum KPI, 100%. Amount for the period; null = not set yet. Pace is judged against it. */
   plan: number | null;
-  /** Target cost per result unit. */
+  /** Target cost per result unit for «Б». */
   cpaPlan: number | null;
+  /** Goal «Б+» — overachievement. */
+  planPlus?: number | null;
+  cpaPlus?: number | null;
+  /** Goal «С» — super overachievement. */
+  planSuper?: number | null;
+  cpaSuper?: number | null;
 }
+
+/** Goal levels of a KPI, lowest first: Б = 100% of the plan, Б+ and С above it. */
+export const GOAL_LEVELS = [
+  { key: "base", label: "Б", plan: "plan", cpa: "cpaPlan" },
+  { key: "plus", label: "Б+", plan: "planPlus", cpa: "cpaPlus" },
+  { key: "super", label: "С", plan: "planSuper", cpa: "cpaSuper" },
+] as const satisfies readonly { key: string; label: string; plan: keyof Kpi; cpa: keyof Kpi }[];
 
 export const TRAFFIC_PLATFORMS = ["meta", "google", "tiktok"] as const;
 export type TrafficPlatform = (typeof TRAFFIC_PLATFORMS)[number];

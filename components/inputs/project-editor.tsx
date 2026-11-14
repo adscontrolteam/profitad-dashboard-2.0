@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { Fragment, useActionState, useEffect, useState, useTransition } from "react";
 import {
   deleteProjectAction,
   listConversionActionsAction,
@@ -14,6 +14,7 @@ import { ProjectIntegrations } from "./project-integrations";
 import { BriefConductor } from "./brief-conductor";
 import { STATUS_META } from "@/lib/domain/statuses";
 import {
+  GOAL_LEVELS,
   PROJECT_STATUSES,
   RESULT_METRICS,
   TRAFFIC_PLATFORMS,
@@ -38,7 +39,14 @@ interface KpiDraft {
   metric: ResultMetric;
   plan: string;
   cpaPlan: string;
+  planPlus: string;
+  cpaPlus: string;
+  planSuper: string;
+  cpaSuper: string;
 }
+
+const LEVEL_HINT: Record<string, string> = { base: "Минимум по KPI, 100%", plus: "Перевыполнение плана", super: "Супер-перевыполнение" };
+const EMPTY_LEVELS = { planPlus: "", cpaPlus: "", planSuper: "", cpaSuper: "" };
 
 interface SourceDraft {
   platform: TrafficPlatform;
@@ -55,8 +63,30 @@ function localMonth() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+const parseNum = (v: string) => {
+  const n = Number(v.replace(/\s/g, "").replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/** Price per result when only the budget and the amount are known: budget / amount. */
+const autoPrice = (budget: string, amount: string) => {
+  const b = parseNum(budget), a = parseNum(amount);
+  return b && a ? String(Math.round((b / a) * 100) / 100) : "";
+};
+
+const str = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v));
 const toDraft = (kpis: Kpi[]): KpiDraft[] =>
-  kpis.length ? kpis.map((k) => ({ metric: k.metric, plan: k.plan?.toString() ?? "", cpaPlan: k.cpaPlan?.toString() ?? "" })) : [{ metric: "leads", plan: "", cpaPlan: "" }];
+  kpis.length
+    ? kpis.map((k) => ({
+        metric: k.metric,
+        plan: str(k.plan),
+        cpaPlan: str(k.cpaPlan),
+        planPlus: str(k.planPlus),
+        cpaPlus: str(k.cpaPlus),
+        planSuper: str(k.planSuper),
+        cpaSuper: str(k.cpaSuper),
+      }))
+    : [{ metric: "leads", plan: "", cpaPlan: "", ...EMPTY_LEVELS }];
 
 /** The month's own plan, or the one carried over from the latest earlier month. */
 function planIn(plans: MonthPlan[], month: string): { plan: MonthPlan | null; own: boolean } {
@@ -134,7 +164,12 @@ export function ProjectEditor({
     goal,
     startDate,
     planMonth,
-    kpis,
+    // An empty price is filled from the budget: budget / amount of that goal level.
+    kpis: kpis.map((k) => {
+      const out: Record<string, string> = { ...k };
+      for (const lv of GOAL_LEVELS) if (!k[lv.cpa].trim()) out[lv.cpa] = autoPrice(budgetMonth, k[lv.plan]);
+      return out;
+    }),
     sources,
     notes,
     smmEmail,
@@ -248,10 +283,16 @@ export function ProjectEditor({
             <p className="mb-1 text-xs text-muted-foreground">
               Ставится в начале каждого месяца; пока новый не задан, действует предыдущий. Первый результат — главный: по нему считается темп.
             </p>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Рекламный бюджет на месяц">
+                <input className="field tabular-nums" inputMode="decimal" placeholder="—" value={budgetMonth} onChange={(e) => setBudgetMonth(e.target.value)} />
+              </Field>
+            </div>
             {kpis.map((kpi, i) => (
-              <div key={i} className="grid grid-cols-[1fr_96px_110px_auto] items-end gap-2">
-                <Field label={i === 0 ? "Результат" : undefined}>
+              <div key={i} className="flex flex-col gap-2 rounded-2xl border border-border p-3">
+                <div className="flex items-center gap-2">
                   <select
+                    aria-label="Результат"
                     value={kpi.metric}
                     onChange={(e) => setKpis(kpis.map((k, j) => (j === i ? { ...k, metric: e.target.value as ResultMetric } : k)))}
                     className="field"
@@ -259,45 +300,56 @@ export function ProjectEditor({
                     {RESULT_METRICS.map((m) => (
                       <option key={m} value={m} disabled={m !== kpi.metric && kpis.some((k) => k.metric === m)}>
                         {METRICS[m].label}
+                        {i === 0 ? " · главный" : ""}
                       </option>
                     ))}
                   </select>
-                </Field>
-                <Field label={i === 0 ? "План" : undefined}>
-                  <input
-                    inputMode="decimal"
-                    value={kpi.plan}
-                    placeholder="—"
-                    onChange={(e) => setKpis(kpis.map((k, j) => (j === i ? { ...k, plan: e.target.value } : k)))}
-                    className="field tabular-nums"
-                  />
-                </Field>
-                <Field label={i === 0 ? `Цена${currency ? `, ${currency}` : ""}` : undefined}>
-                  <input
-                    inputMode="decimal"
-                    value={kpi.cpaPlan}
-                    placeholder="—"
-                    onChange={(e) => setKpis(kpis.map((k, j) => (j === i ? { ...k, cpaPlan: e.target.value } : k)))}
-                    className="field tabular-nums"
-                  />
-                </Field>
-                <RemoveButton label="Убрать результат" onClick={() => setKpis(kpis.filter((_, j) => j !== i))} />
+                  <RemoveButton label="Убрать результат" onClick={() => setKpis(kpis.filter((_, j) => j !== i))} />
+                </div>
+                <div className="grid grid-cols-[44px_1fr_1fr] items-center gap-x-2 gap-y-1.5">
+                  <span />
+                  <span className="text-xs text-muted-foreground">Количество</span>
+                  <span className="text-xs text-muted-foreground">Цена{currency ? `, ${currency}` : ""}</span>
+                  {GOAL_LEVELS.map((lv) => (
+                    <Fragment key={lv.key}>
+                      <span className="text-sm font-semibold" title={LEVEL_HINT[lv.key]}>
+                        {lv.label}
+                      </span>
+                      <input
+                        inputMode="decimal"
+                        aria-label={`${lv.label}: количество`}
+                        value={kpi[lv.plan]}
+                        placeholder="—"
+                        onChange={(e) => setKpis(kpis.map((k, j) => (j === i ? { ...k, [lv.plan]: e.target.value } : k)))}
+                        className="field tabular-nums"
+                      />
+                      <input
+                        inputMode="decimal"
+                        aria-label={`${lv.label}: цена`}
+                        value={kpi[lv.cpa]}
+                        placeholder={autoPrice(budgetMonth, kpi[lv.plan]) ? `авто ${autoPrice(budgetMonth, kpi[lv.plan])}` : "—"}
+                        title="Пусто — посчитается как бюджет / количество"
+                        onChange={(e) => setKpis(kpis.map((k, j) => (j === i ? { ...k, [lv.cpa]: e.target.value } : k)))}
+                        className="field tabular-nums"
+                      />
+                    </Fragment>
+                  ))}
+                </div>
               </div>
             ))}
+            <p className="text-xs text-muted-foreground">
+              Б — минимум по KPI (100%, по ней темп), Б+ — перевыполнение, С — супер-перевыполнение. Цену можно не вписывать: она посчитается как бюджет
+              ÷ количество.
+            </p>
             {unusedMetric && (
               <button
                 type="button"
                 className="btn-ghost self-start px-3 py-1.5 text-xs"
-                onClick={() => setKpis([...kpis, { metric: unusedMetric, plan: "", cpaPlan: "" }])}
+                onClick={() => setKpis([...kpis, { metric: unusedMetric, plan: "", cpaPlan: "", ...EMPTY_LEVELS }])}
               >
                 + Добавить результат
               </button>
             )}
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Рекламный бюджет на месяц">
-                <input className="field tabular-nums" inputMode="decimal" placeholder="—" value={budgetMonth} onChange={(e) => setBudgetMonth(e.target.value)} />
-              </Field>
-            </div>
             {plans.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {[...plans].reverse().map((p) => (
@@ -392,7 +444,7 @@ export function ProjectEditor({
                   if (prev.some((k) => k.metric === kpi.metric)) return prev.map((k) => (k.metric === kpi.metric ? merge(k) : k));
                   // A single empty default row is a placeholder: replace it instead of adding a second result.
                   if (prev.length === 1 && !prev[0].plan && !prev[0].cpaPlan) return [merge({ ...prev[0], metric: kpi.metric })];
-                  return [...prev, merge({ metric: kpi.metric, plan: "", cpaPlan: "" })];
+                  return [...prev, merge({ metric: kpi.metric, plan: "", cpaPlan: "", ...EMPTY_LEVELS })];
                 });
               }
             }}

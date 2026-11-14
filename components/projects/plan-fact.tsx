@@ -3,7 +3,7 @@ import { SIGNAL_TEXT } from "@/components/ui/signal";
 import { cn } from "@/lib/cn";
 import { METRICS } from "@/lib/domain/metrics";
 import { paceLevel } from "@/lib/domain/stats";
-import type { KpiStats } from "@/lib/domain/types";
+import { GOAL_LEVELS, type KpiStats } from "@/lib/domain/types";
 import { formatMetric, formatPercent } from "@/lib/format";
 
 export function PlanFact({ result, elapsed }: { result: KpiStats; elapsed: number }) {
@@ -28,6 +28,7 @@ export function PlanFact({ result, elapsed }: { result: KpiStats; elapsed: numbe
         </p>
       </div>
       <ProgressBar value={result.progress ?? 0} marker={elapsed} pace={result.pace} />
+      <GoalLevels result={result} />
       <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
         <span>Прошло {formatPercent(elapsed)} периода</span>
         {result.pace === null ? (
@@ -38,6 +39,44 @@ export function PlanFact({ result, elapsed }: { result: KpiStats; elapsed: numbe
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Б / Б+ / С: which goal levels are already reached and which one the pace leads to by the end of the period.
+ * Hidden when only Б is set — the bar above says it all.
+ */
+function GoalLevels({ result }: { result: KpiStats }) {
+  const format = METRICS[result.kpi.metric].format;
+  const levels = GOAL_LEVELS.map((lv) => ({ label: lv.label, value: (result.kpi[lv.plan] as number | null | undefined) ?? null })).filter(
+    (lv): lv is { label: "Б" | "Б+" | "С"; value: number } => lv.value !== null && lv.value > 0,
+  );
+  if (levels.length < 2) return null;
+  const reached = levels.filter((lv) => result.fact >= lv.value).at(-1);
+  const heading = levels.filter((lv) => result.forecast >= lv.value).at(-1);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums">
+      {levels.map((lv) => {
+        const done = result.fact >= lv.value;
+        return (
+          <span
+            key={lv.label}
+            className={cn(
+              "rounded-full px-2.5 py-0.5",
+              done ? "bg-positive/12 font-semibold text-positive" : heading?.label === lv.label ? "bg-muted font-semibold" : "bg-muted text-muted-foreground",
+            )}
+            title={done ? "Цель достигнута" : heading?.label === lv.label ? "Темп ведёт к этой цели" : undefined}
+          >
+            {lv.label} {formatMetric(lv.value, format)}
+            {done ? " ✓" : ""}
+          </span>
+        );
+      })}
+      <span className="ml-auto text-muted-foreground">
+        {reached ? `достигнута ${reached.label}` : "цели ещё впереди"}
+        {result.pace !== null && ` · по темпу — ${heading ? heading.label : "ниже Б"}`}
+      </span>
     </div>
   );
 }

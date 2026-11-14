@@ -139,7 +139,16 @@ function KpiList({ kpis, currency }: { kpis: Project["kpis"]; currency: string |
             {i === 0 && kpis.length > 1 && <span className="ml-1 text-xs font-medium text-muted-foreground">· главный</span>}
           </span>
           <span className="text-xs text-muted-foreground tabular-nums">
-            план {formatMetric(kpi.plan, METRICS[kpi.metric].format)} · цена {formatMetric(kpi.cpaPlan, "currency", currency)}
+            {kpi.planPlus || kpi.planSuper ? (
+              <>
+                Б {formatMetric(kpi.plan, METRICS[kpi.metric].format)} · Б+ {formatMetric(kpi.planPlus, METRICS[kpi.metric].format)} · С{" "}
+                {formatMetric(kpi.planSuper, METRICS[kpi.metric].format)} · цена {formatMetric(kpi.cpaPlan, "currency", currency)}
+              </>
+            ) : (
+              <>
+                план {formatMetric(kpi.plan, METRICS[kpi.metric].format)} · цена {formatMetric(kpi.cpaPlan, "currency", currency)}
+              </>
+            )}
           </span>
         </li>
       ))}
