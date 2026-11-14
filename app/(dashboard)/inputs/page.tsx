@@ -6,7 +6,9 @@ import { listOwnerCandidates } from "@/lib/projects/owners";
 import { adsConfigured, listAccounts } from "@/lib/google/ads";
 import { serviceAccountEmail } from "@/lib/google/auth";
 import { listIntegrations, toView } from "@/lib/integrations/store";
+import { listProjectAccess } from "@/lib/access-sync/sync";
 import type { IntegrationView } from "@/lib/integrations/types";
+import type { AccessView } from "@/components/inputs/project-access";
 
 export const metadata: Metadata = { title: "Вводные" };
 
@@ -18,6 +20,10 @@ export default async function InputsPage() {
     permissions.canEditInputs ? listIntegrations() : Promise.resolve([]),
     permissions.canEditInputs && adsConfigured() ? listAccounts().catch(() => null) : Promise.resolve(null),
   ]);
+  const accessRows = permissions.canEditInputs ? await listProjectAccess(projects.map((p) => p.id)) : [];
+  const accessByProject: Record<string, AccessView[]> = {};
+  for (const r of accessRows)
+    (accessByProject[r.projectId] ??= []).push({ service: r.service, email: r.email, status: r.status, error: r.error, role: r.role, target: r.target });
   const integrationsByProject: Record<string, IntegrationView[]> = {};
   for (const rec of integrations) (integrationsByProject[rec.projectId] ??= []).push(toView(rec));
 
@@ -31,6 +37,7 @@ export default async function InputsPage() {
       <ProjectsInputs
         owners={owners}
         integrations={integrationsByProject}
+        access={accessByProject}
         serviceAccountEmail={serviceAccountEmail()}
         adsAccounts={adsAccounts}
         projects={projects.map(({ metrics: _m, stats: _s, ...project }) => project)}

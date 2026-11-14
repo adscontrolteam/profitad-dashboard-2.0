@@ -53,6 +53,7 @@ function toProject(row: ProjectRow, metrics: Metrics, plans: MonthPlan[], range:
     plans,
     planCarried: plan.carried,
     sources: row.sources,
+    services: row.services ?? {},
     notes: row.notes,
     owners: { smm: row.smmEmail ?? null, mediaBuyer: row.mediaBuyerEmail ?? null },
     agent: {

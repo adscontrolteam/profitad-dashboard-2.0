@@ -13,6 +13,7 @@ import { METRICS, PLATFORM_LABELS } from "@/lib/domain/metrics";
 import type { OwnerCandidates, OwnerOption } from "@/lib/projects/owners";
 import type { IntegrationView } from "@/lib/integrations/types";
 import { ProjectIntegrations } from "./project-integrations";
+import { ProjectAccess, type AccessView } from "./project-access";
 import { metaActionLabel } from "@/lib/meta/results";
 import { BriefConductor } from "./brief-conductor";
 import { STATUS_META } from "@/lib/domain/statuses";
@@ -109,6 +110,7 @@ export function ProjectEditor({
   project,
   owners,
   integrations,
+  access,
   serviceAccountEmail,
   adsAccounts,
   canDelete,
@@ -117,6 +119,7 @@ export function ProjectEditor({
   project: EditableProject | null;
   owners: OwnerCandidates;
   integrations: IntegrationView[];
+  access: AccessView[];
   serviceAccountEmail: string | null;
   adsAccounts: AdsAccountOption[] | null;
   canDelete: boolean;
@@ -132,6 +135,7 @@ export function ProjectEditor({
   const initialPlan = planIn(plans, localMonth()).plan;
   const [kpis, setKpis] = useState<KpiDraft[]>(toDraft(initialPlan?.kpis ?? project?.kpis ?? []));
   const [sources, setSources] = useState<SourceDraft[]>(project?.sources ?? []);
+  const [services, setServices] = useState(project?.services ?? {});
   const [createDrive, setCreateDrive] = useState(Boolean(serviceAccountEmail));
   const [createReport, setCreateReport] = useState(Boolean(serviceAccountEmail));
   const [smmEmail, setSmmEmail] = useState(project?.owners.smm ?? "");
@@ -185,6 +189,7 @@ export function ProjectEditor({
       return out;
     }),
     sources,
+    services,
     notes,
     smmEmail,
     mediaBuyerEmail,
@@ -457,6 +462,28 @@ export function ProjectEditor({
             >
               + Добавить источник
             </button>
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-3">
+            <legend className="section-kicker mb-2">Сервисы проекта</legend>
+            <p className="-mt-1 text-xs leading-5 text-muted-foreground">
+              Ссылки на сервисы клиента. Назначенным MediaBuyer и SMM дашборд выдаст доступ сам, при смене специалиста заберёт у прежнего то, что выдавал.
+            </p>
+            <Field label="Google Analytics 4 — ссылка на ресурс или ID">
+              <input className="field" placeholder="https://analytics.google.com/analytics/web/#/p123456789/…" value={services.ga4 ?? ""} onChange={(e) => setServices({ ...services, ga4: e.target.value })} />
+            </Field>
+            <Field label="Google Tag Manager — ссылка на контейнер">
+              <input className="field" placeholder="https://tagmanager.google.com/#/container/accounts/123/containers/456/…" value={services.gtm ?? ""} onChange={(e) => setServices({ ...services, gtm: e.target.value })} />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Clarity — ссылка на проект">
+                <input className="field" placeholder="https://clarity.microsoft.com/projects/view/…" value={services.clarity ?? ""} onChange={(e) => setServices({ ...services, clarity: e.target.value })} />
+              </Field>
+              <Field label="Search Console — сайт">
+                <input className="field" placeholder="https://site.com/ или sc-domain:site.com" value={services.searchConsole ?? ""} onChange={(e) => setServices({ ...services, searchConsole: e.target.value })} />
+              </Field>
+            </div>
+            {project && <ProjectAccess projectId={project.id} items={access} />}
           </fieldset>
 
           <BriefConductor

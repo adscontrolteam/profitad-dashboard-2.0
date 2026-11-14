@@ -80,6 +80,9 @@ export async function syncAll() {
       results.push({ projectId: rec.projectId, kind: rec.kind, ok: false, message: (error as Error).message });
     }
   }
+  // Specialists' accesses: retry what failed, catch up on changes.
+  const { syncAllAccess } = await import("@/lib/access-sync/sync");
+  results.push(...(await syncAllAccess()));
   // Project log: sync failures, daily checks, then the «Посмотреть Лог» reminder (at most every 3 days).
   const { logSyncResults, runProjectChecks } = await import("@/lib/log/checks");
   await logSyncResults(results.filter((r) => r.kind !== "drive"));

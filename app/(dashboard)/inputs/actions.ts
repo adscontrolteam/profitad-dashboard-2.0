@@ -9,6 +9,7 @@ import {
   RESULT_METRICS,
   TRAFFIC_PLATFORMS,
   type Kpi,
+  type ProjectServices,
   type ProjectOwners,
   type ProjectStatus,
   type ResultMetric,
@@ -99,6 +100,15 @@ function parseProject(raw: unknown): ProjectInput | string {
     startDate: start,
     plan: { month: planMonth, kpis, budgetMonth: positive(data.budgetMonth) },
     sources,
+    services: (() => {
+      const sv = (data.services ?? {}) as Record<string, unknown>;
+      const out: ProjectServices = {};
+      for (const k of ["ga4", "gtm", "clarity", "searchConsole"] as const) {
+        const v = str(sv[k], 300);
+        if (v) out[k] = v;
+      }
+      return out;
+    })(),
     notes: str(data.notes, 5000),
     owners: {
       smm: str(data.smmEmail, 200).toLowerCase() || null,
@@ -169,13 +179,15 @@ export async function saveProjectAction(
     }
     const newId = await createProject(input, viewer.email);
     const flags = raw as { createDrive?: unknown; createReport?: unknown };
-    const warning = await provision(newId, input.name, viewer.email, Boolean(flags.createDrive), Boolean(flags.createReport));
+    const provisionWarning = await provision(newId, input.name, viewer.email, Boolean(flags.createDrive), Boolean(flags.createReport));
+    const warning = [provisionWarning, await accessSummary(newId, viewer.email)].filter(Boolean).join("\n") || null;
     updateTag(TAGS.projects);
     return { ok: true, message: "Проект добавлен.", warning };
   }
 
   updateTag(TAGS.projects);
-  return { ok: true, message: "Проект сохранён." };
+  const access = await accessSummary(id, viewer.email);
+  return { ok: true, message: "Проект сохранён.", warning: access };
 }
 
 export async function deleteProjectAction(id: string): Promise<ProjectActionState> {
@@ -184,6 +196,17 @@ export async function deleteProjectAction(id: string): Promise<ProjectActionStat
   await deleteProject(id);
   updateTag(TAGS.projects);
   return { ok: true, message: "Проект удалён." };
+}
+
+/** Gives / takes back the specialists' accesses after a save; returns problems to show, or null. */
+async function accessSummary(projectId: string, actorEmail: string): Promise<string | null> {
+  try {
+    const { syncProjectAccess } = await import("@/lib/access-sync/sync");
+    const r = await syncProjectAccess(projectId, actorEmail);
+    return r.problems.length ? `Проект сохранён, но с доступами не всё: ${r.problems.join("; ")}` : null;
+  } catch (error) {
+    return `Проект сохранён, доступы не обновились: ${error instanceof Error ? error.message : String(error)}`;
+  }
 }
 
 /** Creates the project's Drive folder and/or «Репорт» from the templates. Returns a warning text on failure. */
@@ -276,5 +299,20 @@ export async function syncMetaAction(projectId: string): Promise<{ ok: boolean; 
     return { ok: true, message };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : "Ошибка Meta" };
+  }
+}
+
+/** «Обновить доступы» in the project form. */
+export async function syncAccessAction(projectId: string): Promise<{ ok: boolean; message: string }> {
+  const viewer = await requireSection("inputs");
+  if (!viewer.permissions.canEditInputs || !canViewProject(viewer.permissions, projectId)) return { ok: false, message: "Нет прав." };
+  try {
+    const { syncProjectAccess } = await import("@/lib/access-sync/sync");
+    const r = await syncProjectAccess(projectId, viewer.email);
+    updateTag(TAGS.projects);
+    if (r.problems.length) return { ok: false, message: r.problems.join("; ") };
+    return { ok: true, message: r.done.filter((d) => !d.startsWith("уже был")).join("; ") || "Всё уже выдано." };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
   }
 }

@@ -16,6 +16,7 @@ function toRow(input: ProjectInput) {
     goal: input.goal,
     periodStart: input.startDate,
     sources: input.sources,
+    services: input.services,
     notes: input.notes,
     smmEmail: input.owners.smm,
     mediaBuyerEmail: input.owners.mediaBuyer,

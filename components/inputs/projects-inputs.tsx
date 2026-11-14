@@ -10,6 +10,7 @@ import { formatDate, formatMetric } from "@/lib/format";
 import type { OwnerCandidates } from "@/lib/projects/owners";
 import { INTEGRATION_LABELS } from "@/lib/integrations/kinds";
 import type { IntegrationView } from "@/lib/integrations/types";
+import type { AccessView } from "./project-access";
 import { cn } from "@/lib/cn";
 import type { AdsAccountOption } from "./project-editor";
 import { ProjectEditor, type EditableProject } from "./project-editor";
@@ -18,6 +19,7 @@ export function ProjectsInputs({
   projects,
   owners,
   integrations,
+  access,
   serviceAccountEmail,
   adsAccounts,
   canEdit,
@@ -27,6 +29,7 @@ export function ProjectsInputs({
   projects: EditableProject[];
   owners: OwnerCandidates;
   integrations: Record<string, IntegrationView[]>;
+  access: Record<string, AccessView[]>;
   serviceAccountEmail: string | null;
   /** Google Ads accounts under the MCC; null when the API is not configured. */
   adsAccounts: AdsAccountOption[] | null;
@@ -118,6 +121,7 @@ export function ProjectsInputs({
           project={editing === "new" ? null : editing}
           owners={owners}
           integrations={editing === "new" ? [] : (integrations[editing.id] ?? [])}
+          access={editing === "new" ? [] : (access[editing.id] ?? [])}
           serviceAccountEmail={serviceAccountEmail}
           adsAccounts={adsAccounts}
           canDelete={canDelete}

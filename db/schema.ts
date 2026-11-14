@@ -14,7 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { IntegrationKind } from "@/lib/integrations/kinds";
-import type { Kpi, ProjectStatus, TrafficPlatform, TrafficSource } from "@/lib/domain/types";
+import type { Kpi, ProjectServices, ProjectStatus, TrafficPlatform, TrafficSource } from "@/lib/domain/types";
 import type { DealStage } from "@/lib/sales/stages";
 import type { TaskStage } from "@/lib/tasks/stages";
 
@@ -130,6 +130,8 @@ export const projects = pgTable("projects", {
   budgetMonth: doublePrecision("budget_month"),
   agentDailyReport: boolean("agent_daily_report").notNull().default(true),
   /** Where the AI agent counts leads: ads = Google Ads conversions (lead_actions), sheet = client's lead sheet / CRM, both. */
+  /** Client services the specialists get access to (see lib/access-sync): GA4, GTM, Clarity, Search Console. */
+  services: jsonb("services").$type<ProjectServices>().notNull().default({}),
   /** Project chat in Telegram (from /whereami): the «Посмотреть Лог» reminder goes there. */
   telegramChatId: text("telegram_chat_id"),
   telegramThreadId: integer("telegram_thread_id"),
@@ -295,6 +297,36 @@ export const salesRecords = pgTable(
   },
   (t) => [primaryKey({ columns: [t.projectId, t.source, t.externalId] }), index("sales_records_project_date_idx").on(t.projectId, t.date)],
 );
+
+/**
+ * Accesses the dashboard gave (or asked a person to give) to the project's specialists.
+ * Only rows with status «granted» / «task» were given by the dashboard and are taken back when the specialist changes;
+ * «existing» = the person already had access before — never revoked.
+ */
+export const projectAccess = pgTable(
+  "project_access",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    /** drive | google_ads | ga4 | gtm | meta | clarity | search_console | telegram */
+    service: text("service").notNull(),
+    /** The resource: folder id, Ads customer id, GA4 property, GTM account/container, ad account, URL. */
+    target: text("target").notNull(),
+    email: text("email").notNull(),
+    /** media_buyer | smm */
+    role: text("role").notNull(),
+    /** granted | existing | task | failed | revoked | revoke_task */
+    status: text("status").notNull(),
+    /** What is needed to revoke: permission id, binding name, invitation resource, task id. */
+    ref: text("ref"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("project_access_project_idx").on(t.projectId, t.service)],
+);
+
+export type ProjectAccessRow = typeof projectAccess.$inferSelect;
 
 /**
  * Project log: proposals, analysis, errors and warnings from the dashboard and the AI agent.

@@ -15,6 +15,9 @@ export const SCOPES = {
   ads: "https://www.googleapis.com/auth/adwords",
   sheets: "https://www.googleapis.com/auth/spreadsheets",
   drive: "https://www.googleapis.com/auth/drive",
+  /** User management in GA4 and GTM — add both to the domain-wide delegation of the service account. */
+  analyticsUsers: "https://www.googleapis.com/auth/analytics.manage.users",
+  tagmanagerUsers: "https://www.googleapis.com/auth/tagmanager.manage.users",
 } as const;
 
 let parsed: ServiceAccount | null | undefined;

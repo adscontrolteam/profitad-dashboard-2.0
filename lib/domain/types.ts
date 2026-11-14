@@ -61,6 +61,18 @@ export interface TrafficSource {
   accountId: string;
 }
 
+/** Client services of a project the specialists get access to. Links are kept as pasted; ids are parsed from them. */
+export interface ProjectServices {
+  /** GA4 property: link or numeric id. */
+  ga4?: string;
+  /** GTM container link (…/accounts/123/containers/456/…). */
+  gtm?: string;
+  /** Microsoft Clarity project link. */
+  clarity?: string;
+  /** Search Console property (site URL or sc-domain:example.com). */
+  searchConsole?: string;
+}
+
 /** Plan set for one calendar month. */
 export interface MonthPlan {
   /** YYYY-MM */
@@ -88,6 +100,7 @@ export interface Project {
   /** The last month of `period` has no plan of its own and runs on the previous month's one. */
   planCarried: boolean;
   sources: TrafficSource[];
+  services: ProjectServices;
   notes: string;
   owners: ProjectOwners;
   agent: ProjectAgentSettings;
