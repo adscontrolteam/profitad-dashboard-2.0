@@ -49,6 +49,7 @@ export function WeekPlanCard({
   rows,
   currency,
   canEdit,
+  empty = "plan",
 }: {
   projectId: string;
   monthLabel: string;
@@ -56,13 +57,25 @@ export function WeekPlanCard({
   rows: WeekRow[];
   currency: string | null;
   canEdit: boolean;
+  /** Why there is nothing to show when there are no columns. */
+  empty?: "plan" | "before" | "range";
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   if (columns.length === 0) {
     return (
       <Card className="min-w-0">
-        <h2 className="section-title">План по неделям</h2>
-        <p className="mt-2 text-sm text-muted-foreground">Появится, когда у проекта будет план на месяц — он задаётся во «Вводных».</p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h2 className="section-title">План по неделям</h2>
+          {monthLabel && <span className="ml-auto text-xs text-muted-foreground">{monthLabel}</span>}
+        </div>
+        <p className="mt-3 font-display text-2xl font-extrabold text-muted-foreground">—</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {empty === "range"
+            ? "По неделям план показывается за один месяц: выберите «Этот месяц», «Прошлый месяц» или диапазон внутри одного месяца."
+            : empty === "before"
+              ? "В этом месяце проект ещё не был в работе."
+              : "На этот месяц план не задан — он ставится во «Вводных»."}
+        </p>
       </Card>
     );
   }

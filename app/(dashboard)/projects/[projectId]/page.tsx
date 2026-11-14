@@ -69,7 +69,21 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
     ]),
   );
 
-  const logItems = toLogItems(await listLog(project.id));
+  // History follows the period: an entry is shown if it was open at any moment inside it.
+  const periodStart = Date.parse(`${period.from}T00:00:00Z`);
+  const periodEnd = Date.parse(`${period.to}T23:59:59Z`);
+  // A result with neither a plan nor a fact in this period is an empty card: keep the main one only.
+  const withNumbers = stats.results.filter((r) => r.kpi.plan !== null || r.fact > 0);
+  const results = withNumbers.length ? withNumbers : stats.results.slice(0, 1);
+  const logItems = toLogItems(
+    (await listLog(project.id, undefined, 500)).filter((l) => {
+      if (l.createdAt.getTime() > periodEnd) return false;
+      // Still open = alive up to now, so it belongs to every period since it appeared.
+      return l.status === "needs_you" || (l.resolvedAt ?? l.updatedAt).getTime() >= periodStart;
+    }),
+  );
+  // Weeks make sense for one month at a time.
+  const weekMonth = monthOf(period.from) === monthOf(period.to) ? monthOf(period.from) : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -105,14 +119,20 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
       {/* Plan / fact on the left, the month week by week next to it. */}
       <section className="grid gap-5 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-5">
-          {stats.results.length > 0 ? (
-            stats.results.map((result, i) => (
+          {period.to < base.startDate ? (
+            <Card>
+              <h2 className="section-title">{weekMonth ? "План месяца" : "План периода"}</h2>
+              <p className="mt-3 font-display text-2xl font-extrabold text-muted-foreground">—</p>
+              <p className="mt-1 text-sm text-muted-foreground">В этом периоде проект ещё не был в работе: старт {formatDate(base.startDate)}.</p>
+            </Card>
+          ) : results.length > 0 ? (
+            results.map((result, i) => (
               <ResultCard
                 key={result.kpi.metric}
                 result={result}
                 elapsed={stats.elapsed}
                 currency={project.agent.currency}
-                title={i > 0 ? undefined : monthOf(period.from) === monthOf(period.to) ? "План месяца" : "План периода"}
+                title={i > 0 ? undefined : weekMonth ? "План месяца" : "План периода"}
               />
             ))
           ) : (
@@ -121,7 +141,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
             </Card>
           )}
         </div>
-        <WeekPlanSection base={base} canEdit={permissions.canEditInputs} />
+        <WeekPlanSection base={base} month={weekMonth} canEdit={permissions.canEditInputs} />
       </section>
 
       {/* What happened (Лог) next to what to do now (Фокус): both open, each scrolls inside its block. */}
@@ -169,10 +189,10 @@ const FULL_MONTHS = ["январь", "февраль", "март", "апрель
 const dayLabel = (iso: string) => `${Number(iso.slice(8, 10))} ${SHORT_MONTHS[Number(iso.slice(5, 7)) - 1]}`;
 
 /** The current month week by week: plan (split of the month's plan or a manual number) against the fact so far. */
-async function WeekPlanSection({ base, canEdit }: { base: ProjectWithStats; canEdit: boolean }) {
+async function WeekPlanSection({ base, month, canEdit }: { base: ProjectWithStats; month: string | null; canEdit: boolean }) {
   const today = new Date().toISOString().slice(0, 10);
-  const month = currentMonth();
-  if (base.status === "archived" || monthOf(base.startDate) > month) return null;
+  // Several months at once: no weekly table, just a dash.
+  if (!month) return <WeekPlanCard projectId={base.id} monthLabel="" columns={[]} rows={[]} currency={base.agent.currency} canEdit={false} empty="range" />;
   const fallback = base.plans.length ? null : { kpis: base.kpis, budgetMonth: base.agent.budgetMonth };
   const overrides = await listWeekOverrides(base.id);
   const thisWeek = weekStartOf(today);
@@ -225,6 +245,7 @@ async function WeekPlanSection({ base, canEdit }: { base: ProjectWithStats; canE
       rows={rows}
       currency={base.agent.currency}
       canEdit={canEdit}
+      empty={monthOf(base.startDate) > month ? "before" : "plan"}
     />
   );
 }
