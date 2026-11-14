@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { InfoHint } from "@/components/ui/info-hint";
 import { Field, Segmented, Toast } from "@/components/workspace/form";
 import { uid, useLocalState } from "@/components/workspace/use-local-state";
 import { cn } from "@/lib/cn";
@@ -154,10 +155,11 @@ export function CreativesStudio({
       <div className="grid gap-5 xl:grid-cols-2">
         <section className="flex min-w-0 flex-col gap-4 rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-5 lg:p-6">
           <div>
-            <h2 className="section-title">{platform === "google" ? "Креативы Google" : "Загрузить креатив"}</h2>
-            {platform === "google" && (
-              <p className="mt-1 text-sm text-muted-foreground">Картинки и видео для Performance Max, Demand Gen, Демонстрационной сети и YouTube.</p>
-            )}
+            <h2 className="section-title">{platform === "google" ? "Креативы Google" : "Загрузить креатив"}
+              {platform === "google" && (
+                <InfoHint className="ml-2">Картинки и видео для Performance Max, Demand Gen, Демонстрационной сети и YouTube.</InfoHint>
+              )}
+            </h2>
           </div>
           <button
             type="button"
@@ -215,8 +217,7 @@ export function CreativesStudio({
         ) : (
         <section className="flex min-w-0 flex-col gap-4 rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-5 lg:p-6">
           <div>
-            <h2 className="section-title">Бриф и тексты</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Агент предложит хуки, основной текст и заголовок под формат.</p>
+            <h2 className="section-title">Бриф и тексты <InfoHint className="ml-1">Агент предложит хуки, основной текст и заголовок под формат.</InfoHint></h2>
           </div>
           <Field label="Оффер">
             <input className="field" value={offer} onChange={(e) => setOffer(e.target.value)} placeholder="Бесплатная консультация по ипотеке" />
@@ -368,10 +369,7 @@ function SearchAdBuilder({
   return (
     <section className="flex min-w-0 flex-col gap-4 rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-5 lg:p-6">
       <div>
-        <h2 className="section-title">Объявления для поиска</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Адаптивное поисковое объявление: Google сам собирает комбинации из заголовков и описаний. Минимум 3 заголовка и 2 описания.
-        </p>
+        <h2 className="section-title">Объявления для поиска <InfoHint className="ml-1">Адаптивное поисковое объявление: Google сам собирает комбинации из заголовков и описаний. Минимум 3 заголовка и 2 описания.</InfoHint></h2>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Оффер">

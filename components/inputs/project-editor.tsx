@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useActionState, useEffect, useState, useTransition } from "react";
+import { InfoHint } from "@/components/ui/info-hint";
 import {
   deleteProjectAction,
   listConversionActionsAction,
@@ -265,7 +266,7 @@ export function ProjectEditor({
             <Field label="Старт работы">
               <input type="date" required value={startDate} onChange={(e) => setStartDate(e.target.value)} className="field" />
             </Field>
-            <p className="self-end pb-2 text-xs leading-5 text-muted-foreground">Проект заводится один раз, результаты видны за любые даты, план — по месяцам ниже.</p>
+            <InfoHint caption="Как устроен проект" className="self-end pb-2.5">Проект заводится один раз, результаты видны за любые даты, план — по месяцам ниже.</InfoHint>
           </div>
 
           <fieldset className="flex flex-col gap-2">
@@ -286,7 +287,7 @@ export function ProjectEditor({
           </fieldset>
 
           <fieldset className="flex flex-col gap-2">
-            <legend className="section-kicker mb-2">План на месяц</legend>
+            <legend className="section-kicker mb-2">План на месяц <InfoHint className="ml-1">Ставится в начале каждого месяца; пока новый не задан, действует предыдущий. Первый результат — главный: по нему считается темп.</InfoHint></legend>
             <div className="-mt-1 mb-1 flex flex-wrap items-center gap-3">
               <input
                 type="month"
@@ -303,9 +304,6 @@ export function ProjectEditor({
                     : "Плана ещё нет"}
               </span>
             </div>
-            <p className="mb-1 text-xs text-muted-foreground">
-              Ставится в начале каждого месяца; пока новый не задан, действует предыдущий. Первый результат — главный: по нему считается темп.
-            </p>
             <div className="grid grid-cols-2 gap-4">
               <Field label="Рекламный бюджет на месяц">
                 <input className="field tabular-nums" inputMode="decimal" placeholder="—" value={budgetMonth} onChange={(e) => setBudgetMonth(e.target.value)} />
@@ -370,10 +368,8 @@ export function ProjectEditor({
                 </div>
               </div>
             ))}
-            <p className="text-xs text-muted-foreground">
-              Б — минимум по KPI (100%, по ней темп), Б+ — перевыполнение, С — супер-перевыполнение. Цену можно не вписывать: она посчитается как бюджет
-              ÷ количество.
-            </p>
+            <InfoHint caption="Что такое Б, Б+ и С">Б — минимум по KPI (100%, по ней темп), Б+ — перевыполнение, С — супер-перевыполнение. Цену можно не вписывать: она посчитается как бюджет
+              ÷ количество.</InfoHint>
             {unusedMetric && (
               <button
                 type="button"
@@ -407,10 +403,7 @@ export function ProjectEditor({
           </fieldset>
 
           <fieldset className="flex flex-col gap-2">
-            <legend className="section-kicker mb-2">Источники трафика</legend>
-            <p className="-mt-1 mb-1 text-xs text-muted-foreground">
-              ID кабинета можно оставить пустым, пока нет доступа: источник будет помечен «нет доступа».
-            </p>
+            <legend className="section-kicker mb-2">Источники трафика <InfoHint className="ml-1">ID кабинета можно оставить пустым, пока нет доступа: источник будет помечен «нет доступа».</InfoHint></legend>
             {sources.map((source, i) => (
               <div key={i} className="grid grid-cols-[150px_1fr_auto] items-end gap-2">
                 <Field label={i === 0 ? "Площадка" : undefined}>
@@ -465,10 +458,7 @@ export function ProjectEditor({
           </fieldset>
 
           <fieldset className="flex flex-col gap-3">
-            <legend className="section-kicker mb-2">Сервисы проекта</legend>
-            <p className="-mt-1 text-xs leading-5 text-muted-foreground">
-              Ссылки на сервисы клиента. Назначенным MediaBuyer и SMM дашборд выдаст доступ сам, при смене специалиста заберёт у прежнего то, что выдавал.
-            </p>
+            <legend className="section-kicker mb-2">Сервисы проекта <InfoHint className="ml-1">Ссылки на сервисы клиента. Назначенным MediaBuyer и SMM дашборд выдаст доступ сам, при смене специалиста заберёт у прежнего то, что выдавал.</InfoHint></legend>
             <Field label="Google Analytics 4 — ссылка на ресурс или ID">
               <input className="field" placeholder="https://analytics.google.com/analytics/web/#/p123456789/…" value={services.ga4 ?? ""} onChange={(e) => setServices({ ...services, ga4: e.target.value })} />
             </Field>
@@ -487,6 +477,7 @@ export function ProjectEditor({
           </fieldset>
 
           <BriefConductor
+            projectId={project?.id ?? null}
             current={{ projectName: name, goal, notes, currency, budgetMonth, leadActions, kpis }}
             onApply={(patch) => {
               if (patch.goal !== undefined) setGoal(patch.goal);
@@ -530,7 +521,7 @@ export function ProjectEditor({
                 <Field label="Ветка">
                   <input className="field tabular-nums" placeholder="—" value={telegramThreadId} onChange={(e) => setTelegramThreadId(e.target.value.trim())} />
                 </Field>
-                <p className="col-span-2 -mt-1 text-xs text-muted-foreground">Раз в 3 дня, если в Логе проекта есть новое, сюда придёт «Посмотреть Лог».</p>
+                <InfoHint caption="Что придёт в чат" className="col-span-2 -mt-1">Раз в 3 дня, если в Логе проекта есть новое, сюда придёт «Посмотреть Лог».</InfoHint>
               </div>
             }
             leadSource={agentLeadSource}
@@ -555,7 +546,7 @@ export function ProjectEditor({
                 />
                 <span>
                   Создать папку проекта
-                  <span className="block text-xs text-muted-foreground">Копия «Template Project» в PROFITAD → PROJECTS. Если папка с таким именем уже есть — подключим её.</span>
+                  <InfoHint className="ml-1.5">Копия «Template Project» в PROFITAD → PROJECTS. Если папка с таким именем уже есть — подключим её.</InfoHint>
                 </span>
               </label>
               <label className="flex cursor-pointer items-start gap-3 text-sm">
@@ -568,7 +559,7 @@ export function ProjectEditor({
                 />
                 <span>
                   Создать таблицу «Репорт»
-                  <span className="block text-xs text-muted-foreground">Копия шаблона в папке проекта; дашборд будет заполнять её каждый день.</span>
+                  <InfoHint className="ml-1.5">Копия шаблона в папке проекта; дашборд будет заполнять её каждый день.</InfoHint>
                 </span>
               </label>
               {!serviceAccountEmail && <p className="text-xs text-warning">Google ещё не настроен — создадим позже из карточки проекта.</p>}
@@ -661,10 +652,7 @@ function AgentSettings({
 
   return (
     <fieldset className="flex flex-col gap-3">
-      <legend className="section-kicker mb-2">AI-агент</legend>
-      <p className="-mt-1 text-xs leading-5 text-muted-foreground">
-        Агент берёт проект отсюда: цель и цену заявки — из KPI, бриф — из заметок. Заводить клиента в Telegram больше не нужно.
-      </p>
+      <legend className="section-kicker mb-2">AI-агент <InfoHint className="ml-1">Агент берёт проект отсюда: цель и цену заявки — из KPI, бриф — из заметок. Заводить клиента в Telegram больше не нужно.</InfoHint></legend>
       <Field label="Что считать заявкой (конверсии Google Ads)">
         {!googleAccountId ? (
           <span className="text-xs text-muted-foreground">Выберите кабинет Google Ads в источниках — появится список конверсий.</span>
@@ -811,11 +799,8 @@ function MetaResults({
 
   return (
     <fieldset className="flex flex-col gap-3">
-      <legend className="section-kicker mb-2">Meta: что считать результатом</legend>
-      <p className="-mt-1 text-xs leading-5 text-muted-foreground">
-        Действия кабинета {accountId} за последние 30 дней, цифра — сколько их было. Выберите, что идёт в «Лиды» и в «Подписчики»; можно несколько,
-        они сложатся.
-      </p>
+      <legend className="section-kicker mb-2">Meta: что считать результатом <InfoHint className="ml-1">Действия кабинета {accountId} за последние 30 дней, цифра — сколько их было. Выберите, что идёт в «Лиды» и в «Подписчики»; можно несколько,
+        они сложатся.</InfoHint></legend>
       {available === null && <span className="text-xs text-muted-foreground">Загружаю действия кабинета…</span>}
       {loadError && <span className="text-xs text-warning">{loadError}</span>}
       {group("leads", "Лиды", "Не выбрано — берём «Лиды (все)».")}

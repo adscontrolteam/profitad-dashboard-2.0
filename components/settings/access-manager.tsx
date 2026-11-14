@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
+import { InfoHint } from "@/components/ui/info-hint";
 import {
   revokeGrantAction,
   saveGrantAction,
@@ -45,8 +46,7 @@ export function AccessManager({
       <Card className="min-w-0">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="section-title">Пользователи</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Доступ привязан к почте аккаунта.</p>
+            <h2 className="section-title">Пользователи <InfoHint className="ml-1">Доступ привязан к почте аккаунта.</InfoHint></h2>
           </div>
           <button type="button" className="btn-primary" onClick={() => startEdit(null)}>
             Выдать доступ

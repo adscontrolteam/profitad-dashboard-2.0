@@ -2,18 +2,22 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { isNavItemActive, type NavItem } from "@/config/navigation";
+import { isNavItemActive, projectAreaOf, type NavItem } from "@/config/navigation";
 import { cn } from "@/lib/cn";
+import type { ProjectArea, ProjectNavItem } from "./types";
+import { useCurrentProject } from "./use-current-project";
 
 /** Selection carried between the sub-tabs of a section. */
 const KEPT_PARAMS = ["p", "range", "from", "to"];
 
 /** Sub-tabs of the current section (Аналитика / Сборка кампаний / …), shown in the top bar on desktop. */
-export function HeaderTabs({ items, className }: { items: NavItem[]; className?: string }) {
+export function HeaderTabs({ items, areas, className }: { items: NavItem[]; areas: ProjectArea[]; className?: string }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const section = items.find((item) => item.children && isNavItemActive(item.href, pathname));
-  const tabs = section?.children ?? [];
+  const area = projectAreaOf(pathname);
+  const tabs = area
+    ? (areas.find((a) => a.key === area.key)?.tabs ?? [])
+    : (items.find((item) => item.children && isNavItemActive(item.href, pathname))?.children ?? []);
   if (tabs.length < 2) return null;
 
   const kept = new URLSearchParams();
@@ -42,5 +46,19 @@ export function HeaderTabs({ items, className }: { items: NavItem[]; className?:
         );
       })}
     </nav>
+  );
+}
+
+/** «Credyt Is · Реклама»: inside a project the top bar names the project first. */
+export function PageTitle({ fallback, projects }: { fallback: string; projects: ProjectNavItem[] }) {
+  const pathname = usePathname();
+  const project = useCurrentProject(projects);
+  const area = projectAreaOf(pathname);
+  if (!project || !area) return <>{fallback}</>;
+  return (
+    <>
+      {project.name}
+      <span className="font-medium text-muted-foreground"> · {area.label}</span>
+    </>
   );
 }

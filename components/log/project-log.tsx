@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { InfoHint } from "@/components/ui/info-hint";
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore, useTransition } from "react";
 import { resolveLogAction } from "@/app/(dashboard)/log-actions";
@@ -51,20 +52,110 @@ export function ProjectLog({
   items,
   description = "Предложения, анализ и ошибки — от агента и от проверок дашборда.",
   showArea = false,
+  panel = false,
+  className,
 }: {
   projectId: string;
   items: LogItem[];
   description?: string;
   /** On the project page the log mixes Реклама, SMM and project entries: label each. */
   showArea?: boolean;
+  /** Project page: always open, a list that scrolls inside the block, with search by words. */
+  panel?: boolean;
+  className?: string;
 }) {
   const waiting = items.filter((i) => i.status === "needs_you").length;
   const [filter, setFilter] = useState<"needs_you" | "auto" | "all">(waiting ? "needs_you" : "all");
   // Always folded; the «Посмотреть Лог» link from Telegram (#log) opens it.
   const openedByLink = useSyncExternalStore(subscribeHash, () => window.location.hash === "#log", () => false);
   const [toggled, setToggled] = useState<boolean | null>(null);
-  const expanded = toggled ?? openedByLink;
-  const shown = filter === "all" ? items : filter === "auto" ? items.filter((i) => i.status === "auto") : items.filter((i) => i.status === "needs_you");
+  const expanded = panel || (toggled ?? openedByLink);
+  const [searching, setSearching] = useState(false);
+  const [search, setSearch] = useState("");
+  const words = search.toLowerCase().split(/\s+/).filter(Boolean);
+  const byStatus = filter === "all" ? items : filter === "auto" ? items.filter((i) => i.status === "auto") : items.filter((i) => i.status === "needs_you");
+  const shown = words.length
+    ? byStatus.filter((i) => {
+        const text = `${i.title} ${i.body} ${i.resolutionNote ?? ""} ${KIND[i.kind]?.label ?? ""} ${AREA[i.area]}`.toLowerCase();
+        return words.every((w) => text.includes(w));
+      })
+    : byStatus;
+  const list =
+    shown.length === 0 ? (
+      <p className="text-sm text-muted-foreground">
+        {words.length ? "По этим словам ничего не найдено." : filter === "needs_you" ? "Решений от вас сейчас не ждём." : "Записей пока нет."}
+      </p>
+    ) : (
+      <ul className="flex flex-col divide-y divide-border">
+        {shown.map((item) => (
+          <LogRow key={item.id} projectId={projectId} item={item} showArea={showArea} />
+        ))}
+      </ul>
+    );
+
+  if (panel) {
+    return (
+      <section
+        id="log"
+        className={cn(
+          "flex min-h-0 min-w-0 scroll-mt-24 flex-col rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-5 lg:p-6",
+          className,
+        )}
+      >
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h2 className="section-title flex items-center gap-2">
+            Лог
+            {waiting > 0 && (
+              <span className="size-2.5 rounded-full bg-negative shadow-[0_0_0_3px_color-mix(in_oklab,var(--negative)_25%,transparent)]" title={`Ждёт вашего решения: ${waiting}`} aria-label={`Ждёт вашего решения: ${waiting}`} />
+            )}
+            <InfoHint>{description}</InfoHint>
+          </h2>
+          <div className="ml-auto flex items-center gap-2">
+            <Segmented
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: "needs_you", label: `Ждёт вас${waiting ? ` · ${waiting}` : ""}` },
+                { value: "auto", label: "Авто" },
+                { value: "all", label: "Все" },
+              ]}
+            />
+            <button
+              type="button"
+              aria-label="Поиск по логу"
+              aria-pressed={searching}
+              title="Поиск по словам"
+              onClick={() => {
+                if (searching) setSearch("");
+                setSearching(!searching);
+              }}
+              className={cn(
+                "inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:text-foreground",
+                searching && "border-foreground/40 text-foreground",
+              )}
+            >
+              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        {searching && (
+          <input
+            type="search"
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Слова из записи: бюджет, лиды, доступ…"
+            aria-label="Поиск по логу"
+            className="field mt-3 text-sm"
+          />
+        )}
+        <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">{list}</div>
+      </section>
+    );
+  }
 
   return (
     <section id="log" className="min-w-0 scroll-mt-24 rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-5 lg:p-6">
@@ -91,7 +182,7 @@ export function ProjectLog({
       {expanded && (
         <div className="mt-4">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-muted-foreground">{description}</p>
+            <InfoHint caption="Что попадает в лог">{description}</InfoHint>
             <Segmented
               value={filter}
               onChange={setFilter}
@@ -102,15 +193,7 @@ export function ProjectLog({
               ]}
             />
           </div>
-          {shown.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{filter === "needs_you" ? "Решений от вас сейчас не ждём." : "Записей пока нет."}</p>
-          ) : (
-            <ul className="flex flex-col divide-y divide-border">
-              {shown.map((item) => (
-                <LogRow key={item.id} projectId={projectId} item={item} showArea={showArea} />
-              ))}
-            </ul>
-          )}
+          {list}
         </div>
       )}
     </section>

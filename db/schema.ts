@@ -299,6 +299,36 @@ export const salesRecords = pgTable(
 );
 
 /**
+ * Client brief of a project: questions from lib/brief/questions.ts, answered partly by us and partly by the client
+ * through a public page behind a secret link (`token`). Internal notes and hidden questions never reach that page.
+ */
+export const projectBriefs = pgTable(
+  "project_briefs",
+  {
+    projectId: text("project_id").primaryKey(),
+    /** Secret of the public link /brief/<token>; a new one revokes the old link. */
+    token: text("token").notNull(),
+    lang: text("lang").notNull().default("ru"),
+    /** question id → answer */
+    answers: jsonb("answers").$type<Record<string, string>>().notNull().default({}),
+    /** question id → our note, not shown to the client */
+    notes: jsonb("notes").$type<Record<string, string>>().notNull().default({}),
+    /** Question ids left out of this client's brief. */
+    hidden: jsonb("hidden").$type<string[]>().notNull().default([]),
+    files: jsonb("files").$type<{ name: string; at: string }[]>().notNull().default([]),
+    /** draft = being prepared / filled, submitted = the client pressed «Готово», closed = no more changes. */
+    status: text("status").$type<"draft" | "submitted" | "closed">().notNull().default("draft"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    clientSeenAt: timestamp("client_seen_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("project_briefs_token_idx").on(t.token)],
+);
+
+export type ProjectBriefRow = typeof projectBriefs.$inferSelect;
+
+/**
  * Accesses the dashboard gave (or asked a person to give) to the project's specialists.
  * Only rows with status «granted» / «task» were given by the dashboard and are taken back when the specialist changes;
  * «existing» = the person already had access before — never revoked.

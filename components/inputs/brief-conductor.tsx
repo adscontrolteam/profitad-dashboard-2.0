@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { InfoHint } from "@/components/ui/info-hint";
+import Link from "next/link";
 import { analyzeBriefAction } from "@/app/(dashboard)/inputs/actions";
+import { briefTextAction } from "@/app/(dashboard)/inputs/brief-actions";
 import type { BriefAnalysis } from "@/lib/ai/conductor";
 import { METRICS } from "@/lib/domain/metrics";
 import type { ResultMetric } from "@/lib/domain/types";
@@ -49,7 +52,16 @@ function diff(a: BriefAnalysis, cur: BriefCurrent): Change[] {
   return out.filter((c) => c.to && c.to !== c.from);
 }
 
-export function BriefConductor({ current, onApply }: { current: BriefCurrent; onApply: (patch: BriefPatch) => void }) {
+export function BriefConductor({
+  current,
+  onApply,
+  projectId = null,
+}: {
+  current: BriefCurrent;
+  onApply: (patch: BriefPatch) => void;
+  /** Saved project: its client brief can be opened and pulled in here. */
+  projectId?: string | null;
+}) {
   const [brief, setBrief] = useState("");
   const [analysis, setAnalysis] = useState<BriefAnalysis | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -122,11 +134,32 @@ export function BriefConductor({ current, onApply }: { current: BriefCurrent; on
 
   return (
     <fieldset className="flex flex-col gap-3 rounded-2xl border border-border p-4">
-      <legend className="section-kicker px-1">Бриф целиком · Дирижёр</legend>
-      <p className="-mt-1 text-xs leading-5 text-muted-foreground">
-        Вставьте бриф как есть: переписку с клиентом, заметки со звонка, анкету. Дирижёр разложит его по полям проекта и спросит то, чего не хватает для
-        запуска. В форму ничего не попадёт, пока вы не нажмёте «Применить».
-      </p>
+      <legend className="section-kicker px-1">Бриф целиком · Дирижёр <InfoHint className="ml-1">Вставьте бриф как есть: переписку с клиентом, заметки со звонка, анкету. Дирижёр разложит его по полям проекта и спросит то, чего не хватает для
+        запуска. В форму ничего не попадёт, пока вы не нажмёте «Применить».</InfoHint></legend>
+      {projectId && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/inputs/brief/${projectId}`} className="btn-ghost border border-border px-3 py-1.5 text-xs">
+            Бриф клиента: ссылка и вопросы →
+          </Link>
+          <button
+            type="button"
+            className="btn-ghost border border-border px-3 py-1.5 text-xs"
+            disabled={pending}
+            onClick={() =>
+              start(async () => {
+                const r = await briefTextAction(projectId);
+                if (!r.ok || !r.text.trim()) setError("В брифе клиента пока нет ответов.");
+                else {
+                  setError(null);
+                  setBrief(r.text);
+                }
+              })
+            }
+          >
+            Вставить ответы клиента
+          </button>
+        </div>
+      )}
       <textarea
         rows={7}
         value={brief}

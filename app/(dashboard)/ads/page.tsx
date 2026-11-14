@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { InfoHint } from "@/components/ui/info-hint";
 import { CampaignsTable } from "@/components/ads/campaigns-table";
 import { ProjectLog } from "@/components/log/project-log";
 import { toLogItems } from "@/lib/log/view";
@@ -97,8 +98,7 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
 
       <Card>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="section-title">По дням</h2>
-          <p className="text-xs text-muted-foreground">Столбик — расход за день, цифра — {resultLabel.toLowerCase()}</p>
+          <h2 className="section-title">По дням <InfoHint className="ml-1">Столбик — расход за день, цифра — {resultLabel.toLowerCase()}</InfoHint></h2>
         </div>
         <BarChart
           valueLabel

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { InfoHint } from "@/components/ui/info-hint";
 import { desc } from "drizzle-orm";
 import { Card } from "@/components/ui/card";
 import { getDb } from "@/db";
@@ -92,9 +93,7 @@ export default async function IntegrationsSettingsPage() {
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Ключи задаются в Vercel → Settings → Environment Variables. Инструкция — docs/integrations.md в репозитории.
-        </p>
+        <InfoHint caption="Где задаются ключи" className="mt-3">Ключи задаются в Vercel → Settings → Environment Variables. Инструкция — docs/integrations.md в репозитории.</InfoHint>
       </Card>
 
       <Card className="min-w-0">
@@ -130,8 +129,7 @@ export default async function IntegrationsSettingsPage() {
       </Card>
 
       <Card className="min-w-0">
-        <h2 className="section-title">Журнал действий</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Всё, что дашборд менял во внешних системах: кампании, подключения, загрузки.</p>
+        <h2 className="section-title">Журнал действий <InfoHint className="ml-1">Всё, что дашборд менял во внешних системах: кампании, подключения, загрузки.</InfoHint></h2>
         {log.length === 0 ? (
           <p className="mt-3 text-sm text-muted-foreground">Записей пока нет.</p>
         ) : (

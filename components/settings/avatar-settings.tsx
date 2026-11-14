@@ -1,6 +1,7 @@
 "use client";
 
 import { useUser } from "@clerk/nextjs";
+import { InfoHint } from "@/components/ui/info-hint";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { Card } from "@/components/ui/card";
@@ -54,8 +55,7 @@ export function AvatarSettings() {
 
   return (
     <Card className="min-w-0">
-      <h2 className="section-title">Фото профиля</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Видно в «Профиле» и в задачах. При входе через Google фото подтягивается само.</p>
+      <h2 className="section-title">Фото профиля <InfoHint className="ml-1">Видно в «Профиле» и в задачах. При входе через Google фото подтягивается само.</InfoHint></h2>
 
       <div className="mt-5 flex flex-wrap items-center gap-4">
         {isLoaded && user ? (

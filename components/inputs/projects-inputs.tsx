@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { InfoHint } from "@/components/ui/info-hint";
 import { SourceChips } from "@/components/projects/source-chips";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -45,8 +46,7 @@ export function ProjectsInputs({
     <Card className="min-w-0 overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="section-title">Проекты</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Цели, KPI и источники трафика по каждому проекту.</p>
+          <h2 className="section-title">Проекты <InfoHint className="ml-1">Цели, KPI и источники трафика по каждому проекту.</InfoHint></h2>
         </div>
         {canCreate && (
           <button type="button" className="btn-primary" onClick={() => setEditing("new")}>

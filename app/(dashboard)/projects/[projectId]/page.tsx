@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MetricsGrid } from "@/components/projects/metrics-grid";
 import { ProjectFunnel } from "@/components/projects/project-funnel";
@@ -17,7 +16,8 @@ import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { canViewProject, canViewSection } from "@/lib/access/policy";
 import { getViewerState, requireProject } from "@/lib/access/viewer";
-import { getProject, getProjects } from "@/lib/data";
+import { getProject, getProjects, getVisibleProjects } from "@/lib/data";
+import { ProjectMobileNav } from "@/components/projects/project-mobile-nav";
 import { formatDate } from "@/lib/format";
 import type { ProjectOwners } from "@/lib/domain/types";
 import { memberLabel } from "@/components/tasks/types";
@@ -64,23 +64,17 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
 
   return (
     <div className="flex flex-col gap-5">
+      <ProjectMobileNav
+        projects={(await getVisibleProjects(permissions)).filter((p) => p.status !== "archived")}
+        projectId={project.id}
+        area={null}
+        permissions={permissions}
+      />
       <div className="flex flex-wrap items-center gap-3 px-1">
         <StatusBadge status={project.status} />
         <span className="text-sm text-muted-foreground">в работе с {formatDate(project.startDate)}</span>
         <SourceChips sources={project.sources} />
         <ProjectOwnersLine owners={project.owners} />
-        <div className="ml-auto flex flex-wrap gap-2">
-          {canViewSection(permissions, "ads") && (
-            <Link href={`/ads?p=${project.id}`} className="btn-ghost border border-border px-3 py-1.5">
-              Реклама →
-            </Link>
-          )}
-          {canViewSection(permissions, "smm") && (
-            <Link href={`/smm?p=${project.id}`} className="btn-ghost border border-border px-3 py-1.5">
-              SMM →
-            </Link>
-          )}
-        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -91,13 +85,6 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         </span>
       </div>
 
-      <ProjectLog
-        projectId={project.id}
-        items={toLogItems(await listLog(project.id))}
-        description="Общий лог проекта: реклама, SMM, план и доступы."
-        showArea
-      />
-
       {project.goal && (
         <Card className="py-4 sm:py-4 lg:py-4">
           <p className="section-kicker">Основная цель</p>
@@ -105,17 +92,30 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         </Card>
       )}
 
-      {stats.results.length > 0 ? (
-        <section className="grid gap-5 lg:grid-cols-2">
-          {stats.results.map((result) => (
-            <ResultCard key={result.kpi.metric} result={result} elapsed={stats.elapsed} currency={project.agent.currency} />
-          ))}
-        </section>
-      ) : (
-        <Card>
-          <p className="text-sm text-muted-foreground">Результаты и KPI не заданы — заполните во «Вводных».</p>
-        </Card>
-      )}
+      {/* Plan / fact on the left, the project's log next to it: always open, as tall as the cards beside it. */}
+      <section className="grid gap-5 lg:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-5">
+          {stats.results.length > 0 ? (
+            stats.results.map((result) => (
+              <ResultCard key={result.kpi.metric} result={result} elapsed={stats.elapsed} currency={project.agent.currency} />
+            ))
+          ) : (
+            <Card>
+              <p className="text-sm text-muted-foreground">Результаты и KPI не заданы — заполните во «Вводных».</p>
+            </Card>
+          )}
+        </div>
+        <div className="relative min-w-0 lg:min-h-[320px]">
+          <ProjectLog
+            projectId={project.id}
+            items={toLogItems(await listLog(project.id))}
+            description="Общий лог проекта: реклама, SMM, план и доступы. Предложения и анализ агента, ошибки и проверки дашборда."
+            showArea
+            panel
+            className="max-h-[70dvh] lg:absolute lg:inset-0 lg:max-h-none"
+          />
+        </div>
+      </section>
 
       <MetricsGrid metrics={project.metrics} currency={project.agent.currency} />
 

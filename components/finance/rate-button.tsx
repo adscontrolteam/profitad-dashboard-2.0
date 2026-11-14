@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { InfoHint } from "@/components/ui/info-hint";
 import { saveBuyerRateAction, type FinState } from "@/app/(dashboard)/finance/actions";
 import { BUYER_RATE_ONE_SOURCE } from "@/lib/finance/rules";
 import { Drawer, Field, FormError } from "./drawer";
@@ -34,7 +35,7 @@ export function RateButton({ projectId, projectName, rate, sourcesCount }: { pro
             >
               <input name="rate" inputMode="decimal" defaultValue={rate ?? ""} className="field tabular-nums" autoFocus />
             </Field>
-            <p className="text-sm text-muted-foreground">От этой ставки считаются −50% при невыполненном KPI и +50% с третьего месяца подряд.</p>
+            <InfoHint caption="На что влияет ставка">От этой ставки считаются −50% при невыполненном KPI и +50% с третьего месяца подряд.</InfoHint>
             <FormError message={state.message && !state.ok ? state.message : null} />
             <div className="mt-auto pt-2">
               <button type="submit" className="btn-primary" disabled={saving}>

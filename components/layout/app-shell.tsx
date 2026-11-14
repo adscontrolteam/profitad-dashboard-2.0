@@ -3,12 +3,12 @@
 import { UserButton } from "@clerk/nextjs";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
-import { allowedTabs, getPageTitle, NAV_ITEMS, type AppRoute, type Capability } from "@/config/navigation";
-import { HeaderTabs } from "./header-tabs";
+import { allowedTabs, getPageTitle, NAV_ITEMS, PROJECT_AREAS, type AppRoute, type Capability } from "@/config/navigation";
+import { HeaderTabs, PageTitle } from "./header-tabs";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { PageTransition } from "./page-transition";
 import { Sidebar } from "./sidebar";
-import type { ProjectNavItem } from "./types";
+import type { ProjectArea, ProjectNavItem } from "./types";
 
 export function AppShell({
   children,
@@ -16,6 +16,7 @@ export function AppShell({
   routes,
   roleLabel,
   capabilities,
+  projectSections,
 }: {
   children: React.ReactNode;
   projects: ProjectNavItem[];
@@ -23,25 +24,37 @@ export function AppShell({
   routes: AppRoute[];
   roleLabel: string;
   capabilities: Record<Capability, boolean>;
+  /** Which of Реклама / SMM the viewer may open inside a project. */
+  projectSections: ("ads" | "smm")[];
 }) {
   const pathname = usePathname();
   const items = NAV_ITEMS.filter((item) => routes.includes(item.href)).map((item) =>
     item.children ? { ...item, children: allowedTabs(item.children, capabilities) } : item,
   );
 
+  const areas: ProjectArea[] = PROJECT_AREAS.filter((a) => projectSections.includes(a.key)).map((a) => ({
+    key: a.key,
+    label: a.label,
+    href: a.href,
+    tabs: allowedTabs(a.tabs, capabilities),
+  }));
+  const title = getPageTitle(pathname, projects);
+
   return (
     <>
       <div className="flex h-dvh overflow-hidden bg-background lg:gap-3 lg:p-3">
-        <Sidebar items={items} />
+        <Sidebar items={items} projects={projects} areas={areas} />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between gap-3 border-b border-border bg-background/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-md lg:static lg:mb-3 lg:h-14 lg:rounded-full lg:border lg:bg-[var(--glass)] lg:px-5 lg:pt-0 lg:backdrop-blur-sm">
             <div className="flex min-w-0 flex-1 items-center gap-6">
               <h1 className="min-w-0 shrink-0 truncate text-base font-bold tracking-[-0.02em] sm:text-lg lg:text-[22px]">
-                {getPageTitle(pathname, projects)}
+                <Suspense fallback={title}>
+                  <PageTitle fallback={title} projects={projects} />
+                </Suspense>
               </h1>
               <Suspense fallback={null}>
-                <HeaderTabs items={items} className="hidden lg:flex" />
+                <HeaderTabs items={items} areas={areas} className="hidden lg:flex" />
               </Suspense>
             </div>
             <div className="flex shrink-0 items-center gap-3">

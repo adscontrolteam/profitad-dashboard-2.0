@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useOptimistic, useState, useTransition } from "react";
+import { InfoHint } from "@/components/ui/info-hint";
 import { restoreTasksAction } from "@/app/(dashboard)/tasks/actions";
 import { Card } from "@/components/ui/card";
 import { TONE_DOT } from "@/components/ui/status-badge";
@@ -66,10 +67,7 @@ export function TaskArchive({
     <Card className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <div>
-          <h2 className="section-title">Архив задач</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Сюда попадают задачи, отправленные в архив вручную, и задачи проектов, ушедших в архив.
-          </p>
+          <h2 className="section-title">Архив задач <InfoHint className="ml-1">Сюда попадают задачи, отправленные в архив вручную, и задачи проектов, ушедших в архив.</InfoHint></h2>
         </div>
         <input
           type="search"

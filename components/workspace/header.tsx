@@ -1,13 +1,14 @@
+import { cn } from "@/lib/cn";
 import { allowedTabs, ADS_TABS, SMM_TABS } from "@/config/navigation";
 import type { Permissions } from "@/lib/access/roles";
 import type { Workspace } from "@/lib/workspace/context";
-import { ProjectSelect } from "./project-select";
+import { ProjectMobileNav } from "@/components/projects/project-mobile-nav";
 import { PeriodControl } from "./period-control";
 import { SectionTabs } from "./toolbar";
 
 /**
- * Top of every Ads/SMM page: project dropdown and (optionally) period.
- * Sub-tabs live in the app top bar on desktop and are repeated here only on mobile.
+ * Top of every Ads/SMM page: the period, when the page has one.
+ * The project and the sub-tabs are chosen in the sidebar and the top bar on desktop; phones get them here.
  */
 export function WorkspaceHeader({
   section,
@@ -30,14 +31,23 @@ export function WorkspaceHeader({
   const query = { ...workspace.query, ...extraQuery };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className={cn("flex flex-col gap-3", !withRange && !children && "lg:hidden")}>
+      <ProjectMobileNav
+        projects={workspace.projects}
+        projectId={workspace.project?.id}
+        area={section}
+        pathname={pathname}
+        query={query}
+        permissions={permissions}
+      />
       <div className="lg:hidden">
         <SectionTabs tabs={tabs} pathname={pathname} query={workspace.query} />
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <ProjectSelect projects={workspace.projects} current={workspace.project?.id} path={pathname} query={query} />
-        {withRange && <PeriodControl path={pathname} query={query} period={workspace.range} />}
-      </div>
+      {withRange && (
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <PeriodControl path={pathname} query={query} period={workspace.range} />
+        </div>
+      )}
       {children}
     </div>
   );

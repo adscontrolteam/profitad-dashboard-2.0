@@ -49,6 +49,7 @@ export async function getProjectNav() {
   return projects.filter((p) => p.status !== "archived").map(({ id, name, status, stats }) => ({
     id,
     name,
+    active: status === "active",
     signal: status === "active" ? paceLevel(stats.primary?.pace) : null,
   }));
 }

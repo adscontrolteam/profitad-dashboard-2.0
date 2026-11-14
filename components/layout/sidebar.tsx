@@ -2,13 +2,27 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV_ICONS } from "@/components/icons/nav-icons";
+import { Suspense } from "react";
+import { AdsIcon, NAV_ICONS, SmmIcon } from "@/components/icons/nav-icons";
 import { Logo } from "@/components/ui/logo";
 import { APP_CONFIG } from "@/config/app";
-import { isNavItemActive, type NavItem, type SubNavItem } from "@/config/navigation";
+import { isNavItemActive, projectAreaOf, type NavItem, type SubNavItem } from "@/config/navigation";
 import { cn } from "@/lib/cn";
+import type { ProjectArea, ProjectNavItem } from "./types";
+import { useCurrentProject } from "./use-current-project";
 
-export function Sidebar({ items }: { items: NavItem[] }) {
+const AREA_ICONS = { ads: AdsIcon, smm: SmmIcon };
+
+export function Sidebar({
+  items,
+  projects,
+  areas,
+}: {
+  items: NavItem[];
+  projects: ProjectNavItem[];
+  /** Реклама / SMM the viewer may open inside a project. */
+  areas: ProjectArea[];
+}) {
   const main = items.filter((item) => !item.footer);
   const footer = items.filter((item) => item.footer);
 
@@ -23,7 +37,13 @@ export function Sidebar({ items }: { items: NavItem[] }) {
           {main.map((item) => (
             <div key={item.href} className="flex flex-col gap-0.5">
               <NavLink item={item} />
-              {item.children && item.children.length > 1 ? <SubLinks items={item.children} /> : null}
+              {item.href === "/projects" ? (
+                <Suspense fallback={null}>
+                  <ProjectTree projects={projects} areas={areas} />
+                </Suspense>
+              ) : item.children && item.children.length > 1 ? (
+                <SubLinks items={item.children} />
+              ) : null}
             </div>
           ))}
         </div>
@@ -41,8 +61,9 @@ export function Sidebar({ items }: { items: NavItem[] }) {
 function NavLink({ item }: { item: NavItem }) {
   const pathname = usePathname();
   const Icon = NAV_ICONS[item.href];
-  const isActive =
-    item.href === "/" ? pathname === "/" : pathname === item.href;
+  const inSection = isNavItemActive(item.href, pathname);
+  // «Проекты» has no page of its own: it is the whole section, so it stays lit inside any project.
+  const isActive = item.href === "/projects" ? inSection : pathname === item.href;
 
   return (
     <Link
@@ -52,7 +73,7 @@ function NavLink({ item }: { item: NavItem }) {
         "flex items-center gap-3 rounded-full px-3 py-2.5 text-[14px] font-medium tracking-[-0.01em] transition-colors",
         isActive
           ? "bg-accent text-accent-foreground"
-          : isNavItemActive(item.href, pathname)
+          : inSection
             ? "bg-sidebar-hover text-sidebar-foreground"
             : "text-sidebar-muted hover:bg-sidebar-hover hover:text-sidebar-foreground",
       )}
@@ -60,6 +81,66 @@ function NavLink({ item }: { item: NavItem }) {
       <Icon className="size-[18px] shrink-0" />
       <span className="truncate">{item.label}</span>
     </Link>
+  );
+}
+
+/** Projects under «Проекты»; the open project shows its own Реклама and SMM. */
+function ProjectTree({ projects, areas }: { projects: ProjectNavItem[]; areas: ProjectArea[] }) {
+  const pathname = usePathname();
+  const current = useCurrentProject(projects);
+  if (!isNavItemActive("/projects", pathname)) return null;
+  const area = projectAreaOf(pathname);
+
+  return (
+    <ul className="flex flex-col gap-0.5 pl-6">
+      {projects.map((project) => {
+        const open = project.id === current?.id;
+        return (
+          <li key={project.id} className="flex flex-col gap-0.5">
+            <Link
+              href={`/projects/${project.id}`}
+              aria-current={open && !area ? "page" : undefined}
+              className={cn(
+                "flex items-center gap-2.5 rounded-full px-3 py-1.5 text-[13px] font-medium tracking-[-0.01em] transition-colors",
+                open && !area
+                  ? "bg-accent text-accent-foreground"
+                  : open
+                    ? "bg-sidebar-hover text-sidebar-foreground"
+                    : "text-sidebar-muted hover:bg-sidebar-hover hover:text-sidebar-foreground",
+              )}
+            >
+              <span className="size-1.5 shrink-0 rounded-full bg-current opacity-50" />
+              <span className="truncate">{project.name}</span>
+            </Link>
+            {open && areas.length > 0 && (
+              <ul className="flex flex-col gap-0.5 pl-5">
+                {areas.map((a) => {
+                  const Icon = AREA_ICONS[a.key];
+                  const active = area?.key === a.key;
+                  return (
+                    <li key={a.key}>
+                      <Link
+                        href={`${a.href}?p=${project.id}`}
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "flex items-center gap-2.5 rounded-full px-3 py-1.5 text-[12.5px] font-medium tracking-[-0.01em] transition-colors",
+                          active
+                            ? "bg-accent text-accent-foreground"
+                            : "text-sidebar-muted hover:bg-sidebar-hover hover:text-sidebar-foreground",
+                        )}
+                      >
+                        <Icon className="size-[15px] shrink-0" />
+                        <span className="truncate">{a.label}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

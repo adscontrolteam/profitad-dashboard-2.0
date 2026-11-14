@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { InfoHint } from "@/components/ui/info-hint";
 import Link from "next/link";
 import { PnlChart } from "@/components/finance/charts";
 import { CardHead, Empty, KpiTile, monthLabel, Note, Pill, Table } from "@/components/finance/ui";
@@ -158,9 +159,7 @@ export default async function FinanceOverviewPage() {
             })}
           </tbody>
         </Table>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Суммы в долларах по курсу НБУ: 1 USD = {r.rates.USD?.toFixed(2)} ₴, 1 EUR = {r.rates.EUR?.toFixed(2)} ₴.
-        </p>
+        <InfoHint caption="Курс пересчёта" className="mt-3">Суммы в долларах по курсу НБУ: 1 USD = {r.rates.USD?.toFixed(2)} ₴, 1 EUR = {r.rates.EUR?.toFixed(2)} ₴.</InfoHint>
       </Card>
     </div>
   );

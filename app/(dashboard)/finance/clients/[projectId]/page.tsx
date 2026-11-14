@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { InfoHint } from "@/components/ui/info-hint";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PlanFactChart } from "@/components/finance/charts";
@@ -189,9 +190,7 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
             })}
           </tbody>
         </Table>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Результаты и расход — в валюте проекта, наш доход — в валюте договора, получено и маржа — в долларах (по курсу счёта или НБУ).
-        </p>
+        <InfoHint caption="В какой валюте цифры" className="mt-3">Результаты и расход — в валюте проекта, наш доход — в валюте договора, получено и маржа — в долларах (по курсу счёта или НБУ).</InfoHint>
       </Card>
 
       <Card>

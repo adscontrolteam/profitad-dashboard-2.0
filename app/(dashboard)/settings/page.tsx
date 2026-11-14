@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { InfoHint } from "@/components/ui/info-hint";
 import Link from "next/link";
 import { AvatarSettings } from "@/components/settings/avatar-settings";
 import { ThemePicker } from "@/components/settings/theme-picker";
@@ -15,8 +16,7 @@ export default async function SettingsPage() {
       <AvatarSettings />
 
       <Card className="min-w-0">
-        <h2 className="section-title">Оформление</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Выбор сохраняется на этом устройстве.</p>
+        <h2 className="section-title">Оформление <InfoHint className="ml-1">Выбор сохраняется на этом устройстве.</InfoHint></h2>
         <div className="mt-5">
           <ThemePicker />
         </div>

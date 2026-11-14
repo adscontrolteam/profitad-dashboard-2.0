@@ -1,4 +1,5 @@
 import { Card, StatTile } from "@/components/ui/card";
+import { InfoHint } from "@/components/ui/info-hint";
 import { APP_CONFIG } from "@/config/app";
 import { projectFunnel, type FunnelMonth, type PaymentLag } from "@/lib/integrations/store";
 
@@ -60,11 +61,21 @@ export async function ProjectFunnel({
 
   return (
     <Card className="min-w-0">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <h2 className="section-title">Реальные результаты</h2>
-        <p className="text-xs text-muted-foreground">
-          Считаем только лиды с рекламы (gclid / платная метка). Лиды и продажи — из таблицы клиента, расход — из кабинетов. {periodLabel}, по месяцам.
-        </p>
+        <InfoHint label="Как считаем">
+          <span className="block">
+            Считаем только лиды с рекламы (gclid / платная метка). Лиды и продажи — из таблицы клиента, расход — из кабинетов.
+          </span>
+          <span className="mt-2 block">
+            «С рекламы» — у лида есть gclid / gbraid / wbraid или платная UTM-метка, а также, если реклама в эти дни шла, лиды до того, как сайт
+            начал записывать метки, и лиды с перехода из Google без gclid; без метки (SEO, прямые заходы, мессенджеры) — «не с рекламы», они
+            показаны отдельно серым и в цену лида, клиента и ROAS не входят. Спам и тесты не считаются, один человек в один день — один лид. «Клиенты» — все,
+            кто платил в этом месяце (если дата оплаты не заполнена — в месяце заявки); «повт.» — уже платили раньше, «лид ранее» — первая оплата, а заявка
+            была в прошлом месяце. «Выручка с рекламы» — по «Дата оплати / Сума EUR» у лидов с рекламы; «всего» — {funnel.hasSales ? "лист продаж клиента" : "появится с листом продаж или оплатами в таблице"}.
+          </span>
+        </InfoHint>
+        <span className="ml-auto text-xs text-muted-foreground">{periodLabel}, по месяцам</span>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
@@ -143,13 +154,6 @@ export async function ProjectFunnel({
           </tbody>
         </table>
       </div>
-      <p className="mt-3 text-xs leading-5 text-muted-foreground">
-        «С рекламы» — у лида есть gclid / gbraid / wbraid или платная UTM-метка, а также, если реклама в эти дни шла, лиды до того, как сайт
-        начал записывать метки, и лиды с перехода из Google без gclid; без метки (SEO, прямые заходы, мессенджеры) — «не с рекламы», они
-        показаны отдельно серым и в цену лида, клиента и ROAS не входят. Спам и тесты не считаются, один человек в один день — один лид. «Клиенты» — все,
-        кто платил в этом месяце (если дата оплаты не заполнена — в месяце заявки); «повт.» — уже платили раньше, «лид ранее» — первая оплата, а заявка
-        была в прошлом месяце. «Выручка с рекламы» — по «Дата оплати / Сума EUR» у лидов с рекламы; «всего» — {funnel.hasSales ? "лист продаж клиента" : "появится с листом продаж или оплатами в таблице"}.
-      </p>
     </Card>
   );
 }

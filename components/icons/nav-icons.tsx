@@ -42,7 +42,7 @@ function ProfileIcon(props: IconProps) {
   );
 }
 
-function AdsIcon(props: IconProps) {
+export function AdsIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
       <path d="M4 10v4a1 1 0 0 0 1 1h2l5 4V5L7 9H5a1 1 0 0 0-1 1Z" />
@@ -51,7 +51,7 @@ function AdsIcon(props: IconProps) {
   );
 }
 
-function SmmIcon(props: IconProps) {
+export function SmmIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
       <rect x="3" y="3" width="18" height="18" rx="5" />
@@ -105,11 +105,18 @@ function SettingsIcon(props: IconProps) {
   );
 }
 
+function ProjectsIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.6l2 2.2h7.4A2.5 2.5 0 0 1 21 9.7v6.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5Z" />
+    </IconFrame>
+  );
+}
+
 export const NAV_ICONS: Record<AppRoute, (props: IconProps) => ReactNode> = {
   "/profile": ProfileIcon,
   "/": DashboardIcon,
-  "/ads": AdsIcon,
-  "/smm": SmmIcon,
+  "/projects": ProjectsIcon,
   "/inputs": InputsIcon,
   "/sales": SalesIcon,
   "/tasks": TasksIcon,

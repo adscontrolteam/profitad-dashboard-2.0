@@ -28,6 +28,7 @@ async function ViewerShell({ children }: { children: React.ReactNode }) {
       routes={routes}
       projects={visibleProjects(permissions, projects)}
       roleLabel={ROLE_META[permissions.role].label}
+      projectSections={(["ads", "smm"] as const).filter((section) => canViewSection(permissions, section))}
       capabilities={{
         canManageAds: permissions.canManageAds,
         canPublishContent: permissions.canPublishContent,

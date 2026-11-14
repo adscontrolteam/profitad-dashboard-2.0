@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { InfoHint } from "@/components/ui/info-hint";
 import {
   detectReportAction,
   createFromTemplateAction,
@@ -176,9 +177,7 @@ function CrmCard({ projectId, current }: { projectId: string; current?: Integrat
 
       {type === "webhook" && (
         <>
-          <p className="text-xs leading-5 text-muted-foreground">
-            CRM, форма на сайте, Tilda, Zapier или Make отправляют POST с полями name, phone, email, status, utm_*. Лиды появляются сразу.
-          </p>
+          <InfoHint caption="Как это работает">CRM, форма на сайте, Tilda, Zapier или Make отправляют POST с полями name, phone, email, status, utm_*. Лиды появляются сразу.</InfoHint>
           {url && (
             <div className="flex items-center gap-2 rounded-[12px] bg-muted px-3 py-2">
               <code className="min-w-0 flex-1 truncate text-xs">{url}</code>
@@ -222,9 +221,7 @@ function CrmCard({ projectId, current }: { projectId: string; current?: Integrat
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
           />
-          <p className="text-xs leading-5 text-muted-foreground">
-            Kommo → Настройки → Интеграции → Создать интеграцию (внешняя) → вкладка «Ключи и доступы» → «Долгосрочный токен».
-          </p>
+          <InfoHint caption="Где взять токен">Kommo → Настройки → Интеграции → Создать интеграцию (внешняя) → вкладка «Ключи и доступы» → «Долгосрочный токен».</InfoHint>
           <SaveButton pending={pending} onClick={save} />
         </>
       )}
@@ -239,9 +236,7 @@ function CrmCard({ projectId, current }: { projectId: string; current?: Integrat
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
           />
-          <p className="text-xs leading-5 text-muted-foreground">
-            Bitrix24 → Разработчикам → Другое → Входящий вебхук, права «CRM» и «Пользователи». Скопируйте ссылку вебхука.
-          </p>
+          <InfoHint caption="Где взять ссылку вебхука">Bitrix24 → Разработчикам → Другое → Входящий вебхук, права «CRM» и «Пользователи». Скопируйте ссылку вебхука.</InfoHint>
           <SaveButton pending={pending} onClick={save} />
         </>
       )}
@@ -275,10 +270,8 @@ function LeadsSheetCard({ projectId, current }: { projectId: string; current?: I
 
   return (
     <Shell kind="sheets_leads" current={current} projectId={projectId} summary={summary}>
-      <p className="text-xs leading-5 text-muted-foreground">
-        Реальные лиды клиента, даже если кабинет их не видит. Листы с лидами: одна строка — один лид, в первой строке заголовки (Дата, Имя,
-        Контакт/Телефон, Статус/Qualification, gclid/Attribution, Дата оплаты, Сумма — какие есть). Лист продаж — суммы по периодам.
-      </p>
+      <InfoHint caption="Какой должна быть таблица">Реальные лиды клиента, даже если кабинет их не видит. Листы с лидами: одна строка — один лид, в первой строке заголовки (Дата, Имя,
+        Контакт/Телефон, Статус/Qualification, gclid/Attribution, Дата оплаты, Сумма — какие есть). Лист продаж — суммы по периодам.</InfoHint>
       <div className="flex gap-2">
         <input className="field" placeholder="Ссылка на Google Таблицу" value={url} onChange={(e) => setUrl(e.target.value)} />
         <button
@@ -317,10 +310,8 @@ function LeadsSheetCard({ projectId, current }: { projectId: string; current?: I
           <input type="checkbox" checked={autofill} onChange={(e) => setAutofill(e.target.checked)} className="mt-0.5 size-4 accent-[var(--accent)]" />
           <span>
             Заполнять лист продаж автоматически
-            <span className="block text-xs text-muted-foreground">
-              Новые периоды (пн–вт, ср–чт, пт–вс): лиды с рекламы — всего, целевые, нецелевые; продажи — оплаты из листов лидов. Строки,
-              заполненные вручную, не трогаем.
-            </span>
+            <InfoHint className="ml-1.5">Новые периоды (пн–вт, ср–чт, пт–вс): лиды с рекламы — всего, целевые, нецелевые; продажи — оплаты из листов лидов. Строки,
+              заполненные вручную, не трогаем.</InfoHint>
           </span>
         </label>
       )}
@@ -349,11 +340,9 @@ function ReportCard({ projectId, current }: { projectId: string; current?: Integ
 
   return (
     <Shell kind="sheets_report" current={current} projectId={projectId} summary={cfg && `«${cfg.title}» · листы: ${cfg.tabs.map((t) => t.tab).join(", ")}`}>
-      <p className="text-xs leading-5 text-muted-foreground">
-        Каждый день дашборд находит строку с датой в колонке A и вписывает расход, показы, клики, лиды и подписки за последние 3 дня
+      <InfoHint caption="Как заполняется репорт">Каждый день дашборд находит строку с датой в колонке A и вписывает расход, показы, клики, лиды и подписки за последние 3 дня
         (Google досчитывает конверсии задним числом). Формулы и ручные колонки не трогаются; если строки с датой нет, она
-        добавляется под последней с теми же формулами и форматом.
-      </p>
+        добавляется под последней с теми же формулами и форматом.</InfoHint>
       {!current && (
         <div>
           <button type="button" className="btn-primary px-3 py-1.5 text-xs" disabled={pending} onClick={() => run(() => createFromTemplateAction(projectId, "report"))}>
@@ -426,7 +415,7 @@ function ReportCard({ projectId, current }: { projectId: string; current?: Integ
               ))}
             </tbody>
           </table>
-          <p className="mt-1 text-[11px] text-muted-foreground">Буквы колонок найдены по заголовкам, их можно поправить. Пусто — не заполнять.</p>
+          <InfoHint caption="Про буквы колонок" className="mt-1">Буквы колонок найдены по заголовкам, их можно поправить. Пусто — не заполнять.</InfoHint>
         </div>
       )}
       {tabs.length > 0 && (
@@ -450,10 +439,8 @@ function DriveCard({ projectId, current }: { projectId: string; current?: Integr
 
   return (
     <Shell kind="drive" current={current} projectId={projectId} summary={cfg && `Папка «${cfg.name}»`}>
-      <p className="text-xs leading-5 text-muted-foreground">
-        Сюда уходит контент, созданный в дашборде, и отсюда берутся исходники. Новая папка создаётся копией «Template Project» в
-        PROFITAD → PROJECTS.
-      </p>
+      <InfoHint caption="Зачем папка">Сюда уходит контент, созданный в дашборде, и отсюда берутся исходники. Новая папка создаётся копией «Template Project» в
+        PROFITAD → PROJECTS.</InfoHint>
       {!current && (
         <div>
           <button type="button" className="btn-primary px-3 py-1.5 text-xs" disabled={pending} onClick={() => run(() => createFromTemplateAction(projectId, "drive"))}>

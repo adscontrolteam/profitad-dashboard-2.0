@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { InfoHint } from "@/components/ui/info-hint";
 import { Field, Segmented, Toast } from "@/components/workspace/form";
 import { uid, useLocalState } from "@/components/workspace/use-local-state";
 import { cn } from "@/lib/cn";
@@ -446,8 +447,7 @@ function Montage({ onDone }: { onDone: (msg: string) => void }) {
   return (
     <section className="flex flex-col gap-5 rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-5 lg:p-6">
       <div>
-        <h2 className="section-title">Монтаж</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Агент вырежет паузы и слова-паразиты, ускорит, добавит субтитры и обложку.</p>
+        <h2 className="section-title">Монтаж <InfoHint className="ml-1">Агент вырежет паузы и слова-паразиты, ускорит, добавит субтитры и обложку.</InfoHint></h2>
       </div>
       <button
         type="button"
