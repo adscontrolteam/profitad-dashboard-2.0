@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
+import { leadSource, type LeadSource } from "@/lib/integrations/lead-source";
 import { recentLeads } from "@/lib/integrations/store";
 
 const OUTCOME: Record<string, { label: string; className: string }> = {
@@ -11,7 +12,13 @@ const OUTCOME: Record<string, { label: string; className: string }> = {
   junk: { label: "спам / нецелевой", className: "bg-warning/14 text-warning" },
 };
 
-const SOURCE: Record<string, string> = { webhook: "вебхук", kommo: "Kommo", bitrix24: "Bitrix24", sheet: "таблица" };
+const SOURCE_TONE: Record<LeadSource["tone"], string> = {
+  ads: "bg-info/12 text-info",
+  ai: "bg-positive/12 text-positive",
+  seo: "bg-muted text-foreground",
+  other: "bg-warning/14 text-warning",
+  unknown: "text-muted-foreground",
+};
 
 /** Latest leads from the project's CRM / lead sheet. Renders nothing when no lead source is connected. */
 export async function ProjectLeads({ projectId, limit = 30 }: { projectId: string; limit?: number }) {
@@ -58,7 +65,16 @@ export async function ProjectLeads({ projectId, limit = 30 }: { projectId: strin
                     {l.status || OUTCOME[l.outcome]?.label}
                   </span>
                 </td>
-                <td className="py-2 text-xs text-muted-foreground">{SOURCE[l.source] ?? l.source}</td>
+                <td className="py-2">
+                  {(() => {
+                    const src = leadSource(l.utm);
+                    return (
+                      <span className={cn("whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold", SOURCE_TONE[src.tone])} title={src.hint}>
+                        {src.label}
+                      </span>
+                    );
+                  })()}
+                </td>
               </tr>
             ))}
           </tbody>
