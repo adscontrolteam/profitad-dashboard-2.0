@@ -189,8 +189,15 @@ export async function dropOtherSales(projectId: string, keep: string | null) {
 /**
  * The lead came from ads: the site captured a click id (gclid/gbraid/wbraid/fbclid) or a paid UTM — the parser
  * puts that into utm.ad. No marker = SEO, direct, referrals, messengers: counted only as «не с рекламы».
+ * Exceptions, both only from the first day with ad spend: leads from before the site recorded click ids (utm.untracked)
+ * and leads that came from a Google page without a click id (utm.google_ref) — the owner's decision of 14.11.2026.
  */
-const FROM_ADS = sql`(${leads.utm}->>'ad') is not null`;
+const FROM_ADS = sql`((${leads.utm}->>'ad') is not null or (
+  (${leads.utm}->>'untracked' = '1' or ${leads.utm}->>'google_ref' = '1')
+  and (${leads.leadAt} at time zone 'UTC')::date >= (
+    select min(a.date) from ${adMetricsDaily} a where a.project_id = ${leads.projectId} and a.spend > 0
+  )
+))`;
 
 export interface FunnelMonth {
   month: string;

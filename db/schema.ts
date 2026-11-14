@@ -243,7 +243,8 @@ export type LeadRow = typeof leads.$inferSelect;
 
 /**
  * Leads from the client's sheet / CRM per project, day and campaign, for the AI agent (role bot_sync).
- * No names, phones or emails — only counts. «ads» = the lead carries a click id or a paid UTM.
+ * No names, phones or emails — only counts. «ads» = the lead carries a click id or a paid UTM, or came before
+ * the site recorded click ids while the ads were already running.
  * See docs/agent-contract.md.
  */
 export const agentLeadsDaily = pgView("agent_leads_daily", {
@@ -260,9 +261,9 @@ export const agentLeadsDaily = pgView("agent_leads_daily", {
          (lead_at at time zone 'UTC')::date as day,
          coalesce(nullif(utm->>'utm_campaign', ''), nullif(campaign, ''), '') as campaign,
          (count(*) filter (where outcome <> 'junk'))::int as leads_all,
-         (count(*) filter (where outcome <> 'junk' and utm->>'ad' is not null))::int as leads_ads,
-         (count(*) filter (where outcome = 'no_answer' and utm->>'ad' is not null))::int as no_answer_ads,
-         (count(*) filter (where outcome = 'won' and utm->>'ad' is not null))::int as won_ads,
+         (count(*) filter (where outcome <> 'junk' and (utm->>'ad' is not null or ((utm->>'untracked' = '1' or utm->>'google_ref' = '1') and (lead_at at time zone 'UTC')::date >= (select min(a.date) from ad_metrics_daily a where a.project_id = leads.project_id and a.spend > 0)))))::int as leads_ads,
+         (count(*) filter (where outcome = 'no_answer' and (utm->>'ad' is not null or ((utm->>'untracked' = '1' or utm->>'google_ref' = '1') and (lead_at at time zone 'UTC')::date >= (select min(a.date) from ad_metrics_daily a where a.project_id = leads.project_id and a.spend > 0)))))::int as no_answer_ads,
+         (count(*) filter (where outcome = 'won' and (utm->>'ad' is not null or ((utm->>'untracked' = '1' or utm->>'google_ref' = '1') and (lead_at at time zone 'UTC')::date >= (select min(a.date) from ad_metrics_daily a where a.project_id = leads.project_id and a.spend > 0)))))::int as won_ads,
          (count(*) filter (where outcome = 'junk'))::int as junk
   from leads
   group by 1, 2, 3`);
