@@ -186,21 +186,35 @@ export async function dropOtherSales(projectId: string, keep: string | null) {
 
 /* ---------- Funnel: real leads vs ad cabinet, by month ---------- */
 
+/**
+ * The lead came from ads: the site captured a click id (gclid/gbraid/wbraid/fbclid) or a paid UTM — the parser
+ * puts that into utm.ad. No marker = SEO, direct, referrals, messengers: counted only as «не с рекламы».
+ */
+const FROM_ADS = sql`(${leads.utm}->>'ad') is not null`;
+
 export interface FunnelMonth {
   month: string;
   spend: number | null;
   cabinetLeads: number | null;
+  /** All real leads (no spam), every channel. */
   leads: number;
-  google: number;
+  /** Of `leads`: came from ads — gclid/gbraid/wbraid or a paid UTM. The rest is SEO, direct, referrals. */
+  adsLeads: number;
+  /** Ad leads that never answered. */
   noAnswer: number;
   junk: number;
-  /** Paying clients of the month: everyone who paid in it (lead month when no payment date is filled). */
+  /** Paying clients from ads: everyone who paid in the month (lead month when no payment date is filled). */
   clients: number;
   /** Of `clients`: paid in an earlier month too — repeat purchase (retention). */
   clientsRepeat: number;
   /** Of `clients`: first payment, but the lead came in an earlier month. */
   clientsFromEarlier: number;
+  /** Paying clients of the month, every channel. */
+  clientsAll: number;
   salesCount: number;
+  /** Money from ad clients — their own «Дата оплати / Сума» per lead. */
+  revenueAds: number;
+  /** All the client's money of the month: sales sheet, or per-lead payments when there is no sales sheet. */
   revenue: number;
 }
 
@@ -246,8 +260,8 @@ export async function projectFunnel(projectId: string, months = 6): Promise<Funn
       .select({
         month: sql<string>`to_char(${leads.leadAt} at time zone 'UTC', 'YYYY-MM')`,
         leads: sql<number>`count(*) filter (where ${leads.outcome} <> 'junk')`,
-        google: sql<number>`count(*) filter (where ${leads.outcome} <> 'junk' and ${leads.utm}->>'ad' = 'google')`,
-        noAnswer: sql<number>`count(*) filter (where ${leads.outcome} = 'no_answer')`,
+        adsLeads: sql<number>`count(*) filter (where ${leads.outcome} <> 'junk' and ${FROM_ADS})`,
+        noAnswer: sql<number>`count(*) filter (where ${leads.outcome} = 'no_answer' and ${FROM_ADS})`,
         junk: sql<number>`count(*) filter (where ${leads.outcome} = 'junk')`,
       })
       .from(leads)
@@ -267,17 +281,17 @@ export async function projectFunnel(projectId: string, months = 6): Promise<Funn
 
   // Per-lead payments (each «Дата оплати N» + «Сума N» pair) count in the month they were paid — the cash view.
   // A sales sheet, when connected, is the money source instead, so nothing is counted twice.
-  const paid = ss.length
-    ? []
-    : ((
-        await db.execute(sql`
-          select left(coalesce(nullif(p->>'date', ''), to_char(${leads.leadAt}, 'YYYY-MM-DD')), 7) as month,
-                 sum((p->>'amount')::float8) as amount,
-                 count(*) as n
-          from ${leads}, jsonb_array_elements(coalesce(${leads.raw}->'payments', '[]'::jsonb)) as p
-          where ${leads.projectId} = ${projectId} and (p->>'amount')::float8 > 0
-          group by 1`)
-      ).rows as { month: string; amount: number; n: number }[]);
+  // Ad money is always taken from the per-lead payments: a sales sheet does not say where the client came from.
+  const paid = (
+    await db.execute(sql`
+      select left(coalesce(nullif(p->>'date', ''), to_char(${leads.leadAt}, 'YYYY-MM-DD')), 7) as month,
+             sum((p->>'amount')::float8) as amount,
+             sum((p->>'amount')::float8) filter (where ${FROM_ADS}) as ads,
+             count(*) as n
+      from ${leads}, jsonb_array_elements(coalesce(${leads.raw}->'payments', '[]'::jsonb)) as p
+      where ${leads.projectId} = ${projectId} and (p->>'amount')::float8 > 0
+      group by 1`)
+  ).rows as { month: string; amount: number; ads: number | null; n: number }[];
 
   // A client counts in every month they paid. «Repeat» = paid before (retention); «earlier» = first payment
   // this month but the lead came in a previous month. Paid without dates → one payment in the lead's month.
@@ -285,16 +299,16 @@ export async function projectFunnel(projectId: string, months = 6): Promise<Funn
     await db.execute(sql`
       with won as (
         select ${leads.id} as id, to_char(${leads.leadAt}, 'YYYY-MM') as lead_month, ${leads.raw} as raw, ${leads.utm} as utm,
-               to_char(${leads.leadAt}, 'YYYY-MM-DD') as lead_day
+               to_char(${leads.leadAt}, 'YYYY-MM-DD') as lead_day, ${FROM_ADS} as ads
         from ${leads}
         where ${leads.projectId} = ${projectId} and ${leads.outcome} = 'won'
       ),
       ev as (
-        select w.id, w.lead_month, left(p->>'date', 7) as month
+        select w.id, w.lead_month, w.ads, left(p->>'date', 7) as month
         from won w, jsonb_array_elements(coalesce(w.raw->'payments', '[]'::jsonb)) p
         where coalesce(p->>'date', '') <> ''
         union
-        select w.id, w.lead_month, left(coalesce(nullif(w.utm->>'paid_at', ''), w.lead_day), 7)
+        select w.id, w.lead_month, w.ads, left(coalesce(nullif(w.utm->>'paid_at', ''), w.lead_day), 7)
         from won w
         where not exists (
           select 1 from jsonb_array_elements(coalesce(w.raw->'payments', '[]'::jsonb)) p where coalesce(p->>'date', '') <> ''
@@ -302,13 +316,14 @@ export async function projectFunnel(projectId: string, months = 6): Promise<Funn
       ),
       firsts as (select id, min(month) as first_month from ev group by id)
       select ev.month,
-             count(distinct ev.id) as n,
-             count(distinct ev.id) filter (where f.first_month < ev.month) as repeat,
-             count(distinct ev.id) filter (where f.first_month = ev.month and ev.lead_month < ev.month) as earlier
+             count(distinct ev.id) as all_n,
+             count(distinct ev.id) filter (where ev.ads) as n,
+             count(distinct ev.id) filter (where ev.ads and f.first_month < ev.month) as repeat,
+             count(distinct ev.id) filter (where ev.ads and f.first_month = ev.month and ev.lead_month < ev.month) as earlier
       from ev join firsts f using (id)
       where ev.month >= ${sinceIso.slice(0, 7)}
       group by 1`)
-  ).rows as { month: string; n: number; repeat: number; earlier: number }[];
+  ).rows as { month: string; all_n: number; n: number; repeat: number; earlier: number }[];
 
   const [lagRow] = (
     await db.execute(sql`
@@ -352,20 +367,26 @@ export async function projectFunnel(projectId: string, months = 6): Promise<Funn
         spend: a ? Number(a.spend) : null,
         cabinetLeads: a ? Number(a.leads) : null,
         leads: Number(l?.leads ?? 0),
-        google: Number(l?.google ?? 0),
+        adsLeads: Number(l?.adsLeads ?? 0),
         noAnswer: Number(l?.noAnswer ?? 0),
         junk: Number(l?.junk ?? 0),
         clients: Number(c?.n ?? 0),
         clientsRepeat: Number(c?.repeat ?? 0),
         clientsFromEarlier: Number(c?.earlier ?? 0),
+        clientsAll: Number(c?.all_n ?? 0),
         salesCount: Number(s?.count ?? p?.n ?? 0),
-        revenue: Number(s?.amount ?? p?.amount ?? 0),
+        revenueAds: Number(p?.ads ?? 0),
+        revenue: Number(ss.length ? (s?.amount ?? 0) : (p?.amount ?? 0)),
       };
     }),
   };
 }
 
-/** Real totals for a period, used instead of the ad cabinet's counts when the project has a lead source. */
+/**
+ * Real totals for a period, used instead of the ad cabinet's counts when the project has a lead source.
+ * Only ad leads count (SEO and direct leads are not the ads' result): leads, the ad clients who paid in the
+ * period, and their money from the per-lead payments. A source that never marks the channel counts in full.
+ */
 export async function realTotals(projectIds: string[], periods: Map<string, { start: string; end: string }>) {
   if (projectIds.length === 0) return new Map<string, { leads?: number; sales?: number; revenue?: number }>();
   const db = getDb();
@@ -373,24 +394,34 @@ export async function realTotals(projectIds: string[], periods: Map<string, { st
   await Promise.all(
     projectIds.map(async (id) => {
       const p = periods.get(id);
-      if (!p) return;
-      const [[l], [s]] = await Promise.all([
-        db
-          .select({ n: sql<number>`count(*) filter (where ${leads.outcome} <> 'junk')`, any: sql<number>`count(*)` })
-          .from(leads)
-          .where(and(eq(leads.projectId, id), sql`(${leads.leadAt} at time zone 'UTC')::date between ${p.start}::date and ${p.end}::date`)),
-        db
-          .select({ n: sql<number | null>`sum(${salesRecords.count})`, amount: sql<number | null>`sum(${salesRecords.amount})` })
-          .from(salesRecords)
-          .where(and(eq(salesRecords.projectId, id), gte(salesRecords.date, p.start), lte(salesRecords.date, p.end))),
-      ]);
-      const entry: { leads?: number; sales?: number; revenue?: number } = {};
-      if (await hasLeadSource(id)) entry.leads = Number(l?.n ?? 0);
-      if (s?.amount !== null && s?.amount !== undefined) {
-        entry.sales = Number(s.n ?? 0);
-        entry.revenue = Number(s.amount);
-      }
-      if (Object.keys(entry).length) out.set(id, entry);
+      if (!p || !(await hasLeadSource(id))) return;
+      const [row] = (
+        await db.execute(sql`
+          with l as (
+            select ${leads.id} as id, ${leads.leadAt} as lead_at, ${leads.outcome} as outcome, ${leads.raw} as raw, ${leads.utm} as utm,
+                   case when bool_or(${FROM_ADS}) over () then ${FROM_ADS} else true end as counted
+            from ${leads} where ${leads.projectId} = ${id}
+          ),
+          pay as (
+            select l.id, coalesce(nullif(x->>'date', ''), to_char(l.lead_at, 'YYYY-MM-DD'))::date as day, (x->>'amount')::float8 as amount
+            from l, jsonb_array_elements(coalesce(l.raw->'payments', '[]'::jsonb)) x
+            where l.counted and l.outcome = 'won'
+          )
+          select
+            (select count(*) from l where counted and outcome <> 'junk'
+               and (lead_at at time zone 'UTC')::date between ${p.start}::date and ${p.end}::date) as leads,
+            (select count(distinct id) from pay where day between ${p.start}::date and ${p.end}::date) as sales,
+            (select sum(amount) from pay where day between ${p.start}::date and ${p.end}::date) as revenue,
+            (select count(*) from l where counted and outcome = 'won'
+               and coalesce(nullif(utm->>'paid_at', ''), to_char(lead_at, 'YYYY-MM-DD'))::date between ${p.start}::date and ${p.end}::date
+               and jsonb_array_length(coalesce(raw->'payments', '[]'::jsonb)) = 0) as won_unpaid`)
+      ).rows as { leads: number; sales: number; revenue: number | null; won_unpaid: number }[];
+      out.set(id, {
+        leads: Number(row?.leads ?? 0),
+        // Won leads without a filled payment still count as a sale in their month; money only when it is written down.
+        sales: Number(row?.sales ?? 0) + Number(row?.won_unpaid ?? 0),
+        revenue: Number(row?.revenue ?? 0),
+      });
     }),
   );
   return out;

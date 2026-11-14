@@ -143,9 +143,11 @@ export function parseLeadRows(tab: string, values: string[][]): ParsedTab {
         tab,
       }).filter(([, v]) => v),
     );
-    const fromGoogle = Boolean(utm.gclid || utm.gbraid || utm.wbraid || /google/i.test(utm.utm_source ?? ""));
-    if (fromGoogle) utm.ad = "google";
-    else if (/facebook|instagram|meta|\bfb\b|\big\b/i.test(utm.utm_source ?? "")) utm.ad = "meta";
+    // From ads = a click id or a paid UTM medium. Nothing of the kind (SEO, direct, messengers, referrals) — not ads.
+    const paidMedium = /^(cpc|ppc|paid|cpm|cpa|paid[_-]?social|display|ads?)$/i.test(utm.utm_medium ?? "");
+    const isMeta = /facebook|instagram|meta|\bfb\b|\big\b/i.test(utm.utm_source ?? "");
+    if (utm.gclid || utm.gbraid || utm.wbraid || (paidMedium && !isMeta)) utm.ad = "google";
+    else if (utm.fbclid || (paidMedium && isMeta)) utm.ad = "meta";
     leads.push({
       externalId: "",
       leadAt,

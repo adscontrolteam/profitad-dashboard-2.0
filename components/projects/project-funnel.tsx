@@ -20,50 +20,60 @@ export async function ProjectFunnel({ projectId, currency }: { projectId: string
       : new Intl.NumberFormat(APP_CONFIG.locale, { style: "currency", currency: cur, maximumFractionDigits: digits }).format(v);
   const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "—");
   const div = (a: number | null, b: number) => (a !== null && b > 0 ? a / b : null);
-  const rows = funnel.months.filter((m) => m.leads || m.spend || m.revenue || m.junk);
+  const rows = funnel.months.filter((m) => m.leads || m.spend || m.revenue || m.junk || m.clientsAll);
 
   const sum = (k: keyof FunnelMonth) => rows.reduce((a, m) => a + Number(m[k] ?? 0), 0);
   const total = {
     spend: sum("spend"),
     cabinet: sum("cabinetLeads"),
     leads: sum("leads"),
-    google: sum("google"),
+    adsLeads: sum("adsLeads"),
     noAnswer: sum("noAnswer"),
     clients: sum("clients"),
+    clientsAll: sum("clientsAll"),
     clientsRepeat: sum("clientsRepeat"),
     clientsFromEarlier: sum("clientsFromEarlier"),
+    revenueAds: sum("revenueAds"),
     revenue: sum("revenue"),
   };
   // Cabinet numbers exist only for months with synced ad data; compare like with like.
   const adMonths = rows.filter((m) => m.spend !== null);
-  const leadsInAdMonths = adMonths.reduce((a, m) => a + m.leads, 0);
-  const revenueInAdMonths = adMonths.reduce((a, m) => a + m.revenue, 0);
+  const adLeadsInAdMonths = adMonths.reduce((a, m) => a + m.adsLeads, 0);
+  const newAdClients = adMonths.reduce((a, m) => a + m.clients - m.clientsRepeat, 0);
+  const notAds = (all: number, ads: number) => Math.max(all - ads, 0);
 
   return (
     <Card className="min-w-0">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="section-title">Реальные результаты</h2>
-        <p className="text-xs text-muted-foreground">Лиды и продажи из таблицы клиента, расход — из рекламных кабинетов. Последние 6 месяцев.</p>
+        <p className="text-xs text-muted-foreground">
+          Считаем только лиды с рекламы (gclid / платная метка). Лиды и продажи — из таблицы клиента, расход — из кабинетов. Последние 6 месяцев.
+        </p>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <StatTile label="Реальных лидов">
-          {total.leads}
-          {adMonths.length > 0 && <span className="ml-1.5 text-xs font-normal text-muted-foreground">кабинет видит {total.cabinet} из {leadsInAdMonths}</span>}
+        <StatTile label="Лиды с рекламы">
+          {total.adsLeads}
+          {adMonths.length > 0 && <span className="ml-1.5 text-xs font-normal text-muted-foreground">кабинет видит {total.cabinet} из {adLeadsInAdMonths}</span>}
+          <Parallel all={total.leads} other={notAds(total.leads, total.adsLeads)} />
         </StatTile>
-        <StatTile label="С меткой Google (gclid/UTM)">
-          {total.google} <span className="text-xs font-normal text-muted-foreground">{pct(total.google, total.leads)}</span>
+        <StatTile label="Не ответили (с рекламы)">
+          <span className={total.noAnswer / Math.max(total.adsLeads, 1) >= 0.2 ? "text-warning" : undefined}>{total.noAnswer}</span>{" "}
+          <span className="text-xs font-normal text-muted-foreground">{pct(total.noAnswer, total.adsLeads)} лидов</span>
         </StatTile>
-        <StatTile label="Не ответили">
-          <span className={total.noAnswer / Math.max(total.leads, 1) >= 0.2 ? "text-warning" : undefined}>{total.noAnswer}</span>{" "}
-          <span className="text-xs font-normal text-muted-foreground">{pct(total.noAnswer, total.leads)} лидов</span>
-        </StatTile>
-        <StatTile label="Клиенты">
+        <StatTile label="Клиенты с рекламы">
           {total.clients}
           <ClientNotes repeat={total.clientsRepeat} earlier={total.clientsFromEarlier} />
+          <Parallel all={total.clientsAll} other={notAds(total.clientsAll, total.clients)} />
         </StatTile>
-        <StatTile label="Выручка клиента">{funnel.hasSales ? money(total.revenue) : "—"}</StatTile>
-        <StatTile label="ROAS (месяцы с расходом)">{adMonths.length && funnel.hasSales && total.spend ? `${Math.round((revenueInAdMonths / total.spend) * 100)}%` : "—"}</StatTile>
+        <StatTile label="Выручка с рекламы">
+          {money(total.revenueAds)}
+          {funnel.hasSales && <Parallel all={total.revenue} other={notAds(total.revenue, total.revenueAds)} format={money} />}
+        </StatTile>
+        <StatTile label="Цена лида с рекламы">{money(div(adMonths.length ? total.spend : null, adLeadsInAdMonths), 2)}</StatTile>
+        <StatTile label="ROAS рекламы">{adMonths.length && total.spend ? `${Math.round((total.revenueAds / total.spend) * 100)}%` : "—"}
+          {newAdClients > 0 && <span className="block text-[11px] font-normal leading-4 text-muted-foreground/70">клиент с рекламы — {money(total.spend / newAdClients)}</span>}
+        </StatTile>
       </div>
 
       <PaymentLagLine lag={funnel.lag} />
@@ -75,30 +85,35 @@ export async function ProjectFunnel({ projectId, currency }: { projectId: string
               <th className="py-2 pr-3 font-medium">Месяц</th>
               <th className="py-2 pr-3 text-right font-medium">Расход</th>
               <th className="py-2 pr-3 text-right font-medium">Лиды в кабинете</th>
-              <th className="py-2 pr-3 text-right font-medium">Реальные лиды</th>
-              <th className="py-2 pr-3 text-right font-medium">С меткой Google</th>
+              <th className="py-2 pr-3 text-right font-medium">Лиды с рекламы</th>
               <th className="py-2 pr-3 text-right font-medium">Не ответили</th>
-              <th className="py-2 pr-3 text-right font-medium">Клиенты</th>
-              <th className="py-2 pr-3 text-right font-medium">Выручка</th>
+              <th className="py-2 pr-3 text-right font-medium">Клиенты с рекламы</th>
+              <th className="py-2 pr-3 text-right font-medium">Выручка с рекламы</th>
               <th className="py-2 pr-3 text-right font-medium">Цена лида</th>
               <th className="py-2 text-right font-medium">Цена нового клиента</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {rows.map((m) => (
-              <tr key={m.month}>
+              <tr key={m.month} className="align-top">
                 <td className="py-2 pr-3 font-medium">{monthLabel(m.month)}</td>
                 <td className="py-2 pr-3 text-right">{money(m.spend)}</td>
                 <td className="py-2 pr-3 text-right text-muted-foreground">{m.cabinetLeads ?? "—"}</td>
-                <td className="py-2 pr-3 text-right font-semibold">{m.leads}</td>
-                <td className="py-2 pr-3 text-right">{m.google || "—"}</td>
-                <td className="py-2 pr-3 text-right">{m.noAnswer ? `${m.noAnswer} · ${pct(m.noAnswer, m.leads)}` : "—"}</td>
-                <td className="py-2 pr-3 text-right align-top">
+                <td className="py-2 pr-3 text-right">
+                  <span className="font-semibold">{m.adsLeads || "—"}</span>
+                  <Parallel all={m.leads} other={notAds(m.leads, m.adsLeads)} short />
+                </td>
+                <td className="py-2 pr-3 text-right">{m.noAnswer ? `${m.noAnswer} · ${pct(m.noAnswer, m.adsLeads)}` : "—"}</td>
+                <td className="py-2 pr-3 text-right">
                   {m.clients || "—"}
                   <ClientNotes repeat={m.clientsRepeat} earlier={m.clientsFromEarlier} short />
+                  <Parallel all={m.clientsAll} other={notAds(m.clientsAll, m.clients)} short />
                 </td>
-                <td className="py-2 pr-3 text-right">{m.revenue ? money(m.revenue) : "—"}</td>
-                <td className="py-2 pr-3 text-right">{money(div(m.spend, m.leads), 2)}</td>
+                <td className="py-2 pr-3 text-right">
+                  {m.revenueAds ? money(m.revenueAds) : "—"}
+                  {funnel.hasSales && <Parallel all={m.revenue} other={notAds(m.revenue, m.revenueAds)} format={money} short />}
+                </td>
+                <td className="py-2 pr-3 text-right">{money(div(m.spend, m.adsLeads), 2)}</td>
                 <td className="py-2 text-right">{money(div(m.spend, m.clients - m.clientsRepeat), 2)}</td>
               </tr>
             ))}
@@ -106,12 +121,22 @@ export async function ProjectFunnel({ projectId, currency }: { projectId: string
         </table>
       </div>
       <p className="mt-3 text-xs leading-5 text-muted-foreground">
-        «Реальные лиды» — без спама и тестов, один человек в один день считается один раз. «Клиенты» — все, кто платил в этом месяце
-        (если дата оплаты не заполнена — в месяце заявки); пометки: «повторные» — уже платили раньше, «лид ранее» — первая оплата, но заявка была в прошлом месяце.
-        Цена нового клиента — без повторных. «Выручка» — по дате каждой оплаты{funnel.hasSales ? "" : " (появится, когда в таблице будет лист продаж или колонки «Дата оплаты» и «Сумма»)"}. Цена лида и
-        клиента считаются от всего расхода, включая лиды без метки.
+        «С рекламы» — у лида есть gclid / gbraid / wbraid или платная UTM-метка; без метки (SEO, прямые заходы, мессенджеры) — «не с рекламы», они
+        показаны отдельно серым и в цену лида, клиента и ROAS не входят. Спам и тесты не считаются, один человек в один день — один лид. «Клиенты» — все,
+        кто платил в этом месяце (если дата оплаты не заполнена — в месяце заявки); «повт.» — уже платили раньше, «лид ранее» — первая оплата, а заявка
+        была в прошлом месяце. «Выручка с рекламы» — по «Дата оплати / Сума EUR» у лидов с рекламы; «всего» — {funnel.hasSales ? "лист продаж клиента" : "появится с листом продаж или оплатами в таблице"}.
       </p>
     </Card>
+  );
+}
+
+/** «всего 28 · не с рекламы 21» — the whole picture next to the ad-only number, quiet. */
+function Parallel({ all, other, format = String, short = false }: { all: number; other: number; format?: (v: number) => string; short?: boolean }) {
+  if (!all) return null;
+  return (
+    <span className="block text-[11px] font-normal leading-4 text-muted-foreground/70">
+      всего {format(all)} · не с {short ? "рекл." : "рекламы"} {format(other)}
+    </span>
   );
 }
 
