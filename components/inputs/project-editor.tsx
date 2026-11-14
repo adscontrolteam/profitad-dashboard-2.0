@@ -45,6 +45,13 @@ interface KpiDraft {
   cpaSuper: string;
 }
 
+const CURRENCIES = [
+  { code: "EUR", label: "Евро, €" },
+  { code: "USD", label: "Доллар, $" },
+  { code: "PLN", label: "Злотый, zł" },
+  { code: "UAH", label: "Гривна, ₴" },
+];
+
 const LEVEL_HINT: Record<string, string> = { base: "Минимум по KPI, 100%", plus: "Перевыполнение плана", super: "Супер-перевыполнение" };
 const EMPTY_LEVELS = { planPlus: "", cpaPlus: "", planSuper: "", cpaSuper: "" };
 
@@ -287,6 +294,16 @@ export function ProjectEditor({
               <Field label="Рекламный бюджет на месяц">
                 <input className="field tabular-nums" inputMode="decimal" placeholder="—" value={budgetMonth} onChange={(e) => setBudgetMonth(e.target.value)} />
               </Field>
+              <Field label="Валюта (как в кабинете)">
+                <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="field">
+                  {!currency && <option value="">Выберите</option>}
+                  {[...CURRENCIES, ...(currency && !CURRENCIES.some((c) => c.code === currency) ? [{ code: currency, label: currency }] : [])].map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </div>
             {kpis.map((kpi, i) => (
               <div key={i} className="flex flex-col gap-2 rounded-2xl border border-border p-3">
@@ -351,7 +368,8 @@ export function ProjectEditor({
               </button>
             )}
             {plans.length > 0 && (
-              <div className="mt-1 flex flex-wrap gap-1.5">
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span className="mr-1 text-xs text-muted-foreground">Сохранённые планы:</span>
                 {[...plans].reverse().map((p) => (
                   <button
                     key={p.month}
@@ -622,11 +640,6 @@ function AgentSettings({
           </div>
         )}
       </Field>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Валюта кабинета">
-          <input className="field uppercase" maxLength={3} placeholder="EUR" value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} />
-        </Field>
-      </div>
       <label className="flex cursor-pointer items-center gap-3 text-sm">
         <input type="checkbox" checked={dailyReport} onChange={(e) => setDailyReport(e.target.checked)} className="size-4 accent-[var(--accent)]" />
         Утренний отчёт агента в Telegram
