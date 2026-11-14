@@ -12,3 +12,11 @@ export function termsSummary(t: Terms | null) {
 
 export const KPI_LABEL: Record<KpiState, string> = { met: "KPI выполнен", missed: "KPI не выполнен", unknown: "нет данных KPI" };
 export const KPI_TONE: Record<KpiState, "good" | "bad" | "info"> = { met: "good", missed: "bad", unknown: "info" };
+
+export const STAFF_ROLES = [
+  { value: "media_buyer", label: "MediaBuyer" },
+  { value: "smm", label: "SMM" },
+  { value: "sales", label: "Sales" },
+  { value: "other", label: "Другое" },
+];
+export const roleLabel = (r: string) => STAFF_ROLES.find((x) => x.value === r)?.label ?? r;

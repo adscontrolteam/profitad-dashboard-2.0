@@ -343,6 +343,8 @@ export const projectLog = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
     /** dashboard | agent */
     source: text("source").notNull().default("dashboard"),
+    /** ads | smm | project — which log shows it: «Реклама», «SMM»; the project page shows all of them. */
+    area: text("area").$type<"ads" | "smm" | "project">().notNull().default("project"),
     /** proposal | analysis | error | warning | info */
     kind: text("kind").notNull().default("info"),
     title: text("title").notNull(),

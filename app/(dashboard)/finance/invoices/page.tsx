@@ -30,10 +30,10 @@ export default async function FinanceInvoicesPage() {
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-2 gap-3 lg:gap-5 xl:grid-cols-4">
         <KpiTile label="Получено в этом месяце" value={money(sum(paidThisMonth))}>
-          <span>{paidThisMonth.length} оплат</span>
+          <span>оплат: {paidThisMonth.length}</span>
         </KpiTile>
         <KpiTile label="Ожидаем оплату" value={money(sum(issued))}>
-          <span>{issued.length} счетов</span>
+          <span>счетов: {issued.length}</span>
         </KpiTile>
         <KpiTile label="Без оплаты > 7 дней" value={money(sum(old))} tone={old.length ? "negative" : undefined}>
           <span>{old.length ? old.map((i) => names.get(i.projectId ?? "") ?? "—").join(", ") : "всё в порядке"}</span>

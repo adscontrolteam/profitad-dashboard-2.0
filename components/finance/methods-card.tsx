@@ -28,7 +28,7 @@ export function MethodsList({ methods }: { methods: PaymentMethod[] }) {
                 <span className="ml-auto text-xs text-muted-foreground">{m.currency}</span>
               </span>
               <span className="truncate text-xs text-muted-foreground">
-                {rows.length ? rows.map((r) => r.value).slice(0, 2).join(" · ") : "Ссылка вставляется в каждом счёте"}
+                {rows.length ? rows.filter((r) => r.label !== "Валюта").map((r) => r.value).slice(0, 2).join(" · ") : "Ссылка вставляется в каждом счёте"}
               </span>
             </button>
           );

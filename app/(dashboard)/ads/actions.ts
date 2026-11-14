@@ -103,12 +103,3 @@ export async function launchGoogleSearchAction(
   }
 }
 
-/** Closes a log entry that waited for a person, with an optional comment. */
-export async function resolveLogAction(projectId: string, id: string, note: string): Promise<{ ok: boolean; message: string }> {
-  const { requireSection } = await import("@/lib/access/viewer");
-  const viewer = await requireSection("ads");
-  if (!canViewProject(viewer.permissions, projectId)) return { ok: false, message: "Нет доступа к проекту." };
-  const { resolveLog } = await import("@/lib/log/store");
-  const ok = await resolveLog(projectId, id, viewer.email, String(note ?? "").trim());
-  return ok ? { ok: true, message: "Отмечено как решённое." } : { ok: false, message: "Запись уже закрыта." };
-}

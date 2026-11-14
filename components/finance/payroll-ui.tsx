@@ -3,6 +3,7 @@
 import { useActionState, useState, useTransition } from "react";
 import { markPayoutAction, saveStaffAction, unmarkPayoutAction, type FinState } from "@/app/(dashboard)/finance/actions";
 import { CURRENCIES } from "@/lib/finance/currency";
+import { STAFF_ROLES as ROLES } from "@/lib/finance/labels";
 import type { Staff } from "@/lib/finance/store";
 import { Drawer, Field, FormError } from "./drawer";
 
@@ -19,13 +20,6 @@ export function PayoutButton({ email, month, amount, breakdown, paid }: { email:
   );
 }
 
-const ROLES = [
-  { value: "media_buyer", label: "MediaBuyer" },
-  { value: "smm", label: "SMM" },
-  { value: "sales", label: "Sales" },
-  { value: "other", label: "Другое" },
-];
-export const roleLabel = (r: string) => ROLES.find((x) => x.value === r)?.label ?? r;
 
 const IDLE: FinState = { ok: false, message: null };
 

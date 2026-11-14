@@ -62,8 +62,8 @@ export function InvoiceDocument({ doc }: { doc: InvoiceDocData }) {
             <tr className="bg-[#e8e8e8] font-bold">
               <td className={`${cell} w-[7%] text-center`}>№</td>
               <td className={cell}>Найменування</td>
-              <td className={`${cell} w-[15%]`}>Кількість</td>
-              <td className={`${cell} w-[16%]`}>Сума, {word}</td>
+              <td className={`${cell} w-[14%]`}>Кількість</td>
+              <td className={`${cell} w-[19%] whitespace-nowrap`}>Сума, {word}</td>
             </tr>
           </thead>
           <tbody>

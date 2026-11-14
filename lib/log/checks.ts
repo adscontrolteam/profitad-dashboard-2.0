@@ -13,6 +13,9 @@ const KIND_LABEL: Record<string, string> = {
   meta_ads: "Meta Ads",
   drive: "папка Drive",
 };
+/** Which log shows a sync problem: ad stats and leads → «Реклама», the rest → the project. */
+const AREA_OF_KIND: Record<string, "ads" | "smm" | "project"> = { meta_ads: "ads", sheets_leads: "ads", crm: "ads" };
+
 const MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 const monthName = (m: string) => `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
 
@@ -24,7 +27,7 @@ export async function logSyncResults(results: { projectId: string; kind: string;
       r.projectId,
       `sync:${r.kind}`,
       !r.ok,
-      { kind: "error", title: `Не обновилась ${what}`, body: r.message, link: "/inputs" },
+      { kind: "error", title: `Не обновилась ${what}`, body: r.message, link: "/inputs", area: AREA_OF_KIND[r.kind] ?? "project" },
       "Синхронизация снова прошла",
     ).catch(() => undefined);
   }
@@ -56,6 +59,7 @@ export async function runProjectChecks() {
           title: `План на ${monthName(month)} не задан`,
           body: prev?.month ? `Пока действует план за ${monthName(prev.month)}. Задайте бюджет и цели Б / Б+ / С во «Вводных».` : "Задайте бюджет и цели Б / Б+ / С во «Вводных».",
           link: "/inputs",
+          area: "project",
         },
         "План на месяц задан",
       );
@@ -88,6 +92,7 @@ export async function runProjectChecks() {
           title: `Кабинет видит ${Math.round(cabinet)} заявок из ${sheet} за 3 дня`,
           body: "По таблице клиента лидов с рекламы заметно больше, чем конверсий в кабинете. Проверьте, какие конверсии отмечены «заявкой» и срабатывают ли они на сайте — от этого зависит, на чём учится автостратегия.",
           link: "/inputs",
+          area: "ads",
         },
         "Кабинет снова видит почти все заявки",
       );
@@ -108,6 +113,8 @@ export async function runProjectChecks() {
           kind: "warning",
           title: `${n} ${n === 1 ? "лид" : n < 5 ? "лида" : "лидов"} с рекламы без статуса дольше 2 дней`,
           body: "В таблице клиента у них всё ещё «Новий». Либо менеджер не связался, либо не обновил статус — без этого не видно, какая реклама приводит клиентов.",
+          link: "/ads/leads",
+          area: "ads",
         },
         "Статусы проставлены",
       );

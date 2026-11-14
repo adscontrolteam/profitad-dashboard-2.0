@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { roleLabel, PayoutButton, StaffButton } from "@/components/finance/payroll-ui";
+import { PayoutButton, StaffButton } from "@/components/finance/payroll-ui";
 import { CardHead, dateLabel, Empty, KpiTile, monthLabel, monthShort, Pill, Table } from "@/components/finance/ui";
 import { Card } from "@/components/ui/card";
 import { requireSection } from "@/lib/access/viewer";
 import { money } from "@/lib/finance/fx";
-import { KPI_LABEL, KPI_TONE } from "@/lib/finance/labels";
+import { KPI_LABEL, KPI_TONE, roleLabel } from "@/lib/finance/labels";
 import { buildFinanceReport } from "@/lib/finance/report";
 import { BUYER_RATE_ONE_SOURCE } from "@/lib/finance/rules";
 
@@ -146,7 +146,7 @@ export default async function FinancePayrollPage() {
               <tr key={p.email}>
                 <td>
                   <b>{p.name}</b>
-                  <span className="block text-xs text-muted-foreground">{p.staff ? `с ${monthLabel(p.staff.sinceMonth)}` : "не добавлен в команду"}</span>
+                  <span className="block text-xs text-muted-foreground">{p.staff ? `зарплата с ${p.staff.sinceMonth.split("-").reverse().join(".")}` : "не добавлен в команду"}</span>
                 </td>
                 <td className="text-muted-foreground">{roleLabel(p.role)}</td>
                 {last.map((m) => {

@@ -23,6 +23,7 @@ export interface NavItem {
 
 export const ADS_TABS: SubNavItem[] = [
   { label: "Аналитика", href: "/ads" },
+  { label: "Лиды", href: "/ads/leads" },
   { label: "Сборка кампаний", href: "/ads/campaigns", capability: "canManageAds" },
   { label: "Креативы", href: "/ads/creatives", capability: "canManageAds" },
 ];

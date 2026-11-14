@@ -6,6 +6,12 @@ import { PrintBar } from "@/components/finance/print-bar";
 import { requireSection } from "@/lib/access/viewer";
 import { getInvoice } from "@/lib/finance/store";
 
+const TRANSLIT: Record<string, string> = Object.fromEntries(
+  "а:a б:b в:v г:h ґ:g д:d е:e є:ie ж:zh з:z и:y і:i ї:i й:i к:k л:l м:m н:n о:o п:p р:r с:s т:t у:u ф:f х:kh ц:ts ч:ch ш:sh щ:shch ь: ю:iu я:ia ы:y э:e ё:e ъ:"
+    .split(" ")
+    .map((p) => p.split(":") as [string, string]),
+);
+
 export const metadata: Metadata = { title: "Рахунок-фактура" };
 
 /** Bare A4 page of an invoice for «Save as PDF» (outside the dashboard shell). */
@@ -25,7 +31,11 @@ async function InvoicePrint({ params }: { params: Promise<{ id: string }> }) {
   const slug = (invoice.recipient?.details.recipient ?? invoice.recipient?.label ?? "")
     .replace(/^ФОП\s+/i, "")
     .split(/\s+/)[0]
-    ?.toLowerCase();
+    ?.toLowerCase()
+    .split("")
+    .map((c) => TRANSLIT[c] ?? c)
+    .join("")
+    .replace(/[^a-z0-9]/g, "");
   const fileName = ["rahunok_faktura", slug, Math.round(invoice.total), invoice.currency.toLowerCase(), invoice.issueDate].filter(Boolean).join("_");
 
   return (

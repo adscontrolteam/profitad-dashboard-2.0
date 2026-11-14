@@ -14,8 +14,8 @@ const OUTCOME: Record<string, { label: string; className: string }> = {
 const SOURCE: Record<string, string> = { webhook: "вебхук", kommo: "Kommo", bitrix24: "Bitrix24", sheet: "таблица" };
 
 /** Latest leads from the project's CRM / lead sheet. Renders nothing when no lead source is connected. */
-export async function ProjectLeads({ projectId }: { projectId: string }) {
-  const leads = await recentLeads(projectId, 30);
+export async function ProjectLeads({ projectId, limit = 30 }: { projectId: string; limit?: number }) {
+  const leads = await recentLeads(projectId, limit);
   if (leads.length === 0) return null;
 
   const counts = leads.reduce<Record<string, number>>((acc, l) => ((acc[l.outcome] = (acc[l.outcome] ?? 0) + 1), acc), {});

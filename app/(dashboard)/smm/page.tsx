@@ -6,6 +6,9 @@ import { AreaChart, BarChart, formatCompact, formatShortDate, KpiTile } from "@/
 import { WorkspaceHeader } from "@/components/workspace/header";
 import { DemoNotice, EmptyProjects, PillTabs } from "@/components/workspace/toolbar";
 import { requireSection } from "@/lib/access/viewer";
+import { ProjectLog } from "@/components/log/project-log";
+import { listLog } from "@/lib/log/store";
+import { toLogItems } from "@/lib/log/view";
 import { formatNumber } from "@/lib/format";
 import { resolveWorkspace } from "@/lib/workspace/context";
 import { demoConnectedNetworks, demoSmmReport } from "@/lib/workspace/demo";
@@ -61,6 +64,12 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
       />
 
       <DemoNotice />
+
+      <ProjectLog
+        projectId={ws.project.id}
+        items={toLogItems(await listLog(ws.project.id, "smm"))}
+        description="SMM: предложения агента по контенту, ошибки публикаций и соцсетей."
+      />
 
       {!report.connected ? (
         <Card className="flex flex-col items-start gap-3">

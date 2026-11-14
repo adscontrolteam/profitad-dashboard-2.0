@@ -3,7 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MetricsGrid } from "@/components/projects/metrics-grid";
 import { ProjectFunnel } from "@/components/projects/project-funnel";
-import { ProjectLeads } from "@/components/projects/project-leads";
+import { ProjectLog } from "@/components/log/project-log";
+import { listLog } from "@/lib/log/store";
+import { toLogItems } from "@/lib/log/view";
 import { ProjectPeriodControl } from "@/components/projects/project-period-control";
 import { currentMonth, monthEnd, monthOf, monthsBetween, planFor } from "@/lib/projects/plans";
 import { parseProjectPeriod } from "@/lib/projects/range";
@@ -89,6 +91,13 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         </span>
       </div>
 
+      <ProjectLog
+        projectId={project.id}
+        items={toLogItems(await listLog(project.id))}
+        description="Общий лог проекта: реклама, SMM, план и доступы."
+        showArea
+      />
+
       {project.goal && (
         <Card className="py-4 sm:py-4 lg:py-4">
           <p className="section-kicker">Основная цель</p>
@@ -119,7 +128,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         leadPlans={leadPlans}
       />
 
-      <ProjectLeads projectId={project.id} />
+
     </div>
   );
 }

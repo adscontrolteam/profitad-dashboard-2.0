@@ -55,7 +55,7 @@ export async function notifyLogs(now = new Date()) {
         p.chat,
         p.thread ?? null,
         `📋 ${p.name}${waiting ? ` · ждут вашего решения: ${waiting}` : ""}`,
-        { text: "Посмотреть Лог", url: `${appUrl()}/ads?p=${encodeURIComponent(p.id)}#log` },
+        { text: "Посмотреть Лог", url: `${appUrl()}/projects/${encodeURIComponent(p.id)}#log` },
       );
       await db.update(projects).set({ logNotifiedAt: now }).where(eq(projects.id, p.id));
       out.push({ projectId: p.id, kind: "telegram_log", ok: true, message: `отправлено (ждут: ${waiting}, новых: ${fresh})` });

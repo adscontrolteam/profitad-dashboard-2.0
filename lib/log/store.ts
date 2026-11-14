@@ -5,12 +5,14 @@ import { projectLog, type ProjectLogRow } from "@/db/schema";
 
 export type LogStatus = ProjectLogRow["status"];
 export type LogKind = "proposal" | "analysis" | "error" | "warning" | "info";
+export type LogArea = "ads" | "smm" | "project";
 
 export interface LogEntry {
   title: string;
   body?: string;
   kind: LogKind;
   link?: string | null;
+  area?: LogArea;
 }
 
 export async function addLog(projectId: string, entry: LogEntry & { status: LogStatus; source?: "dashboard" | "agent"; topic?: string | null }) {
@@ -20,6 +22,7 @@ export async function addLog(projectId: string, entry: LogEntry & { status: LogS
       id: crypto.randomUUID(),
       projectId,
       source: entry.source ?? "dashboard",
+      area: entry.area ?? "project",
       kind: entry.kind,
       title: entry.title.slice(0, 300),
       body: (entry.body ?? "").slice(0, 4000),
@@ -46,7 +49,7 @@ export async function condition(projectId: string, topic: string, active: boolea
     if (open.title !== entry.title || open.body !== (entry.body ?? "")) {
       await db
         .update(projectLog)
-        .set({ title: entry.title.slice(0, 300), body: (entry.body ?? "").slice(0, 4000), link: entry.link ?? open.link, updatedAt: new Date() })
+        .set({ title: entry.title.slice(0, 300), body: (entry.body ?? "").slice(0, 4000), link: entry.link ?? open.link, area: entry.area ?? open.area, updatedAt: new Date() })
         .where(eq(projectLog.id, open.id));
     }
     return;
@@ -59,8 +62,9 @@ export async function condition(projectId: string, topic: string, active: boolea
   }
 }
 
-export async function listLog(projectId: string, status: LogStatus | "all" = "all", limit = 100) {
-  const where = status === "all" ? eq(projectLog.projectId, projectId) : and(eq(projectLog.projectId, projectId), eq(projectLog.status, status));
+/** `area` = only that log (Реклама / SMM); without it — everything, for the project page. */
+export async function listLog(projectId: string, area?: LogArea, limit = 100) {
+  const where = area ? and(eq(projectLog.projectId, projectId), eq(projectLog.area, area)) : eq(projectLog.projectId, projectId);
   return getDb().select().from(projectLog).where(where).orderBy(desc(projectLog.updatedAt)).limit(limit);
 }
 

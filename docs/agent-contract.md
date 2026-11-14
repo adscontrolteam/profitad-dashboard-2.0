@@ -119,20 +119,21 @@ WHERE project_id = $1 AND day BETWEEN $2 AND $3;
 
 ## Лог проекта (с 14.11.2026)
 
-Владелец смотрит всё, что агент предложил, проанализировал, сделал сам или не смог, в блоке «Лог» на странице
-«Реклама → Аналитика» проекта. Telegram для этого больше не нужен: раз в 3 дня дашборд сам шлёт в чат проекта
+Владелец смотрит всё, что агент предложил, проанализировал, сделал сам или не смог, в блоке «Лог»: у рекламы свой
+(«Реклама → Аналитика»), у SMM свой («SMM»), на странице проекта — общий. Telegram для этого больше не нужен: раз в 3 дня дашборд сам шлёт в чат проекта
 одно сообщение с кнопкой «Посмотреть Лог», если там есть новое.
 
 Агент пишет в таблицу `project_log` (права: `GRANT SELECT, INSERT, UPDATE ON project_log TO bot_sync;`):
 
 ```sql
-INSERT INTO project_log (id, project_id, source, kind, title, body, status, topic, link)
-VALUES (gen_random_uuid()::text, $project_id, 'agent', $kind, $title, $body, $status, $topic, $link);
+INSERT INTO project_log (id, project_id, source, area, kind, title, body, status, topic, link)
+VALUES (gen_random_uuid()::text, $project_id, 'agent', $area, $kind, $title, $body, $status, $topic, $link);
 ```
 
 | Поле | Значение |
 |---|---|
 | `project_id` | `clients.dashboard_project_id` |
+| `area` | `ads` — реклама (видно в «Реклама → Аналитика»), `smm` — контент и соцсети («SMM»), `project` — всё остальное. Страница проекта показывает все три |
 | `kind` | `proposal` — предложение правки; `analysis` — разбор/вывод; `error` — не смог (API, данные); `warning` — заметил проблему; `info` — сделал сам |
 | `title` | одна строка, до 300 символов: что и в какой кампании |
 | `body` | детали: цифры, почему, что будет; до 4000 символов |

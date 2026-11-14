@@ -94,7 +94,7 @@ export function InvoiceBuilder({
   };
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,480px)_minmax(0,1fr)]">
       <div className="flex flex-col gap-4 rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-5 lg:p-6 xl:sticky xl:top-0 xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Проект">
@@ -151,7 +151,7 @@ export function InvoiceBuilder({
         <div className="flex flex-col gap-2">
           <span className="text-xs font-medium text-muted-foreground">Услуги</span>
           {items.map((it, i) => (
-            <div key={i} className="grid grid-cols-[1fr_56px_110px_auto] items-center gap-2">
+            <div key={i} className="grid grid-cols-[minmax(0,1fr)_48px_112px_32px] items-center gap-2">
               <input className="field" value={it.name} onChange={(e) => setItem(i, { name: e.target.value })} placeholder="Найменування" />
               <input className="field px-2 text-center" inputMode="numeric" value={it.qty} onChange={(e) => setItem(i, { qty: Number(e.target.value) || 1 })} />
               <input

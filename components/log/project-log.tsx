@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore, useTransition } from "react";
-import { resolveLogAction } from "@/app/(dashboard)/ads/actions";
+import { resolveLogAction } from "@/app/(dashboard)/log-actions";
 import { Segmented } from "@/components/workspace/form";
 import { cn } from "@/lib/cn";
 
@@ -15,6 +15,7 @@ export interface LogItem {
   title: string;
   body: string;
   status: "auto" | "needs_you" | "done";
+  area: "ads" | "smm" | "project";
   link: string | null;
   resolvedBy: string | null;
   resolutionNote: string | null;
@@ -43,7 +44,20 @@ const subscribeHash = (cb: () => void) => {
 };
 
 /** Proposals, analysis, errors and warnings of the project — from the dashboard's checks and from the AI agent. */
-export function ProjectLog({ projectId, items }: { projectId: string; items: LogItem[] }) {
+const AREA: Record<LogItem["area"], string> = { ads: "реклама", smm: "SMM", project: "проект" };
+
+export function ProjectLog({
+  projectId,
+  items,
+  description = "Предложения, анализ и ошибки — от агента и от проверок дашборда.",
+  showArea = false,
+}: {
+  projectId: string;
+  items: LogItem[];
+  description?: string;
+  /** On the project page the log mixes Реклама, SMM and project entries: label each. */
+  showArea?: boolean;
+}) {
   const waiting = items.filter((i) => i.status === "needs_you").length;
   const [filter, setFilter] = useState<"needs_you" | "auto" | "all">(waiting ? "needs_you" : "all");
   // Always folded; the «Посмотреть Лог» link from Telegram (#log) opens it.
@@ -77,7 +91,7 @@ export function ProjectLog({ projectId, items }: { projectId: string; items: Log
       {expanded && (
         <div className="mt-4">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-muted-foreground">Предложения, анализ и ошибки — от агента и от проверок дашборда.</p>
+            <p className="text-xs text-muted-foreground">{description}</p>
             <Segmented
               value={filter}
               onChange={setFilter}
@@ -93,7 +107,7 @@ export function ProjectLog({ projectId, items }: { projectId: string; items: Log
           ) : (
             <ul className="flex flex-col divide-y divide-border">
               {shown.map((item) => (
-                <LogRow key={item.id} projectId={projectId} item={item} />
+                <LogRow key={item.id} projectId={projectId} item={item} showArea={showArea} />
               ))}
             </ul>
           )}
@@ -103,7 +117,7 @@ export function ProjectLog({ projectId, items }: { projectId: string; items: Log
   );
 }
 
-function LogRow({ projectId, item }: { projectId: string; item: LogItem }) {
+function LogRow({ projectId, item, showArea }: { projectId: string; item: LogItem; showArea: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
@@ -116,6 +130,7 @@ function LogRow({ projectId, item }: { projectId: string; item: LogItem }) {
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="tabular-nums text-muted-foreground">{when(item.at)}</span>
         <span className={cn("rounded-full px-2 py-0.5 font-medium", kind.className)}>{kind.label}</span>
+        {showArea && <span className="rounded-full border border-border px-2 py-0.5 text-muted-foreground">{AREA[item.area]}</span>}
         <span className="text-muted-foreground">{item.source === "agent" ? "агент" : "дашборд"}</span>
         <span className={cn("ml-auto font-medium", STATUS[item.status].className)}>{STATUS[item.status].label}</span>
       </div>
