@@ -48,14 +48,32 @@ export interface TrafficSource {
   accountId: string;
 }
 
+/** Plan set for one calendar month. */
+export interface MonthPlan {
+  /** YYYY-MM */
+  month: string;
+  kpis: Kpi[];
+  budgetMonth: number | null;
+}
+
 export interface Project {
   id: string;
   name: string;
   status: ProjectStatus;
   goal: string;
+  /** Start of work; results can be viewed for any range from here on. */
+  startDate: IsoDate;
+  /** The range the numbers below are for (a calendar month by default; may end in the future). */
   period: { start: IsoDate; end: IsoDate };
-  /** Results tracked for the project; the first one is the primary KPI. */
+  /**
+   * Results tracked for the project with the plan for `period`: monthly plans summed in proportion to the days
+   * of each month inside the range. The first one is the primary KPI.
+   */
   kpis: Kpi[];
+  /** Every monthly plan saved so far, oldest first. */
+  plans: MonthPlan[];
+  /** The last month of `period` has no plan of its own and runs on the previous month's one. */
+  planCarried: boolean;
   sources: TrafficSource[];
   notes: string;
   owners: ProjectOwners;

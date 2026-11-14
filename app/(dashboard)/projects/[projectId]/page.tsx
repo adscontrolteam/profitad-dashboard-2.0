@@ -4,6 +4,11 @@ import { notFound } from "next/navigation";
 import { MetricsGrid } from "@/components/projects/metrics-grid";
 import { ProjectFunnel } from "@/components/projects/project-funnel";
 import { ProjectLeads } from "@/components/projects/project-leads";
+import { ProjectPeriodControl } from "@/components/projects/project-period-control";
+import { currentMonth, monthEnd, monthOf, monthsBetween, planFor } from "@/lib/projects/plans";
+import { parseProjectPeriod } from "@/lib/projects/range";
+import { firstDataDate } from "@/lib/integrations/store";
+import { first } from "@/lib/workspace/params";
 import { ResultCard } from "@/components/projects/result-card";
 import { SourceChips } from "@/components/projects/source-chips";
 import { Card } from "@/components/ui/card";
@@ -35,20 +40,31 @@ export async function generateMetadata({
   return { title: project?.name ?? "Проект" };
 }
 
-export default async function ProjectPage({ params }: PageProps<"/projects/[projectId]">) {
+export default async function ProjectPage({ params, searchParams }: PageProps<"/projects/[projectId]">) {
   const { projectId } = await params;
+  const query = await searchParams;
   const { permissions } = await requireProject(projectId);
-  const project = await getProject(projectId);
-  if (!project) notFound();
+  const base = await getProject(projectId);
+  if (!base) notFound();
+  const firstData = await firstDataDate(projectId);
+  const since = firstData && firstData < base.startDate ? firstData : base.startDate;
+  const period = parseProjectPeriod(first(query.range), first(query.from), first(query.to), since);
+  const project = (await getProject(projectId, period.from, period.to)) ?? base;
   const { stats } = project;
+  // Monthly plan of leads for the history table (a month without its own plan keeps the previous one).
+  const fallback = base.plans.length ? null : { kpis: base.kpis, budgetMonth: base.agent.budgetMonth };
+  const leadPlans = Object.fromEntries(
+    monthsBetween(period.from, period.to).map((m) => [
+      m,
+      planFor(base.plans, m, monthOf(base.startDate), fallback)?.kpis.find((k) => k.metric === "leads")?.plan ?? null,
+    ]),
+  );
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-3 px-1">
         <StatusBadge status={project.status} />
-        <span className="text-sm text-muted-foreground">
-          {formatDate(project.period.start)} — {formatDate(project.period.end)}
-        </span>
+        <span className="text-sm text-muted-foreground">в работе с {formatDate(project.startDate)}</span>
         <SourceChips sources={project.sources} />
         <ProjectOwnersLine owners={project.owners} />
         <div className="ml-auto flex flex-wrap gap-2">
@@ -63,6 +79,14 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[proj
             </Link>
           )}
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ProjectPeriodControl path={`/projects/${project.id}`} period={period} maxDate={monthEnd(currentMonth())} />
+        <span className="text-xs text-muted-foreground">
+          {formatDate(project.period.start)} — {formatDate(project.period.end)}
+          {project.planCarried && " · план с прошлого месяца — задайте новый во «Вводных»"}
+        </span>
       </div>
 
       {project.goal && (
@@ -86,7 +110,14 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[proj
 
       <MetricsGrid metrics={project.metrics} currency={project.agent.currency} />
 
-      <ProjectFunnel projectId={project.id} currency={project.agent.currency} />
+      <ProjectFunnel
+        projectId={project.id}
+        currency={project.agent.currency}
+        from={period.from}
+        to={period.to}
+        periodLabel={period.label}
+        leadPlans={leadPlans}
+      />
 
       <ProjectLeads projectId={project.id} />
     </div>

@@ -242,19 +242,18 @@ export interface Funnel {
  * Month by month: ad spend and the leads the ad cabinet counted, next to the leads the client actually got
  * (sheet/CRM), how many never answered, how many paid, and money from the sales records by payment date.
  */
-export async function projectFunnel(projectId: string, months = 6): Promise<Funnel> {
+export async function projectFunnel(projectId: string, from: string, to: string): Promise<Funnel> {
   const db = getDb();
-  const since = new Date();
-  since.setUTCDate(1);
-  since.setUTCMonth(since.getUTCMonth() - (months - 1));
-  const sinceIso = since.toISOString().slice(0, 10);
+  // Whole months: the table is by month.
+  const sinceIso = `${from.slice(0, 7)}-01`;
+  const untilMonth = to.slice(0, 7);
   const month = (col: unknown) => sql<string>`to_char(${col}, 'YYYY-MM')`;
 
   const [ads, ls, ss] = await Promise.all([
     db
       .select({ month: month(adMetricsDaily.date), spend: sql<number>`sum(${adMetricsDaily.spend})`, leads: sql<number>`sum(${adMetricsDaily.leads})` })
       .from(adMetricsDaily)
-      .where(and(eq(adMetricsDaily.projectId, projectId), gte(adMetricsDaily.date, sinceIso)))
+      .where(and(eq(adMetricsDaily.projectId, projectId), gte(adMetricsDaily.date, sinceIso), sql`to_char(${adMetricsDaily.date}, 'YYYY-MM') <= ${untilMonth}`))
       .groupBy(sql`1`),
     db
       .select({
@@ -265,7 +264,7 @@ export async function projectFunnel(projectId: string, months = 6): Promise<Funn
         junk: sql<number>`count(*) filter (where ${leads.outcome} = 'junk')`,
       })
       .from(leads)
-      .where(and(eq(leads.projectId, projectId), sql`${leads.leadAt} >= ${sinceIso}::date`))
+      .where(and(eq(leads.projectId, projectId), sql`${leads.leadAt} >= ${sinceIso}::date`, sql`to_char(${leads.leadAt} at time zone 'UTC', 'YYYY-MM') <= ${untilMonth}`))
       .groupBy(sql`1`),
     db
       .select({
@@ -275,7 +274,7 @@ export async function projectFunnel(projectId: string, months = 6): Promise<Funn
         currency: sql<string>`max(${salesRecords.currency})`,
       })
       .from(salesRecords)
-      .where(and(eq(salesRecords.projectId, projectId), gte(salesRecords.date, sinceIso)))
+      .where(and(eq(salesRecords.projectId, projectId), gte(salesRecords.date, sinceIso), sql`to_char(${salesRecords.date}, 'YYYY-MM') <= ${untilMonth}`))
       .groupBy(sql`1`),
   ]);
 
@@ -321,7 +320,7 @@ export async function projectFunnel(projectId: string, months = 6): Promise<Funn
              count(distinct ev.id) filter (where ev.ads and f.first_month < ev.month) as repeat,
              count(distinct ev.id) filter (where ev.ads and f.first_month = ev.month and ev.lead_month < ev.month) as earlier
       from ev join firsts f using (id)
-      where ev.month >= ${sinceIso.slice(0, 7)}
+      where ev.month >= ${sinceIso.slice(0, 7)} and ev.month <= ${untilMonth}
       group by 1`)
   ).rows as { month: string; all_n: number; n: number; repeat: number; earlier: number }[];
 
@@ -352,11 +351,11 @@ export async function projectFunnel(projectId: string, months = 6): Promise<Funn
   };
 
   const keys: string[] = [];
-  for (let d = new Date(since); keys.length < months; d.setUTCMonth(d.getUTCMonth() + 1)) keys.push(d.toISOString().slice(0, 7));
+  for (let d = new Date(sinceIso); d.toISOString().slice(0, 7) <= untilMonth && keys.length < 240; d.setUTCMonth(d.getUTCMonth() + 1)) keys.push(d.toISOString().slice(0, 7));
   const pick = <T extends { month: string }>(rows: T[], m: string) => rows.find((r) => r.month === m);
 
   return {
-    hasLeads: ls.length > 0,
+    hasLeads: ls.length > 0 || Number((await db.execute(sql`select count(*) as n from ${leads} where ${leads.projectId} = ${projectId}`)).rows[0]?.n ?? 0) > 0,
     lag,
     hasSales: ss.length > 0 || paid.length > 0,
     currency: ss.find((s) => s.currency)?.currency ?? "",
@@ -433,4 +432,14 @@ async function hasLeadSource(projectId: string) {
     .from(projectIntegrations)
     .where(and(eq(projectIntegrations.projectId, projectId), sql`(${projectIntegrations.kind} = 'sheets_leads' or (${projectIntegrations.kind} = 'crm'))`));
   return Number(row?.n ?? 0) > 0;
+}
+
+/** Earliest day the project has any data (ad stats or leads) — «Всё время» starts here when it precedes the start of work. */
+export async function firstDataDate(projectId: string): Promise<string | null> {
+  const res = await getDb().execute(sql`
+    select least(
+      (select min(${adMetricsDaily.date}) from ${adMetricsDaily} where ${adMetricsDaily.projectId} = ${projectId}),
+      (select min((${leads.leadAt} at time zone 'UTC')::date) from ${leads} where ${leads.projectId} = ${projectId})
+    )::text as d`);
+  return (res.rows[0] as { d: string | null } | undefined)?.d ?? null;
 }

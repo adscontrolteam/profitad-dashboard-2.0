@@ -58,10 +58,10 @@ export function ProjectsInputs({
             <tr className="text-left text-xs text-muted-foreground">
               <th className="px-4 pb-2 font-medium">Проект</th>
               <th className="px-4 pb-2 font-medium">Основная цель</th>
-              <th className="px-4 pb-2 font-medium">Результаты и KPI</th>
+              <th className="px-4 pb-2 font-medium">План на этот месяц</th>
               <th className="px-4 pb-2 font-medium">Источники трафика</th>
               <th className="px-4 pb-2 font-medium">Ответственные</th>
-              <th className="px-4 pb-2 font-medium">Период</th>
+              <th className="px-4 pb-2 font-medium">В работе</th>
               {canEdit && <th className="w-px px-4 pb-2" />}
             </tr>
           </thead>
@@ -79,7 +79,10 @@ export function ProjectsInputs({
                   {project.goal || "—"}
                 </td>
                 <td className="bg-background/70 px-4 py-3 transition-colors group-hover:bg-muted">
-                  <KpiList kpis={project.kpis} />
+                  <KpiList kpis={project.kpis} currency={project.agent.currency} />
+                  {project.planCarried && project.kpis.length > 0 && (
+                    <p className="mt-1.5 text-[11px] text-warning">План с прошлого месяца — задайте на этот</p>
+                  )}
                 </td>
                 <td className="bg-background/70 px-4 py-3 transition-colors group-hover:bg-muted">
                   {project.sources.length ? <SourceChips sources={project.sources} /> : <span className="text-muted-foreground">—</span>}
@@ -93,7 +96,7 @@ export function ProjectsInputs({
                   </p>
                 </td>
                 <td className="whitespace-nowrap bg-background/70 px-4 py-3 text-muted-foreground tabular-nums transition-colors group-hover:bg-muted">
-                  {formatDate(project.period.start)} — {formatDate(project.period.end)}
+                  с {formatDate(project.startDate)}
                 </td>
                 {canEdit && (
                   <td className="rounded-r-[18px] bg-background/70 px-2 py-2 transition-colors group-hover:bg-muted">
@@ -125,7 +128,7 @@ export function ProjectsInputs({
   );
 }
 
-function KpiList({ kpis }: { kpis: Project["kpis"] }) {
+function KpiList({ kpis, currency }: { kpis: Project["kpis"]; currency: string | null }) {
   if (kpis.length === 0) return <span className="text-muted-foreground">Не заданы</span>;
   return (
     <ul className="flex flex-col gap-1.5">
@@ -136,7 +139,7 @@ function KpiList({ kpis }: { kpis: Project["kpis"] }) {
             {i === 0 && kpis.length > 1 && <span className="ml-1 text-xs font-medium text-muted-foreground">· главный</span>}
           </span>
           <span className="text-xs text-muted-foreground tabular-nums">
-            план {formatMetric(kpi.plan, METRICS[kpi.metric].format)} · цена {formatMetric(kpi.cpaPlan, "currency")}
+            план {formatMetric(kpi.plan, METRICS[kpi.metric].format)} · цена {formatMetric(kpi.cpaPlan, "currency", currency)}
           </span>
         </li>
       ))}

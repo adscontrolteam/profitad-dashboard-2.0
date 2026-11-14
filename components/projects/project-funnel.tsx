@@ -9,8 +9,23 @@ const monthLabel = (m: string) => `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slic
  * Real results month by month: what the ad cabinet saw vs the leads the client actually got, how many never
  * answered, how many paid and the money. Renders nothing until the project has a lead sheet or CRM.
  */
-export async function ProjectFunnel({ projectId, currency }: { projectId: string; currency: string | null }) {
-  const funnel = await projectFunnel(projectId, 6);
+export async function ProjectFunnel({
+  projectId,
+  currency,
+  from,
+  to,
+  periodLabel,
+  leadPlans,
+}: {
+  projectId: string;
+  currency: string | null;
+  from: string;
+  to: string;
+  periodLabel: string;
+  /** Plan of ad leads per month (YYYY-MM), when the project has a leads KPI. */
+  leadPlans: Record<string, number | null>;
+}) {
+  const funnel = await projectFunnel(projectId, from, to);
   if (!funnel.hasLeads) return null;
 
   const cur = currency || funnel.currency || APP_CONFIG.currency;
@@ -20,7 +35,8 @@ export async function ProjectFunnel({ projectId, currency }: { projectId: string
       : new Intl.NumberFormat(APP_CONFIG.locale, { style: "currency", currency: cur, maximumFractionDigits: digits }).format(v);
   const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "—");
   const div = (a: number | null, b: number) => (a !== null && b > 0 ? a / b : null);
-  const rows = funnel.months.filter((m) => m.leads || m.spend || m.revenue || m.junk || m.clientsAll);
+  const rows = funnel.months.filter((m) => m.leads || m.spend || m.revenue || m.junk || m.clientsAll || leadPlans[m.month]);
+  const hasPlans = rows.some((m) => leadPlans[m.month]);
 
   const sum = (k: keyof FunnelMonth) => rows.reduce((a, m) => a + Number(m[k] ?? 0), 0);
   const total = {
@@ -47,7 +63,7 @@ export async function ProjectFunnel({ projectId, currency }: { projectId: string
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="section-title">Реальные результаты</h2>
         <p className="text-xs text-muted-foreground">
-          Считаем только лиды с рекламы (gclid / платная метка). Лиды и продажи — из таблицы клиента, расход — из кабинетов. Последние 6 месяцев.
+          Считаем только лиды с рекламы (gclid / платная метка). Лиды и продажи — из таблицы клиента, расход — из кабинетов. {periodLabel}, по месяцам.
         </p>
       </div>
 
@@ -85,6 +101,7 @@ export async function ProjectFunnel({ projectId, currency }: { projectId: string
               <th className="py-2 pr-3 font-medium">Месяц</th>
               <th className="py-2 pr-3 text-right font-medium">Расход</th>
               <th className="py-2 pr-3 text-right font-medium">Лиды в кабинете</th>
+              {hasPlans && <th className="py-2 pr-3 text-right font-medium">План лидов</th>}
               <th className="py-2 pr-3 text-right font-medium">Лиды с рекламы</th>
               <th className="py-2 pr-3 text-right font-medium">Не ответили</th>
               <th className="py-2 pr-3 text-right font-medium">Клиенты с рекламы</th>
@@ -99,8 +116,14 @@ export async function ProjectFunnel({ projectId, currency }: { projectId: string
                 <td className="py-2 pr-3 font-medium">{monthLabel(m.month)}</td>
                 <td className="py-2 pr-3 text-right">{money(m.spend)}</td>
                 <td className="py-2 pr-3 text-right text-muted-foreground">{m.cabinetLeads ?? "—"}</td>
+                {hasPlans && <td className="py-2 pr-3 text-right text-muted-foreground">{leadPlans[m.month] ?? "—"}</td>}
                 <td className="py-2 pr-3 text-right">
                   <span className="font-semibold">{m.adsLeads || "—"}</span>
+                  {leadPlans[m.month] ? (
+                    <span className={m.adsLeads >= leadPlans[m.month]! ? "ml-1 text-xs text-positive" : "ml-1 text-xs text-muted-foreground"}>
+                      {pct(m.adsLeads, leadPlans[m.month]!)}
+                    </span>
+                  ) : null}
                   <Parallel all={m.leads} other={notAds(m.leads, m.adsLeads)} short />
                 </td>
                 <td className="py-2 pr-3 text-right">{m.noAnswer ? `${m.noAnswer} · ${pct(m.noAnswer, m.adsLeads)}` : "—"}</td>

@@ -66,5 +66,11 @@ export async function syncAll() {
       results.push({ projectId: rec.projectId, kind: rec.kind, ok: false, message: (error as Error).message });
     }
   }
+  // A new month may have a plan set in advance: keep the agent's copy of the current plan up to date.
+  const { getDb } = await import("@/db");
+  const { projects } = await import("@/db/schema");
+  const { syncCurrentPlan } = await import("@/lib/projects/store");
+  for (const p of await getDb().select({ id: projects.id }).from(projects)) await syncCurrentPlan(p.id).catch(() => undefined);
+  revalidateTag(TAGS.projects, "max");
   return results;
 }

@@ -21,12 +21,13 @@ export async function getProjects(): Promise<ProjectWithStats[]> {
   return projects.map((p) => withStats(p, now));
 }
 
-export async function getProject(id: string): Promise<ProjectWithStats | null> {
+/** `from`/`to` = range to show; without them — the current month. */
+export async function getProject(id: string, from?: string, to?: string): Promise<ProjectWithStats | null> {
   "use cache";
   cacheLife("minutes");
   cacheTag(TAGS.projects, TAGS.project(id));
 
-  const project = await source.getProject(id);
+  const project = await source.getProject(id, from && to ? { start: from, end: to } : undefined);
   return project ? withStats(project, new Date()) : null;
 }
 

@@ -48,10 +48,10 @@ function parseProject(raw: unknown): ProjectInput | string {
   const status = data.status as ProjectStatus;
   if (!PROJECT_STATUSES.includes(status)) return "Выберите статус.";
 
-  const start = str(data.periodStart, 10);
-  const end = str(data.periodEnd, 10);
-  if (!DATE.test(start) || !DATE.test(end)) return "Укажите период.";
-  if (start > end) return "Начало периода позже конца.";
+  const start = str(data.startDate, 10);
+  if (!DATE.test(start)) return "Укажите дату старта работы.";
+  const planMonth = str(data.planMonth, 7);
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(planMonth)) return "Выберите месяц плана.";
 
   const kpis: Kpi[] = [];
   for (const item of Array.isArray(data.kpis) ? data.kpis.slice(0, 6) : []) {
@@ -74,8 +74,8 @@ function parseProject(raw: unknown): ProjectInput | string {
     name,
     status,
     goal: str(data.goal, 200),
-    period: { start, end },
-    kpis,
+    startDate: start,
+    plan: { month: planMonth, kpis, budgetMonth: positive(data.budgetMonth) },
     sources,
     notes: str(data.notes, 5000),
     owners: {

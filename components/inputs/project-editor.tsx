@@ -17,6 +17,8 @@ import {
   PROJECT_STATUSES,
   RESULT_METRICS,
   TRAFFIC_PLATFORMS,
+  type Kpi,
+  type MonthPlan,
   type Project,
   type ProjectStatus,
   type ResultMetric,
@@ -45,13 +47,22 @@ interface SourceDraft {
 
 const IDLE: ProjectActionState = { ok: false, message: null };
 
-function currentMonth() {
+const MONTHS_GEN = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+const monthName = (m: string) => `${MONTHS_GEN[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
+
+function localMonth() {
   const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const last = new Date(y, m + 1, 0).getDate();
-  return { start: `${y}-${pad(m + 1)}-01`, end: `${y}-${pad(m + 1)}-${pad(last)}` };
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+const toDraft = (kpis: Kpi[]): KpiDraft[] =>
+  kpis.length ? kpis.map((k) => ({ metric: k.metric, plan: k.plan?.toString() ?? "", cpaPlan: k.cpaPlan?.toString() ?? "" })) : [{ metric: "leads", plan: "", cpaPlan: "" }];
+
+/** The month's own plan, or the one carried over from the latest earlier month. */
+function planIn(plans: MonthPlan[], month: string): { plan: MonthPlan | null; own: boolean } {
+  let found: MonthPlan | null = null;
+  for (const p of plans) if (p.month <= month && (!found || p.month > found.month)) found = p;
+  return { plan: found, own: found?.month === month };
 }
 
 export function ProjectEditor({
@@ -74,13 +85,12 @@ export function ProjectEditor({
   const [name, setName] = useState(project?.name ?? "");
   const [status, setStatus] = useState<ProjectStatus>(project?.status ?? "active");
   const [goal, setGoal] = useState(project?.goal ?? "");
-  const [period, setPeriod] = useState(project?.period ?? currentMonth);
+  const plans = project?.plans ?? [];
+  const [startDate, setStartDate] = useState(project?.startDate ?? `${localMonth()}-01`);
+  const [planMonth, setPlanMonth] = useState(localMonth);
   const [notes, setNotes] = useState(project?.notes ?? "");
-  const [kpis, setKpis] = useState<KpiDraft[]>(
-    project?.kpis.map((k) => ({ metric: k.metric, plan: k.plan?.toString() ?? "", cpaPlan: k.cpaPlan?.toString() ?? "" })) ?? [
-      { metric: "leads", plan: "", cpaPlan: "" },
-    ],
-  );
+  const initialPlan = planIn(plans, localMonth()).plan;
+  const [kpis, setKpis] = useState<KpiDraft[]>(toDraft(initialPlan?.kpis ?? project?.kpis ?? []));
   const [sources, setSources] = useState<SourceDraft[]>(project?.sources ?? []);
   const [createDrive, setCreateDrive] = useState(Boolean(serviceAccountEmail));
   const [createReport, setCreateReport] = useState(Boolean(serviceAccountEmail));
@@ -88,7 +98,19 @@ export function ProjectEditor({
   const [mediaBuyerEmail, setMediaBuyerEmail] = useState(project?.owners.mediaBuyer ?? "");
   const [leadActions, setLeadActions] = useState<string[]>(project?.agent.leadActions ?? []);
   const [currency, setCurrency] = useState(project?.agent.currency ?? "");
-  const [budgetMonth, setBudgetMonth] = useState(project?.agent.budgetMonth?.toString() ?? "");
+  const [budgetMonth, setBudgetMonth] = useState((initialPlan ? initialPlan.budgetMonth : project?.agent.budgetMonth)?.toString() ?? "");
+  const shown = planIn(plans, planMonth);
+
+  // Another month: its plan (or the one in force then) becomes the starting point to edit.
+  const pickMonth = (month: string) => {
+    if (!/^\d{4}-\d{2}$/.test(month)) return;
+    setPlanMonth(month);
+    const { plan } = planIn(plans, month);
+    if (plan) {
+      setKpis(toDraft(plan.kpis));
+      setBudgetMonth(plan.budgetMonth?.toString() ?? "");
+    }
+  };
   const [agentDailyReport, setAgentDailyReport] = useState(project?.agent.dailyReport ?? true);
 
   const [state, formAction, saving] = useActionState(async (prev: ProjectActionState, formData: FormData) => {
@@ -110,8 +132,8 @@ export function ProjectEditor({
     name,
     status,
     goal,
-    periodStart: period.start,
-    periodEnd: period.end,
+    startDate,
+    planMonth,
     kpis,
     sources,
     notes,
@@ -182,12 +204,10 @@ export function ProjectEditor({
           </Field>
 
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Начало периода">
-              <input type="date" required value={period.start} onChange={(e) => setPeriod({ ...period, start: e.target.value })} className="field" />
+            <Field label="Старт работы">
+              <input type="date" required value={startDate} onChange={(e) => setStartDate(e.target.value)} className="field" />
             </Field>
-            <Field label="Конец периода">
-              <input type="date" required value={period.end} onChange={(e) => setPeriod({ ...period, end: e.target.value })} className="field" />
-            </Field>
+            <p className="self-end pb-2 text-xs leading-5 text-muted-foreground">Проект заводится один раз, результаты видны за любые даты, план — по месяцам ниже.</p>
           </div>
 
           <fieldset className="flex flex-col gap-2">
@@ -208,8 +228,26 @@ export function ProjectEditor({
           </fieldset>
 
           <fieldset className="flex flex-col gap-2">
-            <legend className="section-kicker mb-2">Результаты и KPI</legend>
-            <p className="-mt-1 mb-1 text-xs text-muted-foreground">Первый результат — главный: по нему считается темп проекта.</p>
+            <legend className="section-kicker mb-2">План на месяц</legend>
+            <div className="-mt-1 mb-1 flex flex-wrap items-center gap-3">
+              <input
+                type="month"
+                aria-label="Месяц плана"
+                value={planMonth}
+                onChange={(e) => pickMonth(e.target.value)}
+                className="field w-auto tabular-nums"
+              />
+              <span className="text-xs text-muted-foreground">
+                {shown.own
+                  ? "План этого месяца"
+                  : shown.plan
+                    ? `Своего плана нет — показан план за ${monthName(shown.plan.month)}. Сохраните, чтобы закрепить на ${monthName(planMonth)}.`
+                    : "Плана ещё нет"}
+              </span>
+            </div>
+            <p className="mb-1 text-xs text-muted-foreground">
+              Ставится в начале каждого месяца; пока новый не задан, действует предыдущий. Первый результат — главный: по нему считается темп.
+            </p>
             {kpis.map((kpi, i) => (
               <div key={i} className="grid grid-cols-[1fr_96px_110px_auto] items-end gap-2">
                 <Field label={i === 0 ? "Результат" : undefined}>
@@ -234,7 +272,7 @@ export function ProjectEditor({
                     className="field tabular-nums"
                   />
                 </Field>
-                <Field label={i === 0 ? "Цена, $" : undefined}>
+                <Field label={i === 0 ? `Цена${currency ? `, ${currency}` : ""}` : undefined}>
                   <input
                     inputMode="decimal"
                     value={kpi.cpaPlan}
@@ -254,6 +292,31 @@ export function ProjectEditor({
               >
                 + Добавить результат
               </button>
+            )}
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Рекламный бюджет на месяц">
+                <input className="field tabular-nums" inputMode="decimal" placeholder="—" value={budgetMonth} onChange={(e) => setBudgetMonth(e.target.value)} />
+              </Field>
+            </div>
+            {plans.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {[...plans].reverse().map((p) => (
+                  <button
+                    key={p.month}
+                    type="button"
+                    onClick={() => pickMonth(p.month)}
+                    aria-pressed={p.month === planMonth}
+                    className={
+                      p.month === planMonth
+                        ? "rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground"
+                        : "rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:bg-muted"
+                    }
+                  >
+                    {monthName(p.month)}
+                    {p.kpis[0]?.plan !== null && p.kpis[0] ? ` · ${METRICS[p.kpis[0].metric].label.toLowerCase()} ${p.kpis[0].plan}` : ""}
+                  </button>
+                ))}
+              </div>
             )}
           </fieldset>
 
@@ -342,8 +405,6 @@ export function ProjectEditor({
             setLeadActions={setLeadActions}
             currency={currency}
             setCurrency={setCurrency}
-            budgetMonth={budgetMonth}
-            setBudgetMonth={setBudgetMonth}
             dailyReport={agentDailyReport}
             setDailyReport={setAgentDailyReport}
           />
@@ -421,8 +482,6 @@ function AgentSettings({
   setLeadActions,
   currency,
   setCurrency,
-  budgetMonth,
-  setBudgetMonth,
   dailyReport,
   setDailyReport,
 }: {
@@ -432,8 +491,6 @@ function AgentSettings({
   setLeadActions: (v: string[]) => void;
   currency: string;
   setCurrency: (v: string) => void;
-  budgetMonth: string;
-  setBudgetMonth: (v: string) => void;
   dailyReport: boolean;
   setDailyReport: (v: boolean) => void;
 }) {
@@ -514,9 +571,6 @@ function AgentSettings({
         )}
       </Field>
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Бюджет на месяц">
-          <input className="field tabular-nums" inputMode="decimal" placeholder="—" value={budgetMonth} onChange={(e) => setBudgetMonth(e.target.value)} />
-        </Field>
         <Field label="Валюта кабинета">
           <input className="field uppercase" maxLength={3} placeholder="EUR" value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} />
         </Field>

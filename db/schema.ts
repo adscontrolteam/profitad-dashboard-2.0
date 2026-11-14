@@ -109,8 +109,11 @@ export const projects = pgTable("projects", {
   name: text("name").notNull(),
   status: text("status").$type<ProjectStatus>().notNull(),
   goal: text("goal").notNull().default(""),
+  /** Start of work. Results are viewed for any range; plans are set per month in project_plans. */
   periodStart: date("period_start").notNull(),
-  periodEnd: date("period_end").notNull(),
+  /** Legacy fixed period end — no longer used. */
+  periodEnd: date("period_end"),
+  /** Plan of the current month, mirrored from project_plans for the AI agent (docs/agent-contract.md). */
   kpis: jsonb("kpis").$type<Kpi[]>().notNull().default([]),
   sources: jsonb("sources").$type<TrafficSource[]>().notNull().default([]),
   notes: text("notes").notNull().default(""),
@@ -129,6 +132,23 @@ export const projects = pgTable("projects", {
 });
 
 export type ProjectRow = typeof projects.$inferSelect;
+
+/** The plan set at the start of each month: KPI amounts and prices, ad budget. A month without a row keeps the previous plan. */
+export const projectPlans = pgTable(
+  "project_plans",
+  {
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    /** YYYY-MM */
+    month: text("month").notNull(),
+    kpis: jsonb("kpis").$type<Kpi[]>().notNull().default([]),
+    budgetMonth: doublePrecision("budget_month"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedBy: text("updated_by"),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.month] })],
+);
 
 /**
  * One row per campaign per day, written by the ad-platform sync.

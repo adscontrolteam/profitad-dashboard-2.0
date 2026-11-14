@@ -1,9 +1,10 @@
-import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { adMetricsDaily, projects, type ProjectRow } from "@/db/schema";
-import type { Metrics, Project } from "@/lib/domain/types";
+import { adMetricsDaily, projectPlans, projects, type ProjectRow } from "@/db/schema";
+import type { MonthPlan, Metrics, Project } from "@/lib/domain/types";
+import { currentMonth, monthEnd, monthOf, monthStart, planForRange } from "@/lib/projects/plans";
 import { realTotals } from "@/lib/integrations/store";
-import type { DataSource } from "../source";
+import type { DataSource, Range } from "../source";
 
 const totals = {
   spend: sql<number | null>`sum(${adMetricsDaily.spend})`,
@@ -38,61 +39,80 @@ function withReal(metrics: Metrics, real: { leads?: number; sales?: number; reve
   return { ...metrics, ...real };
 }
 
-function toProject(row: ProjectRow, metrics: Metrics): Project {
+function toProject(row: ProjectRow, metrics: Metrics, plans: MonthPlan[], range: Range): Project {
+  const fallback = row.kpis.length || row.budgetMonth !== null ? { kpis: row.kpis, budgetMonth: row.budgetMonth ?? null } : null;
+  const plan = planForRange(plans, range.start, range.end, monthOf(row.periodStart), fallback);
   return {
     id: row.id,
     name: row.name,
     status: row.status,
     goal: row.goal,
-    period: { start: row.periodStart, end: row.periodEnd },
-    kpis: row.kpis,
+    startDate: row.periodStart,
+    period: range,
+    kpis: plan.kpis,
+    plans,
+    planCarried: plan.carried,
     sources: row.sources,
     notes: row.notes,
     owners: { smm: row.smmEmail ?? null, mediaBuyer: row.mediaBuyerEmail ?? null },
     agent: {
       leadActions: row.leadActions ?? [],
       currency: row.currency ?? null,
-      budgetMonth: row.budgetMonth ?? null,
+      // Budget of the range from the monthly plans; the project-level value is the current month's mirror.
+      budgetMonth: plan.budget ?? row.budgetMonth ?? null,
       dailyReport: row.agentDailyReport ?? true,
     },
     metrics,
   };
 }
 
-const periodJoin = and(
-  eq(adMetricsDaily.projectId, projects.id),
-  gte(adMetricsDaily.date, projects.periodStart),
-  lte(adMetricsDaily.date, projects.periodEnd),
-);
+/** Default view: the current calendar month (it ends in the future — the plan is for the whole month). */
+export const thisMonth = (): Range => ({ start: monthStart(currentMonth()), end: monthEnd(currentMonth()) });
+
+async function loadPlans(ids: string[]) {
+  const by = new Map<string, MonthPlan[]>();
+  if (!ids.length) return by;
+  const rows = await getDb().select().from(projectPlans).where(inArray(projectPlans.projectId, ids)).orderBy(asc(projectPlans.month));
+  for (const r of rows) {
+    const list = by.get(r.projectId) ?? [];
+    list.push({ month: r.month, kpis: r.kpis, budgetMonth: r.budgetMonth ?? null });
+    by.set(r.projectId, list);
+  }
+  return by;
+}
+
+const inRange = (range: Range) =>
+  and(eq(adMetricsDaily.projectId, projects.id), gte(adMetricsDaily.date, range.start), lte(adMetricsDaily.date, range.end));
 
 export const dbSource: DataSource = {
-  async listProjects() {
+  async listProjects(range = thisMonth()) {
     const db = getDb();
     const [rows, sums] = await Promise.all([
       db.select().from(projects).orderBy(asc(projects.position), asc(projects.createdAt)),
       db
         .select({ projectId: projects.id, ...totals })
         .from(projects)
-        .innerJoin(adMetricsDaily, periodJoin)
+        .innerJoin(adMetricsDaily, inRange(range))
         .groupBy(projects.id),
     ]);
     const byProject = new Map(sums.map((s) => [s.projectId, s]));
-    const real = await realTotals(rows.map((r) => r.id), new Map(rows.map((r) => [r.id, { start: r.periodStart, end: r.periodEnd }])));
-    return rows.map((row) => toProject(row, withReal(toMetrics(byProject.get(row.id)), real.get(row.id))));
+    const ids = rows.map((r) => r.id);
+    const [real, plans] = await Promise.all([realTotals(ids, new Map(ids.map((id) => [id, range]))), loadPlans(ids)]);
+    return rows.map((row) => toProject(row, withReal(toMetrics(byProject.get(row.id)), real.get(row.id)), plans.get(row.id) ?? [], range));
   },
 
-  async getProject(id) {
+  async getProject(id, range = thisMonth()) {
     const db = getDb();
     const [[row], [sum]] = await Promise.all([
       db.select().from(projects).where(eq(projects.id, id)).limit(1),
       db
         .select(totals)
         .from(projects)
-        .innerJoin(adMetricsDaily, periodJoin)
+        .innerJoin(adMetricsDaily, inRange(range))
         .where(eq(projects.id, id)),
     ]);
     if (!row) return null;
-    const real = await realTotals([row.id], new Map([[row.id, { start: row.periodStart, end: row.periodEnd }]]));
-    return toProject(row, withReal(toMetrics(sum), real.get(row.id)));
+    const [real, plans] = await Promise.all([realTotals([row.id], new Map([[row.id, range]])), loadPlans([row.id])]);
+    return toProject(row, withReal(toMetrics(sum), real.get(row.id)), plans.get(row.id) ?? [], range);
   },
 };
