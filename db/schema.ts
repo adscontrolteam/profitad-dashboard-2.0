@@ -446,6 +446,10 @@ export const finInvoices = pgTable(
     total: doublePrecision("total").notNull(),
     purpose: text("purpose").notNull().default(""),
     payLink: text("pay_link").notNull().default(""),
+    /** Currency of the client's terms when it differs from the invoice currency, and the agreed rate:
+     *  invoice-currency units per 1 unit of the contract currency (e.g. 50.2 UAH per EUR). */
+    contractCurrency: text("contract_currency"),
+    fxRate: doublePrecision("fx_rate"),
     document: boolean("document").notNull().default(true),
     /** issued | paid | cancelled */
     status: text("status").$type<"issued" | "paid" | "cancelled">().notNull().default("issued"),
@@ -514,5 +518,12 @@ export const finPlans = pgTable("fin_plans", {
   month: text("month").primaryKey(),
   revenuePlan: doublePrecision("revenue_plan"),
   profitPlan: doublePrecision("profit_plan"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** Media buyer's rate for a project (USD) when it differs from the default for one traffic source. */
+export const finBuyerRates = pgTable("fin_buyer_rates", {
+  projectId: text("project_id").primaryKey(),
+  rate: doublePrecision("rate").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

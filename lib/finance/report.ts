@@ -8,6 +8,8 @@ import { addMonths, currentMonth, monthEnd, monthOf, monthStart, monthsBetween }
 import { BASE_CURRENCY, convert, getRates, toBase, type Rates } from "./fx";
 import { accrue, buyerPay, defaultBuyerRate, PAY_CURRENCY, type Accrual, type KpiState, type PayLine, type Terms } from "./rules";
 import {
+  invoiceIn,
+  listBuyerRates,
   listExpenses,
   listInvoices,
   listPayouts,
@@ -85,6 +87,8 @@ export interface ProjectFin {
   currency: string | null;
   sourcesCount: number;
   mediaBuyerEmail: string | null;
+  /** Media buyer's rate for the project, USD; null = not set yet (2+ traffic sources). */
+  buyerRate: number | null;
   startMonth: string;
   terms: Terms | null;
   months: ProjectFinMonth[];
@@ -161,7 +165,7 @@ export const expenseActive = (e: Expense, month: string) =>
 
 export async function buildFinanceReport(): Promise<FinanceReport> {
   const now = currentMonth();
-  const [allProjects, terms, invoices, expenses, staff, payouts, plans, rates] = await Promise.all([
+  const [allProjects, terms, invoices, expenses, staff, payouts, plans, rates, buyerRates] = await Promise.all([
     getProjects(),
     listTerms(),
     listInvoices(),
@@ -170,7 +174,9 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     listPayouts(),
     listPlans(),
     getRates(),
+    listBuyerRates(),
   ]);
+  const inBase = (x: Invoice) => invoiceIn(x, BASE_CURRENCY, (a, f, t) => convert(a, f, t, rates));
   const termsBy = new Map(terms.map((t) => [t.projectId, t]));
   const projects = allProjects.filter((p) => p.status !== "archived" || termsBy.has(p.id));
 
@@ -209,8 +215,8 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
           kpi: kpiState(d, forecast),
           accrual,
           accrualBase: accrual ? toBase(accrual.total, accrual.currency, rates) : 0,
-          receivedBase: inv.filter((x) => x.status === "paid").reduce((a, x) => a + toBase(x.total, x.currency, rates), 0),
-          issuedBase: inv.filter((x) => x.status === "issued").reduce((a, x) => a + toBase(x.total, x.currency, rates), 0),
+          receivedBase: inv.filter((x) => x.status === "paid").reduce((a, x) => a + inBase(x), 0),
+          issuedBase: inv.filter((x) => x.status === "issued").reduce((a, x) => a + inBase(x), 0),
           forecast,
         };
       });
@@ -221,6 +227,7 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
         currency: p.agent.currency,
         sourcesCount: p.sources.length,
         mediaBuyerEmail: p.owners.mediaBuyer,
+        buyerRate: buyerRates.get(p.id) ?? t?.buyerRate ?? defaultBuyerRate(p.sources.length),
         startMonth,
         terms: t,
         months: rows,
@@ -246,7 +253,7 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     const who = person(fp.mediaBuyerEmail, "media_buyer");
     if (who.staff?.active === false) continue;
     const since = who.staff?.sinceMonth ?? now;
-    const rate = fp.terms?.buyerRate ?? defaultBuyerRate(fp.sourcesCount);
+    const rate = fp.buyerRate;
     const pay = buyerPay(fp.months.map((m) => ({ month: m.month, state: m.kpi })), rate, now);
     for (const line of pay) {
       if (line.month < since || line.month < fp.startMonth) continue;

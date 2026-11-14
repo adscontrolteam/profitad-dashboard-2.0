@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, max } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
+  finBuyerRates,
   finExpenses,
   finInvoices,
   finPaymentMethods,
@@ -100,6 +101,8 @@ export interface InvoiceInput {
   items: InvoiceItem[];
   purpose: string;
   payLink: string;
+  contractCurrency: string | null;
+  fxRate: number | null;
   document: boolean;
   status: "issued" | "paid" | "cancelled";
   paidDate: string | null;
@@ -201,4 +204,27 @@ export async function listPlans(): Promise<AgencyPlan[]> {
 export async function savePlan(p: AgencyPlan) {
   const values = { ...p, updatedAt: new Date() };
   await getDb().insert(finPlans).values(values).onConflictDoUpdate({ target: finPlans.month, set: values });
+}
+
+/* ---------- media buyer rates ---------- */
+
+export async function listBuyerRates(): Promise<Map<string, number>> {
+  const rows = await getDb().select().from(finBuyerRates);
+  return new Map(rows.map((r) => [r.projectId, r.rate]));
+}
+
+export async function saveBuyerRate(projectId: string, rate: number | null) {
+  const db = getDb();
+  if (rate === null) {
+    await db.delete(finBuyerRates).where(eq(finBuyerRates.projectId, projectId));
+    return;
+  }
+  const values = { projectId, rate, updatedAt: new Date() };
+  await db.insert(finBuyerRates).values(values).onConflictDoUpdate({ target: finBuyerRates.projectId, set: values });
+}
+
+/** Amount of an invoice in another currency: through the agreed rate when the invoice has one, else by market rates. */
+export function invoiceIn(i: Pick<Invoice, "total" | "currency" | "contractCurrency" | "fxRate">, to: string, convert: (amount: number, from: string, to: string) => number) {
+  if (i.contractCurrency && i.fxRate && i.fxRate > 0) return convert(i.total / i.fxRate, i.contractCurrency, to);
+  return convert(i.total, i.currency, to);
 }

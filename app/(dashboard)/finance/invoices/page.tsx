@@ -6,19 +6,20 @@ import { CardHead, dateLabel, Empty, KpiTile, monthLabel, Pill, Table } from "@/
 import { Card } from "@/components/ui/card";
 import { requireSection } from "@/lib/access/viewer";
 import { getProjects } from "@/lib/data";
-import { getRates, money, toBase } from "@/lib/finance/fx";
-import { listInvoices, listMethods } from "@/lib/finance/store";
+import { BASE_CURRENCY, convert, getRates, money } from "@/lib/finance/fx";
+import { invoiceIn, listInvoices, listMethods, listTerms } from "@/lib/finance/store";
 import { currentMonth } from "@/lib/projects/plans";
 
 export const metadata: Metadata = { title: "Financial · Инвойсы" };
 
 export default async function FinanceInvoicesPage() {
   await requireSection("finance");
-  const [invoices, methods, projects, rates] = await Promise.all([listInvoices(), listMethods(), getProjects(), getRates()]);
+  const [invoices, methods, projects, rates, terms] = await Promise.all([listInvoices(), listMethods(), getProjects(), getRates(), listTerms()]);
+  const termCurrency = new Map(terms.map((t) => [t.projectId, t.currency]));
   const names = new Map(projects.map((p) => [p.id, p.name]));
   const now = currentMonth();
   const active = invoices.filter((i) => i.status !== "cancelled");
-  const sum = (list: typeof invoices) => list.reduce((a, i) => a + toBase(i.total, i.currency, rates), 0);
+  const sum = (list: typeof invoices) => list.reduce((a, i) => a + invoiceIn(i, BASE_CURRENCY, (x, f, t) => convert(x, f, t, rates)), 0);
   const issued = active.filter((i) => i.status === "issued");
   const paidThisMonth = active.filter((i) => i.status === "paid" && i.paidDate?.startsWith(now));
   const now0 = new Date();
@@ -45,7 +46,7 @@ export default async function FinanceInvoicesPage() {
 
       <Card>
         <CardHead title="Счета и оплаты" hint="Суммы в валюте счёта; в шапке — в долларах по курсу НБУ">
-          <RecordPaymentButton projects={projects.filter((p) => p.status !== "archived").map((p) => ({ id: p.id, name: p.name }))} methods={methods} month={now} />
+          <RecordPaymentButton projects={projects.filter((p) => p.status !== "archived").map((p) => ({ id: p.id, name: p.name, currency: termCurrency.get(p.id) ?? null }))} methods={methods} month={now} />
           <Link href="/finance/invoices/new" className="btn-primary">
             + Новый инвойс
           </Link>
@@ -60,6 +61,7 @@ export default async function FinanceInvoicesPage() {
                 <th>За месяц</th>
                 <th>Реквизиты</th>
                 <th className="!text-right">Сумма</th>
+                <th>Курс</th>
                 <th>Статус</th>
                 <th></th>
               </tr>
@@ -73,6 +75,16 @@ export default async function FinanceInvoicesPage() {
                   <td className="text-muted-foreground">{monthLabel(i.month)}</td>
                   <td className="text-muted-foreground">{i.recipient?.label ?? "—"}</td>
                   <td className="text-right font-semibold tabular-nums">{money(i.total, i.currency, 2)}</td>
+                  <td className="text-xs text-muted-foreground tabular-nums">
+                    {i.contractCurrency && i.fxRate ? (
+                      <>
+                        1 {i.contractCurrency} = {i.fxRate} {i.currency}
+                        <span className="block">= {money(i.total / i.fxRate, i.contractCurrency, 2)}</span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td>
                     {i.status === "paid" ? (
                       <Pill tone="good">Оплачен {i.paidDate ? dateLabel(i.paidDate) : ""}</Pill>

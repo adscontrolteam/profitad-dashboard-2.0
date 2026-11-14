@@ -63,7 +63,15 @@ export function InvoiceRowActions({ id, status, document }: { id: string; status
 }
 
 /** A payment received without an invoice from the dashboard (e.g. a direct transfer). */
-export function RecordPaymentButton({ projects, methods, month }: { projects: { id: string; name: string }[]; methods: PaymentMethod[]; month: string }) {
+export function RecordPaymentButton({
+  projects,
+  methods,
+  month,
+}: {
+  projects: { id: string; name: string; currency: string | null }[];
+  methods: PaymentMethod[];
+  month: string;
+}) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();
@@ -71,6 +79,9 @@ export function RecordPaymentButton({ projects, methods, month }: { projects: { 
   const submit = (f: FormData) => {
     setError(null);
     const method = methods.find((m) => m.id === f.get("methodId")) ?? null;
+    const contract = projects.find((p) => p.id === f.get("projectId"))?.currency ?? null;
+    const fxRate = Number(String(f.get("fxRate") ?? "").replace(/\s/g, "").replace(",", "."));
+    const withRate = contract && contract !== f.get("currency") && fxRate > 0;
     start(async () => {
       const res = await saveInvoiceAction({
         projectId: String(f.get("projectId") || "") || null,
@@ -82,6 +93,8 @@ export function RecordPaymentButton({ projects, methods, month }: { projects: { 
         items: [{ name: "Оплата", qty: 1, amount: Number(String(f.get("amount")).replace(/\s/g, "").replace(",", ".")) }],
         purpose: "",
         payLink: "",
+        contractCurrency: withRate ? contract : null,
+        fxRate: withRate ? fxRate : null,
         document: false,
         status: "paid",
         paidDate: String(f.get("paidDate")),
@@ -127,6 +140,9 @@ export function RecordPaymentButton({ projects, methods, month }: { projects: { 
                 <input name="paidDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} className="field" />
               </Field>
             </div>
+            <Field label="Курс к валюте договора" hint="Если оплата в другой валюте: сколько её единиц за 1 единицу валюты договора. Пусто — по курсу НБУ">
+              <input name="fxRate" inputMode="decimal" className="field tabular-nums" placeholder="например 50,2" />
+            </Field>
             <Field label="Куда пришла">
               <select name="methodId" className="field">
                 <option value="">—</option>

@@ -7,6 +7,7 @@ import { CURRENCIES } from "@/lib/finance/currency";
 import { SHARE_BASES, type ShareBase } from "@/lib/finance/rules";
 import {
   archiveMethod,
+  saveBuyerRate,
   deleteExpense,
   deleteInvoice,
   markPayout,
@@ -52,13 +53,12 @@ export async function saveTermsAction(_prev: FinState, f: FormData): Promise<Fin
   const projectId = text(f, "projectId", 80);
   const fix = num(f, "fixAmount");
   const pct = num(f, "sharePct");
-  const rate = num(f, "buyerRate");
   const payDay = num(f, "payDay");
   const currency = currencyOf(f);
   const startMonth = text(f, "startMonth", 7);
   const base = text(f, "shareBase", 30);
   if (!projectId) return { ok: false, message: "Нет проекта." };
-  if (fix === "bad" || pct === "bad" || rate === "bad" || payDay === "bad") return { ok: false, message: "Суммы должны быть числами." };
+  if (fix === "bad" || pct === "bad" || payDay === "bad") return { ok: false, message: "Суммы должны быть числами." };
   if (!currency) return { ok: false, message: "Выберите валюту." };
   if (!MONTH.test(startMonth)) return { ok: false, message: "Укажите, с какого месяца действуют условия." };
   const shareBase = SHARE_BASES.some((b) => b.value === base) ? (base as ShareBase) : null;
@@ -70,7 +70,7 @@ export async function saveTermsAction(_prev: FinState, f: FormData): Promise<Fin
       currency,
       sharePct: pct || null,
       shareBase: pct ? shareBase : null,
-      buyerRate: rate,
+      buyerRate: null,
       payDay: payDay === null ? null : Math.min(31, Math.max(1, Math.round(payDay))),
       startMonth,
       note: text(f, "note", 2000),
@@ -130,6 +130,8 @@ export interface InvoicePayload {
   items: InvoiceItem[];
   purpose: string;
   payLink: string;
+  contractCurrency: string | null;
+  fxRate: number | null;
   document: boolean;
   status: "issued" | "paid";
   paidDate: string | null;
@@ -146,6 +148,10 @@ export async function saveInvoiceAction(p: InvoicePayload): Promise<FinState> {
     .filter((i) => i.name && Number.isFinite(i.amount) && i.amount > 0);
   if (!items.length) return { ok: false, message: "Добавьте услугу и сумму." };
   if (p.status === "paid" && (!p.paidDate || !DATE.test(p.paidDate))) return { ok: false, message: "Укажите дату оплаты." };
+  // The agreed rate is kept only when the invoice is in another currency than the client's terms.
+  const fx =
+    p.contractCurrency && p.contractCurrency !== p.currency && (CURRENCIES as readonly string[]).includes(p.contractCurrency) && p.fxRate && Number.isFinite(p.fxRate) && p.fxRate > 0;
+  if (p.contractCurrency && p.contractCurrency !== p.currency && !fx) return { ok: false, message: "Укажите курс." };
   const id = await saveInvoice(
     {
       id: p.id || undefined,
@@ -158,6 +164,8 @@ export async function saveInvoiceAction(p: InvoicePayload): Promise<FinState> {
       items,
       purpose: p.purpose.slice(0, 500),
       payLink: p.payLink.slice(0, 1000),
+      contractCurrency: fx ? p.contractCurrency : null,
+      fxRate: fx ? p.fxRate : null,
       document: p.document,
       status: p.status,
       paidDate: p.status === "paid" ? p.paidDate : null,
@@ -270,4 +278,17 @@ export async function savePlanAction(_prev: FinState, f: FormData): Promise<FinS
   await savePlan({ month, revenuePlan: rev, profitPlan: profit });
   refresh();
   return { ok: true, message: "План сохранён." };
+}
+
+/* ---------------- media buyer rate per project ---------------- */
+
+export async function saveBuyerRateAction(_prev: FinState, f: FormData): Promise<FinState> {
+  await guard();
+  const projectId = text(f, "projectId", 80);
+  const rate = num(f, "rate");
+  if (!projectId) return { ok: false, message: "Нет проекта." };
+  if (rate === "bad" || (rate !== null && rate < 0)) return { ok: false, message: "Ставка должна быть числом." };
+  await saveBuyerRate(projectId, rate);
+  refresh();
+  return { ok: true, message: "Ставка сохранена." };
 }

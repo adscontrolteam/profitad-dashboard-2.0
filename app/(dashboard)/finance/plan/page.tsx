@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { requireSection } from "@/lib/access/viewer";
 import { money } from "@/lib/finance/fx";
 import { buildFinanceReport } from "@/lib/finance/report";
+import { addMonths } from "@/lib/projects/plans";
 
 export const metadata: Metadata = { title: "Financial · План / Факт" };
 
@@ -15,6 +16,8 @@ export default async function FinancePlanPage() {
   await requireSection("finance");
   const r = await buildFinanceReport();
   const rows = [...r.pnl].reverse();
+  // Plans can be set three months ahead; the charts stop at the current month.
+  const ahead = [3, 2, 1].map((n) => addMonths(r.now, n));
   const clients = r.projects.filter((p) => p.status !== "archived");
   const last = r.months.slice(-6);
 
@@ -32,7 +35,7 @@ export default async function FinancePlanPage() {
       </div>
 
       <Card>
-        <CardHead title="История по месяцам" hint="План задаётся в долларах справа — доход и прибыль на месяц" />
+        <CardHead title="История по месяцам" hint="План задаётся в долларах справа: доход и прибыль. Можно на три месяца вперёд" />
         <Table>
           <thead>
             <tr>
@@ -47,6 +50,26 @@ export default async function FinancePlanPage() {
             </tr>
           </thead>
           <tbody>
+            {ahead.map((month) => {
+              const plan = r.plans.find((p) => p.month === month);
+              return (
+                <tr key={month}>
+                  <td className="font-semibold">
+                    {monthLabel(month)}
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">план</span>
+                  </td>
+                  <td colSpan={5} className="text-muted-foreground">
+                    {plan?.revenuePlan || plan?.profitPlan
+                      ? `доход ${money(plan.revenuePlan)} · прибыль ${money(plan.profitPlan)}`
+                      : "месяц ещё не начался — задайте план справа"}
+                  </td>
+                  <td></td>
+                  <td>
+                    <PlanForm month={month} revenuePlan={plan?.revenuePlan ?? null} profitPlan={plan?.profitPlan ?? null} />
+                  </td>
+                </tr>
+              );
+            })}
             {rows.map((m) => {
               const rp = m.plan?.revenuePlan ? Math.round((m.revenue / m.plan.revenuePlan) * 100) : null;
               const pp = m.plan?.profitPlan ? Math.round((m.profit / m.plan.profitPlan) * 100) : null;

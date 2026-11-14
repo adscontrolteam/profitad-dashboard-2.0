@@ -19,6 +19,7 @@ export default async function NewInvoicePage({ searchParams }: PageProps<"/finan
     .map((p) => ({
       id: p.id,
       name: p.name,
+      currency: p.terms?.currency ?? null,
       due: Object.fromEntries(p.months.filter((m) => m.accrual).map((m) => [m.month, { amount: Math.round(m.accrual!.total * 100) / 100, currency: m.accrual!.currency }])),
     }));
   const today = new Date().toISOString().slice(0, 10);

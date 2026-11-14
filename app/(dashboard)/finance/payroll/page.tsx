@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PayoutButton, StaffButton } from "@/components/finance/payroll-ui";
+import { RateButton } from "@/components/finance/rate-button";
 import { CardHead, dateLabel, Empty, KpiTile, monthLabel, monthShort, Pill, Table } from "@/components/finance/ui";
 import { Card } from "@/components/ui/card";
 import { requireSection } from "@/lib/access/viewer";
@@ -93,6 +94,7 @@ export default async function FinancePayrollPage() {
                   <th>Сейчас</th>
                   <th>Правило</th>
                   <th className="!text-right">Сумма</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -104,7 +106,10 @@ export default async function FinancePayrollPage() {
                       <Pill tone={KPI_TONE[l.state]}>{l.state === "unknown" ? "нет данных" : l.state === "met" ? "в темпе" : "отстаёт"}</Pill>
                     </td>
                     <td className="text-muted-foreground">{l.rule}</td>
-                    <td className="text-right tabular-nums">{l.amount === null ? <Pill tone="warning">задать ставку</Pill> : money(l.amount)}</td>
+                    <td className="text-right tabular-nums">{l.amount === null ? <Pill tone="warning">ставка не задана</Pill> : money(l.amount)}</td>
+                    <td className="text-right">
+                      <RateButton projectId={l.projectId} projectName={l.projectName} rate={l.rate} sourcesCount={r.projects.find((x) => x.id === l.projectId)?.sourcesCount ?? 1} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -116,7 +121,7 @@ export default async function FinancePayrollPage() {
         <Card>
           <CardHead title="Правила медиабайера" />
           <ul className="flex flex-col gap-2.5 text-sm">
-            <li>Ставка за проект — <b>${BUYER_RATE_ONE_SOURCE}</b> (один источник трафика). Для 2+ источников ставка задаётся в условиях клиента.</li>
+            <li>Ставка за проект — <b>${BUYER_RATE_ONE_SOURCE}</b> (один источник трафика). Для 2+ источников ставка задаётся кнопкой «Ставка» в прогнозе.</li>
             <li>KPI клиента не выполнен за месяц — <b>−50%</b> ставки.</li>
             <li>KPI выполняется <b>3+ месяца подряд</b> — с 3-го месяца <b>+50%</b>, и так каждый следующий месяц, пока KPI выполняется.</li>
             <li>Невыполнение сбрасывает счёт — снова нужно 3 месяца подряд.</li>

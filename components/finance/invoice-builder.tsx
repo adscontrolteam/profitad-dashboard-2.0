@@ -15,6 +15,8 @@ import { InvoiceDocument } from "./invoice-document";
 export interface ProjectOption {
   id: string;
   name: string;
+  /** Currency of the client's terms; null = no terms yet. */
+  currency: string | null;
   /** Amount due by the terms, per month (terms currency). */
   due: Record<string, { amount: number; currency: string }>;
 }
@@ -47,17 +49,26 @@ export function InvoiceBuilder({
   const [payLink, setPayLink] = useState(initial?.payLink ?? "");
   const [showPayer, setShowPayer] = useState(Boolean(initial?.recipient?.payer));
   const [note, setNote] = useState(initial?.note ?? "");
+  // The agreed rate typed by hand; empty = the NBU rate of today.
+  const [rateInput, setRateInput] = useState(initial?.fxRate ? String(initial.fxRate) : "");
   const [error, setError] = useState<string | null>(null);
   const [saving, start] = useTransition();
 
   const method = methods.find((m) => m.id === methodId) ?? null;
   const project = projects.find((p) => p.id === projectId) ?? null;
   const due = project?.due[month] ?? null;
-  const dueConverted = due ? Math.round(convert(due.amount, due.currency, currency, rates) * 100) / 100 : null;
+  const contractCurrency = project?.currency ?? initial?.contractCurrency ?? null;
+  const needsRate = Boolean(contractCurrency && contractCurrency !== currency);
+  const nbuRate = needsRate ? Math.round(convert(1, contractCurrency!, currency, rates) * 10000) / 10000 : 1;
+  const typedRate = Number(rateInput.replace(/\s/g, "").replace(",", "."));
+  const rate = needsRate ? (rateInput && Number.isFinite(typedRate) && typedRate > 0 ? typedRate : nbuRate) : 1;
+  const total = items.reduce((a, i) => a + (Number(i.amount) || 0), 0);
+  const dueConverted = due ? Math.round(due.amount * (due.currency === currency ? 1 : rate) * 100) / 100 : null;
 
   const pickMethod = (m: PaymentMethod) => {
     setMethodId(m.id);
     setCurrency(m.currency);
+    setRateInput("");
     if (m.serviceName) setItems((list) => list.map((it, i) => (i === 0 ? { ...it, name: m.serviceName } : it)));
     if (m.purpose) setPurpose(m.purpose);
   };
@@ -81,6 +92,8 @@ export function InvoiceBuilder({
       items,
       purpose,
       payLink,
+      contractCurrency: needsRate ? contractCurrency : null,
+      fxRate: needsRate ? rate : null,
       document: true,
       status: initial?.status === "paid" ? "paid" : "issued",
       paidDate: initial?.paidDate ?? null,
@@ -98,7 +111,14 @@ export function InvoiceBuilder({
       <div className="flex flex-col gap-4 rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-5 lg:p-6 xl:sticky xl:top-0 xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Проект">
-            <select className="field" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+            <select
+              className="field"
+              value={projectId}
+              onChange={(e) => {
+                setProjectId(e.target.value);
+                setRateInput("");
+              }}
+            >
               <option value="">Без проекта</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -113,14 +133,49 @@ export function InvoiceBuilder({
           <Field label="Дата счёта">
             <input type="date" className="field" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
           </Field>
-          <Field label="Валюта">
-            <select className="field" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+          <Field label="Валюта счёта">
+            <select
+              className="field"
+              value={currency}
+              onChange={(e) => {
+                setCurrency(e.target.value);
+                setRateInput("");
+              }}
+            >
               {CURRENCIES.map((c) => (
                 <option key={c}>{c}</option>
               ))}
             </select>
           </Field>
         </div>
+
+        {needsRate && (
+          <div className="flex flex-col gap-1.5 rounded-[16px] bg-muted px-3 py-3">
+            <span className="text-xs font-medium text-muted-foreground">
+              Курс: договор в {contractCurrency}, счёт в {currency}
+            </span>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="whitespace-nowrap">1 {contractCurrency} =</span>
+              <input
+                className="field w-[120px] text-right tabular-nums"
+                inputMode="decimal"
+                value={rateInput}
+                placeholder={String(nbuRate)}
+                onChange={(e) => setRateInput(e.target.value)}
+                aria-label="Курс"
+              />
+              <span>{currency}</span>
+              <button type="button" className="btn-ghost ml-auto px-3 py-1" onClick={() => setRateInput("")}>
+                НБУ {nbuRate}
+              </button>
+            </div>
+            {total > 0 && (
+              <span className="text-xs text-muted-foreground tabular-nums">
+                Счёт на {formatInvoiceAmount(total)} {currency} = {formatInvoiceAmount(total / rate)} {contractCurrency} по этому курсу. Курс сохраняется в счёте.
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Реквизиты</span>
@@ -181,7 +236,7 @@ export function InvoiceBuilder({
                 По условиям за месяц: <b className="tabular-nums">{formatInvoiceAmount(due.amount)} {due.currency}</b>
                 {due.currency !== currency && (
                   <>
-                    {" "}≈ <b className="tabular-nums">{formatInvoiceAmount(dueConverted)} {currency}</b> по курсу НБУ
+                    {" "}= <b className="tabular-nums">{formatInvoiceAmount(dueConverted)} {currency}</b> по курсу {rate}
                   </>
                 )}
               </span>

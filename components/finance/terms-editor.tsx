@@ -3,14 +3,13 @@
 import { useActionState, useState } from "react";
 import { saveTermsAction, type FinState } from "@/app/(dashboard)/finance/actions";
 import { CURRENCIES } from "@/lib/finance/currency";
-import { BUYER_RATE_ONE_SOURCE, SHARE_BASES, type Terms } from "@/lib/finance/rules";
+import { SHARE_BASES, type Terms } from "@/lib/finance/rules";
 import { Drawer, Field, FormError } from "./drawer";
 
 export interface TermsTarget {
   id: string;
   name: string;
   startMonth: string;
-  sourcesCount: number;
   currency: string | null;
   terms: Terms | null;
 }
@@ -93,16 +92,6 @@ function TermsDrawer({ target, onClose }: { target: TermsTarget; onClose: () => 
             <input name="payDay" inputMode="numeric" defaultValue={t?.payDay ?? ""} className="field" placeholder="5" />
           </Field>
         </div>
-        <Field
-          label="Ставка медиабайера за проект, $"
-          hint={
-            target.sourcesCount <= 1
-              ? `Пусто = $${BUYER_RATE_ONE_SOURCE} (1 источник трафика)`
-              : `У проекта ${target.sourcesCount} источника трафика — ставку нужно задать`
-          }
-        >
-          <input name="buyerRate" inputMode="decimal" defaultValue={t?.buyerRate ?? ""} className="field tabular-nums" placeholder={target.sourcesCount <= 1 ? String(BUYER_RATE_ONE_SOURCE) : ""} />
-        </Field>
         <Field label="Заметки">
           <textarea name="note" rows={3} defaultValue={t?.note ?? ""} className="field resize-y" />
         </Field>
