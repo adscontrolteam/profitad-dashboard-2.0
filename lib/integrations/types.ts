@@ -32,8 +32,15 @@ export interface SheetConfig {
 }
 
 export interface SheetsLeadsConfig extends SheetConfig {
+  /** First lead tab (kept for configs saved before multi-tab support). */
   tab: string;
+  /** Every tab with one lead per row. */
+  tabs?: string[];
+  /** Optional tab with sales per period: «Період», «Кількість», «Сума». */
+  salesTab?: string | null;
 }
+
+export const leadTabsOf = (cfg: SheetsLeadsConfig) => (cfg.tabs?.length ? cfg.tabs : [cfg.tab]).filter(Boolean);
 
 export interface SheetsReportConfig extends SheetConfig {
   tabs: ReportTab[];
@@ -62,6 +69,19 @@ export interface IntegrationView<K extends IntegrationKind = IntegrationKind> {
   lastError: string | null;
 }
 
+export const LEAD_OUTCOMES = ["new", "qualified", "no_answer", "won", "lost", "junk"] as const;
+export type LeadOutcome = (typeof LEAD_OUTCOMES)[number];
+
+export interface NormalizedSale {
+  externalId: string;
+  periodStart: string;
+  date: string;
+  count: number;
+  amount: number;
+  currency: string;
+  note: string;
+}
+
 export interface NormalizedLead {
   externalId: string;
   leadAt: Date;
@@ -69,7 +89,7 @@ export interface NormalizedLead {
   phone: string;
   email: string;
   status: string;
-  outcome: "new" | "qualified" | "won" | "lost" | "junk";
+  outcome: LeadOutcome;
   value: number | null;
   campaign: string;
   utm: Record<string, string>;

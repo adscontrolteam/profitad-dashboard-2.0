@@ -198,7 +198,7 @@ export const leads = pgTable(
     email: text("email").notNull().default(""),
     /** Stage/status as named in the source (e.g. a Kommo pipeline status). */
     status: text("status").notNull().default(""),
-    /** new | qualified | won | lost | junk — normalized where the source allows. */
+    /** new | qualified | no_answer | won | lost | junk — normalized where the source allows. */
     outcome: text("outcome").notNull().default("new"),
     value: doublePrecision("value"),
     campaign: text("campaign").notNull().default(""),
@@ -214,6 +214,29 @@ export const leads = pgTable(
 );
 
 export type LeadRow = typeof leads.$inferSelect;
+
+/**
+ * Sales recorded outside a CRM, e.g. a «Продажи» sheet kept by the client per period (not per lead).
+ * A sync replaces all rows of its source, so the sheet stays the source of truth.
+ */
+export const salesRecords = pgTable(
+  "sales_records",
+  {
+    projectId: text("project_id").notNull(),
+    /** e.g. sheet:<spreadsheetId>:<tab> */
+    source: text("source").notNull(),
+    externalId: text("external_id").notNull(),
+    /** Last day of the period the row covers. */
+    date: date("date").notNull(),
+    periodStart: date("period_start").notNull(),
+    count: doublePrecision("count").notNull().default(0),
+    amount: doublePrecision("amount").notNull().default(0),
+    currency: text("currency").notNull().default(""),
+    note: text("note").notNull().default(""),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.source, t.externalId] }), index("sales_records_project_date_idx").on(t.projectId, t.date)],
+);
 
 /** Every action that changes something outside the dashboard (ad platforms, sheets, drive). */
 export const auditLog = pgTable(

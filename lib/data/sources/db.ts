@@ -2,6 +2,7 @@ import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { adMetricsDaily, projects, type ProjectRow } from "@/db/schema";
 import type { Metrics, Project } from "@/lib/domain/types";
+import { realTotals } from "@/lib/integrations/store";
 import type { DataSource } from "../source";
 
 const totals = {
@@ -26,6 +27,15 @@ function toMetrics(row: Totals | undefined): Metrics {
     if (row[key] !== null) metrics[key] = Number(row[key]);
   }
   return metrics;
+}
+
+/**
+ * The ad cabinet only counts the conversions it tracks. When the project has a lead sheet or CRM, its real
+ * leads (without spam) and sales replace the cabinet's numbers — KPIs, CPL and ROAS are then about real results.
+ */
+function withReal(metrics: Metrics, real: { leads?: number; sales?: number; revenue?: number } | undefined): Metrics {
+  if (!real) return metrics;
+  return { ...metrics, ...real };
 }
 
 function toProject(row: ProjectRow, metrics: Metrics): Project {
@@ -67,7 +77,8 @@ export const dbSource: DataSource = {
         .groupBy(projects.id),
     ]);
     const byProject = new Map(sums.map((s) => [s.projectId, s]));
-    return rows.map((row) => toProject(row, toMetrics(byProject.get(row.id))));
+    const real = await realTotals(rows.map((r) => r.id), new Map(rows.map((r) => [r.id, { start: r.periodStart, end: r.periodEnd }])));
+    return rows.map((row) => toProject(row, withReal(toMetrics(byProject.get(row.id)), real.get(row.id))));
   },
 
   async getProject(id) {
@@ -80,6 +91,8 @@ export const dbSource: DataSource = {
         .innerJoin(adMetricsDaily, periodJoin)
         .where(eq(projects.id, id)),
     ]);
-    return row ? toProject(row, toMetrics(sum)) : null;
+    if (!row) return null;
+    const real = await realTotals([row.id], new Map([[row.id, { start: row.periodStart, end: row.periodEnd }]]));
+    return toProject(row, withReal(toMetrics(sum), real.get(row.id)));
   },
 };

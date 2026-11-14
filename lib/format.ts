@@ -24,11 +24,13 @@ export const formatWholeCurrency = (v: number) => wholeCurrencyFmt.format(v);
 export const formatPercent = (v: number) => percentFmt.format(v);
 export const formatDate = (iso: string) => dateFmt.format(new Date(iso));
 
-export function formatMetric(value: number | null | undefined, format: MetricFormat) {
+export function formatMetric(value: number | null | undefined, format: MetricFormat, currency?: string | null) {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
   switch (format) {
     case "currency":
-      return formatCurrency(value);
+      return currency && currency !== APP_CONFIG.currency
+        ? new Intl.NumberFormat(APP_CONFIG.locale, { style: "currency", currency, maximumFractionDigits: 2 }).format(value)
+        : formatCurrency(value);
     case "percent":
       return formatPercent(value);
     default:

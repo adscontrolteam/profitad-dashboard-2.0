@@ -5,9 +5,10 @@ import { recentLeads } from "@/lib/integrations/store";
 const OUTCOME: Record<string, { label: string; className: string }> = {
   new: { label: "новый", className: "bg-muted text-muted-foreground" },
   qualified: { label: "в работе", className: "bg-info/12 text-info" },
+  no_answer: { label: "не ответил", className: "bg-warning/14 text-warning" },
   won: { label: "продажа", className: "bg-positive/12 text-positive" },
   lost: { label: "отказ", className: "bg-negative/12 text-negative" },
-  junk: { label: "нецелевой", className: "bg-warning/14 text-warning" },
+  junk: { label: "спам / нецелевой", className: "bg-warning/14 text-warning" },
 };
 
 const SOURCE: Record<string, string> = { webhook: "вебхук", kommo: "Kommo", bitrix24: "Bitrix24", sheet: "таблица" };

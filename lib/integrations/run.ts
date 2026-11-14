@@ -3,7 +3,7 @@ import { revalidateTag } from "next/cache";
 import { TAGS } from "@/lib/data/tags";
 import { pullBitrix, pullKommo } from "./crm";
 import { readLeadsSheet, writeReport } from "./sheets";
-import { listIntegrations, markIntegration, readSecret, upsertLeads, type IntegrationRecord } from "./store";
+import { dropOtherSales, listIntegrations, markIntegration, readSecret, replaceLeads, replaceSales, upsertLeads, type IntegrationRecord } from "./store";
 import type { CrmConfig, SheetsLeadsConfig, SheetsReportConfig } from "./types";
 
 const DAY = 86_400_000;
@@ -14,6 +14,7 @@ export async function syncIntegration(rec: IntegrationRecord): Promise<string> {
     const message = await run(rec);
     await markIntegration(rec.projectId, rec.kind, null);
     revalidateTag(TAGS.project(rec.projectId), "max");
+    revalidateTag(TAGS.projects, "max");
     return message;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -36,12 +37,13 @@ async function run(rec: IntegrationRecord): Promise<string> {
       return `Лидов загружено/обновлено: ${n}`;
     }
     case "sheets_leads": {
-      const { leads, columns } = await readLeadsSheet(rec.config as SheetsLeadsConfig);
-      if (!columns.includes("date") && !columns.includes("phone") && !columns.includes("name")) {
-        throw new Error("В первой строке не нашли колонок «Дата», «Имя» или «Телефон».");
-      }
-      const n = await upsertLeads(rec.projectId, "sheet", leads);
-      return `Строк с лидами: ${n}`;
+      const cfg = rec.config as SheetsLeadsConfig;
+      const { leads, sales, summary } = await readLeadsSheet(cfg);
+      const n = await replaceLeads(rec.projectId, "sheet", leads);
+      const salesSource = cfg.salesTab ? `sheet:${cfg.spreadsheetId}:${cfg.salesTab}` : null;
+      await dropOtherSales(rec.projectId, salesSource);
+      const s = sales && salesSource ? await replaceSales(rec.projectId, salesSource, sales) : null;
+      return `Лидов: ${n} (${summary})${s !== null ? ` · продаж за периоды: ${s}` : ""}`;
     }
     case "sheets_report": {
       const cells = await writeReport(rec.projectId, rec.config as SheetsReportConfig, 3);

@@ -25,6 +25,7 @@ import {
   type ReportTab,
   type SheetsLeadsConfig,
   type SheetsReportConfig,
+  leadTabsOf,
 } from "@/lib/integrations/types";
 
 const when = (iso: string | null) =>
@@ -264,25 +265,59 @@ function SaveButton({ pending, onClick, label = "Проверить и сохр�
 function LeadsSheetCard({ projectId, current }: { projectId: string; current?: IntegrationView<"sheets_leads"> }) {
   const cfg = current?.config as SheetsLeadsConfig | undefined;
   const [url, setUrl] = useState(cfg?.url ?? "");
-  const [tab, setTab] = useState(cfg?.tab ?? "");
+  const [picked, setPicked] = useState<string[]>(cfg ? leadTabsOf(cfg) : []);
+  const [salesTab, setSalesTab] = useState(cfg?.salesTab ?? "");
   const [tabs, setTabs] = useState<string[]>([]);
   const { pending, result, run } = useRunner();
+  const toggle = (t: string) => setPicked((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]));
+  const summary = cfg && `«${cfg.title}» · лиды: ${leadTabsOf(cfg).join(", ")}${cfg.salesTab ? ` · продажи: ${cfg.salesTab}` : ""}`;
 
   return (
-    <Shell kind="sheets_leads" current={current} projectId={projectId} summary={cfg && `«${cfg.title}» · ${cfg.tab}`}>
+    <Shell kind="sheets_leads" current={current} projectId={projectId} summary={summary}>
       <p className="text-xs leading-5 text-muted-foreground">
-        Для проектов без CRM. В первой строке — заголовки: Дата, Имя, Телефон, Email, Статус, Источник, Сумма (какие есть).
+        Реальные лиды клиента, даже если кабинет их не видит. Листы с лидами: одна строка — один лид, в первой строке заголовки (Дата, Имя,
+        Контакт/Телефон, Статус/Qualification, gclid/Attribution, Дата оплаты, Сумма — какие есть). Лист продаж — суммы по периодам.
       </p>
-      <input className="field" placeholder="Ссылка на Google Таблицу" value={url} onChange={(e) => setUrl(e.target.value)} />
+      <div className="flex gap-2">
+        <input className="field" placeholder="Ссылка на Google Таблицу" value={url} onChange={(e) => setUrl(e.target.value)} />
+        <button
+          type="button"
+          className="btn-ghost shrink-0 border border-border px-3 py-1.5 text-xs"
+          disabled={pending || !url.trim()}
+          onClick={() => run(() => saveLeadsSheetAction(projectId, { url }), (r) => r.tabs && setTabs(r.tabs))}
+        >
+          Показать листы
+        </button>
+      </div>
       {tabs.length > 0 && (
-        <select className="field" value={tab} onChange={(e) => setTab(e.target.value)}>
-          <option value="">Выберите лист…</option>
-          {tabs.map((t) => (
-            <option key={t}>{t}</option>
-          ))}
-        </select>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Листы с лидами</span>
+            {tabs.map((t) => (
+              <label key={t} className="flex cursor-pointer items-center gap-2 text-sm">
+                <input type="checkbox" checked={picked.includes(t)} disabled={t === salesTab} onChange={() => toggle(t)} className="size-4 accent-[var(--accent)]" />
+                {t}
+              </label>
+            ))}
+          </div>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Лист продаж (необязательно)</span>
+            <select className="field" value={salesTab} onChange={(e) => setSalesTab(e.target.value)}>
+              <option value="">Нет</option>
+              {tabs.filter((t) => !picked.includes(t)).map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </select>
+          </label>
+        </div>
       )}
-      <SaveButton pending={pending} onClick={() => run(() => saveLeadsSheetAction(projectId, { url, tab }), (r) => r.tabs && setTabs(r.tabs))} />
+      {(tabs.length > 0 || cfg) && (
+        <SaveButton
+          pending={pending}
+          label="Сохранить и загрузить"
+          onClick={() => run(() => saveLeadsSheetAction(projectId, { url, tabs: picked, salesTab: salesTab || null }), (r) => r.tabs && setTabs(r.tabs))}
+        />
+      )}
       <Result r={result} />
     </Shell>
   );

@@ -131,17 +131,25 @@ export async function rotateWebhookKeyAction(projectId: string): Promise<Integra
 
 /* ---------- Google Sheets ---------- */
 
-export async function saveLeadsSheetAction(projectId: string, input: { url: string; tab?: string }): Promise<IntegrationResult> {
+/**
+ * Without `tabs`: only checks access and returns the sheet's tabs to choose from.
+ * With `tabs`: saves the lead tabs (+ optional sales tab) and runs the first import.
+ */
+export async function saveLeadsSheetAction(
+  projectId: string,
+  input: { url: string; tabs?: string[]; salesTab?: string | null },
+): Promise<IntegrationResult> {
   const viewer = await admin();
   const spreadsheetId = parseSpreadsheetId(input.url);
   if (!spreadsheetId) return { ok: false, message: "Вставьте ссылку на Google Таблицу." };
   try {
     const info = await spreadsheetInfo(spreadsheetId);
-    const tab = input.tab && info.tabs.includes(input.tab) ? input.tab : info.tabs.length === 1 ? info.tabs[0] : null;
-    if (!tab) return { ok: false, message: "Выберите лист с лидами.", tabs: info.tabs };
-    await saveIntegration(projectId, "sheets_leads", { url: input.url.trim(), spreadsheetId, title: info.title, tab }, null, viewer.email);
+    const tabs = (input.tabs ?? []).filter((t) => info.tabs.includes(t));
+    if (tabs.length === 0) return { ok: false, message: "Отметьте листы с лидами (одна строка — один лид).", tabs: info.tabs };
+    const salesTab = input.salesTab && info.tabs.includes(input.salesTab) && !tabs.includes(input.salesTab) ? input.salesTab : null;
+    await saveIntegration(projectId, "sheets_leads", { url: input.url.trim(), spreadsheetId, title: info.title, tab: tabs[0], tabs, salesTab }, null, viewer.email);
     const sync = await trySync(projectId, "sheets_leads");
-    return done(viewer, "integration.sheets_leads", projectId, { ok: true, message: `«${info.title}» · ${tab} подключена. ${sync}` });
+    return done(viewer, "integration.sheets_leads", projectId, { ok: true, message: `«${info.title}» подключена. ${sync}` });
   } catch (error) {
     return done(viewer, "integration.sheets_leads", projectId, { ok: false, message: explain(error) });
   }

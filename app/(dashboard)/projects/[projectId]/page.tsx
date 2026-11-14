@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MetricsGrid } from "@/components/projects/metrics-grid";
+import { ProjectFunnel } from "@/components/projects/project-funnel";
 import { ProjectLeads } from "@/components/projects/project-leads";
 import { ResultCard } from "@/components/projects/result-card";
 import { SourceChips } from "@/components/projects/source-chips";
@@ -83,7 +84,9 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[proj
         </Card>
       )}
 
-      <MetricsGrid metrics={project.metrics} />
+      <MetricsGrid metrics={project.metrics} currency={project.agent.currency} />
+
+      <ProjectFunnel projectId={project.id} currency={project.agent.currency} />
 
       <ProjectLeads projectId={project.id} />
     </div>

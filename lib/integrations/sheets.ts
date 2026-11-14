@@ -3,8 +3,8 @@ import { and, eq, gte, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { adMetricsDaily } from "@/db/schema";
 import { batchUpdate, columnIndex, columnLetter, readRange, shiftFormulaRows, spreadsheetInfo, writeCells, writeRows } from "@/lib/google/sheets";
-import { fingerprint, toDate } from "./crm";
-import { REPORT_METRICS, type NormalizedLead, type ReportMetric, type ReportTab, type SheetsLeadsConfig, type SheetsReportConfig } from "./types";
+import { dedupeLeads, parseLeadRows, parseSalesRows } from "./lead-sheet";
+import { leadTabsOf, REPORT_METRICS, type NormalizedLead, type NormalizedSale, type ReportMetric, type ReportTab, type SheetsLeadsConfig, type SheetsReportConfig } from "./types";
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
@@ -196,51 +196,25 @@ export async function resetReportCopy(spreadsheetId: string, tabs: ReportTab[]) 
 
 /* ---------- Leads sheet ---------- */
 
-const LEAD_HEADERS = {
-  date: ["дата", "date", "created", "created_at", "время", "дата заявки"],
-  name: ["имя", "name", "фио", "клиент"],
-  phone: ["телефон", "phone", "тел", "номер"],
-  email: ["email", "e-mail", "почта"],
-  status: ["статус", "status", "этап"],
-  campaign: ["кампания", "campaign", "источник", "source", "utm_campaign"],
-  value: ["сумма", "value", "amount", "чек", "цена"],
-} as const;
-
-export async function readLeadsSheet(cfg: SheetsLeadsConfig): Promise<{ leads: NormalizedLead[]; columns: string[] }> {
-  const values = await readRange(cfg.spreadsheetId, cfg.tab, "A1:Z5000");
-  const [header = [], ...rows] = values;
-  const index = Object.fromEntries(
-    Object.entries(LEAD_HEADERS).map(([key, names]) => [key, header.findIndex((h) => (names as readonly string[]).includes(norm(h ?? "")))]),
-  ) as Record<keyof typeof LEAD_HEADERS, number>;
-  const found = Object.entries(index).filter(([, i]) => i >= 0).map(([k]) => k);
-  const cell = (row: string[], key: keyof typeof LEAD_HEADERS) => (index[key] >= 0 ? (row[index[key]] ?? "").trim() : "");
-
-  const leads = rows
-    .filter((row) => row.some((v) => (v ?? "").trim()))
-    .map((row) => {
-      const leadAt = toDate(cell(row, "date"));
-      const status = cell(row, "status");
-      const value = Number(cell(row, "value").replace(/[^\d.,]/g, "").replace(",", "."));
-      const outcome: NormalizedLead["outcome"] = /успех|продаж|оплач|won|клиент/i.test(status)
-        ? "won"
-        : /отказ|lost|не целев|спам|junk/i.test(status)
-          ? "lost"
-          : /квалиф|qualif|в работе/i.test(status)
-            ? "qualified"
-            : "new";
-      return {
-        externalId: fingerprint(cell(row, "date"), cell(row, "phone"), cell(row, "email"), cell(row, "name")),
-        leadAt,
-        name: cell(row, "name"),
-        phone: cell(row, "phone"),
-        email: cell(row, "email"),
-        status,
-        outcome,
-        value: Number.isFinite(value) && value > 0 ? value : null,
-        campaign: cell(row, "campaign"),
-        utm: {},
-        raw: null,
-      } satisfies NormalizedLead;
-    });
-  return { leads, columns: found };
+/**
+ * Reads every lead tab (one lead per row) and the optional sales tab of a client's sheet.
+ * Test rows are skipped, the same person on the same day is one lead.
+ */
+export async function readLeadsSheet(cfg: SheetsLeadsConfig, today = new Date()) {
+  const all: NormalizedLead[] = [];
+  const notes: string[] = [];
+  for (const tab of leadTabsOf(cfg)) {
+    const parsed = parseLeadRows(tab, await readRange(cfg.spreadsheetId, tab, "A1:Z5000"));
+    if (!parsed.columns.includes("date")) throw new Error(`На листе «${tab}» в первой строке нет колонки «Дата»/«Date».`);
+    all.push(...parsed.leads);
+    notes.push(`${tab}: ${parsed.leads.length}${parsed.skipped ? ` (тестовых/без даты: ${parsed.skipped})` : ""}`);
+  }
+  const { leads, merged } = dedupeLeads(all);
+  let sales: NormalizedSale[] | null = null;
+  if (cfg.salesTab) {
+    const parsed = parseSalesRows(cfg.salesTab, await readRange(cfg.spreadsheetId, cfg.salesTab, "A1:AZ3000"), today);
+    if (parsed.problem) throw new Error(parsed.problem);
+    sales = parsed.sales;
+  }
+  return { leads, sales, summary: `${notes.join(" · ")}${merged ? ` · дублей склеено: ${merged}` : ""}` };
 }
