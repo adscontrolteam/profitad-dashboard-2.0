@@ -57,6 +57,7 @@ function toProject(row: ProjectRow, metrics: Metrics, plans: MonthPlan[], range:
     owners: { smm: row.smmEmail ?? null, mediaBuyer: row.mediaBuyerEmail ?? null },
     agent: {
       leadActions: row.leadActions ?? [],
+      metaActions: { leads: row.metaActions?.leads ?? [], subscribers: row.metaActions?.subscribers ?? [] },
       currency: row.currency ?? null,
       // Budget of the range from the monthly plans; the project-level value is the current month's mirror.
       budgetMonth: plan.budget ?? row.budgetMonth ?? null,

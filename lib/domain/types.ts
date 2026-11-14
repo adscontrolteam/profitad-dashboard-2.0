@@ -98,6 +98,8 @@ export interface Project {
 export interface ProjectAgentSettings {
   /** Google Ads conversion actions that count as a lead (names as in the account). */
   leadActions: string[];
+  /** Meta Ads action types counted as leads and as subscribers. */
+  metaActions: { leads: string[]; subscribers: string[] };
   /** Ad account currency, e.g. EUR. */
   currency: string | null;
   budgetMonth: number | null;

@@ -56,8 +56,11 @@ async function run(rec: IntegrationRecord): Promise<string> {
 
 /** Cron entry point: every integration of every project, errors collected per integration. */
 export async function syncAll() {
+  // Ad stats first: the daily reports below are filled from them.
+  const { syncAllMeta } = await import("@/lib/meta/sync");
+  const results: { projectId: string; kind: string; ok: boolean; message: string }[] = await syncAllMeta();
+  for (const r of results) if (r.ok) revalidateTag(TAGS.project(r.projectId), "max");
   const all = await listIntegrations();
-  const results: { projectId: string; kind: string; ok: boolean; message: string }[] = [];
   for (const rec of all) {
     if (rec.kind === "drive" || (rec.kind === "crm" && (rec.config as CrmConfig).type === "webhook")) continue;
     try {

@@ -41,6 +41,12 @@ function positive(value: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+const actionList = (v: unknown) =>
+  (Array.isArray(v) ? v : [])
+    .map((a) => str(a, 120))
+    .filter((a) => /^[a-z0-9_.]+$/i.test(a))
+    .slice(0, 20);
+
 function parseProject(raw: unknown): ProjectInput | string {
   if (!raw || typeof raw !== "object") return "Некорректные данные формы.";
   const data = raw as Record<string, unknown>;
@@ -103,6 +109,10 @@ function parseProject(raw: unknown): ProjectInput | string {
         .map((a) => str(a, 200))
         .filter(Boolean)
         .slice(0, 30),
+      metaActions: {
+        leads: actionList((data.metaActions as Record<string, unknown> | undefined)?.leads),
+        subscribers: actionList((data.metaActions as Record<string, unknown> | undefined)?.subscribers),
+      },
       currency: /^[A-Z]{3}$/.test(str(data.currency, 3).toUpperCase()) ? str(data.currency, 3).toUpperCase() : null,
       budgetMonth: positive(data.budgetMonth),
       dailyReport: data.agentDailyReport !== false,
@@ -234,5 +244,34 @@ export async function analyzeBriefAction(input: {
     if (/credit balance/i.test(text)) return { ok: false, message: "На балансе Anthropic API закончились кредиты — пополните в console.anthropic.com → Billing." };
     if (/authentication|invalid x-api-key/i.test(text)) return { ok: false, message: "Ключ ANTHROPIC_API_KEY не принят Anthropic." };
     return { ok: false, message: text };
+  }
+}
+
+/** Meta action types of an ad account (last 30 days), to choose what counts as a lead / subscriber. */
+export async function listMetaActionsAction(accountId: string): Promise<{ ok: boolean; actions: { type: string; count: number }[]; message?: string }> {
+  await requireSection("inputs");
+  const id = accountId.replace(/\D/g, "");
+  if (!id) return { ok: false, actions: [] };
+  const { metaConfigured, accountActionTypes } = await import("@/lib/meta/ads");
+  if (!metaConfigured()) return { ok: false, actions: [], message: "Meta ещё не подключена (нет токена System User)." };
+  try {
+    return { ok: true, actions: await accountActionTypes(id) };
+  } catch (error) {
+    return { ok: false, actions: [], message: error instanceof Error ? error.message : "Ошибка Meta" };
+  }
+}
+
+/** Loads the project's Meta stats now (180 days on the first run, else the last 3 days). */
+export async function syncMetaAction(projectId: string): Promise<{ ok: boolean; message: string }> {
+  const viewer = await requireSection("inputs");
+  if (!viewer.permissions.canEditInputs || !canViewProject(viewer.permissions, projectId)) return { ok: false, message: "Нет прав." };
+  try {
+    const { syncMetaProject } = await import("@/lib/meta/sync");
+    const message = await syncMetaProject(projectId, 30);
+    updateTag(TAGS.projects);
+    updateTag(TAGS.project(projectId));
+    return { ok: true, message };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : "Ошибка Meta" };
   }
 }

@@ -4,6 +4,8 @@ import { Fragment, useActionState, useEffect, useState, useTransition } from "re
 import {
   deleteProjectAction,
   listConversionActionsAction,
+  listMetaActionsAction,
+  syncMetaAction,
   saveProjectAction,
   type ProjectActionState,
 } from "@/app/(dashboard)/inputs/actions";
@@ -11,6 +13,7 @@ import { METRICS, PLATFORM_LABELS } from "@/lib/domain/metrics";
 import type { OwnerCandidates, OwnerOption } from "@/lib/projects/owners";
 import type { IntegrationView } from "@/lib/integrations/types";
 import { ProjectIntegrations } from "./project-integrations";
+import { metaActionLabel } from "@/lib/meta/results";
 import { BriefConductor } from "./brief-conductor";
 import { STATUS_META } from "@/lib/domain/statuses";
 import {
@@ -148,6 +151,7 @@ export function ProjectEditor({
       setBudgetMonth(plan.budgetMonth?.toString() ?? "");
     }
   };
+  const [metaActions, setMetaActions] = useState(project?.agent.metaActions ?? { leads: [], subscribers: [] });
   const [agentDailyReport, setAgentDailyReport] = useState(project?.agent.dailyReport ?? true);
 
   const [state, formAction, saving] = useActionState(async (prev: ProjectActionState, formData: FormData) => {
@@ -182,6 +186,7 @@ export function ProjectEditor({
     smmEmail,
     mediaBuyerEmail,
     leadActions,
+    metaActions,
     currency,
     budgetMonth,
     agentDailyReport,
@@ -468,6 +473,15 @@ export function ProjectEditor({
             }}
           />
 
+          {sources.some((src) => src.platform === "meta" && src.accountId) && (
+            <MetaResults
+              projectId={project?.id ?? null}
+              accountId={sources.find((src) => src.platform === "meta" && src.accountId)!.accountId.replace(/\D/g, "")}
+              value={metaActions}
+              onChange={setMetaActions}
+            />
+          )}
+
           <AgentSettings
             googleAccountId={sources.find((src) => src.platform === "google" && src.accountId)?.accountId.replace(/\D/g, "") ?? ""}
             adsAccounts={adsAccounts}
@@ -644,6 +658,104 @@ function AgentSettings({
         <input type="checkbox" checked={dailyReport} onChange={(e) => setDailyReport(e.target.checked)} className="size-4 accent-[var(--accent)]" />
         Утренний отчёт агента в Telegram
       </label>
+    </fieldset>
+  );
+}
+
+/** What counts as a lead / subscriber in Meta: action types of the ad account, picked from its last 30 days. */
+function MetaResults({
+  projectId,
+  accountId,
+  value,
+  onChange,
+}: {
+  projectId: string | null;
+  accountId: string;
+  value: { leads: string[]; subscribers: string[] };
+  onChange: (v: { leads: string[]; subscribers: string[] }) => void;
+}) {
+  const [available, setAvailable] = useState<{ type: string; count: number }[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [syncing, startSync] = useTransition();
+  const [syncMessage, setSyncMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listMetaActionsAction(accountId).then((r) => {
+      if (cancelled) return;
+      setAvailable(r.ok ? r.actions : []);
+      setLoadError(r.ok ? null : (r.message ?? null));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId]);
+
+  const group = (key: "leads" | "subscribers", title: string, hint: string) => {
+    const chosen = value[key];
+    const options = [...new Set([...(available ?? []).map((a) => a.type), ...chosen])];
+    const count = (t: string) => available?.find((a) => a.type === t)?.count;
+    const toggle = (t: string) => onChange({ ...value, [key]: chosen.includes(t) ? chosen.filter((x) => x !== t) : [...chosen, t] });
+    return (
+      <Field label={title}>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs text-muted-foreground">{hint}</span>
+          {options.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {options.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => toggle(t)}
+                  aria-pressed={chosen.includes(t)}
+                  title={t}
+                  className={
+                    chosen.includes(t)
+                      ? "rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground"
+                      : "rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+                  }
+                >
+                  {metaActionLabel(t)}
+                  {count(t) !== undefined && <span className="ml-1 opacity-60 tabular-nums">{Math.round(count(t)!)}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Field>
+    );
+  };
+
+  return (
+    <fieldset className="flex flex-col gap-3">
+      <legend className="section-kicker mb-2">Meta: что считать результатом</legend>
+      <p className="-mt-1 text-xs leading-5 text-muted-foreground">
+        Действия кабинета {accountId} за последние 30 дней, цифра — сколько их было. Выберите, что идёт в «Лиды» и в «Подписчики»; можно несколько,
+        они сложатся.
+      </p>
+      {available === null && <span className="text-xs text-muted-foreground">Загружаю действия кабинета…</span>}
+      {loadError && <span className="text-xs text-warning">{loadError}</span>}
+      {group("leads", "Лиды", "Не выбрано — берём «Лиды (все)».")}
+      {group("subscribers", "Подписчики", "Не выбрано — подписчиков считать не будем.")}
+      {projectId && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            className="btn-ghost border border-border px-3 py-1.5 text-xs"
+            disabled={syncing}
+            onClick={() =>
+              startSync(async () => {
+                const r = await syncMetaAction(projectId);
+                setSyncMessage({ ok: r.ok, text: r.message });
+              })
+            }
+          >
+            {syncing ? "Загружаю…" : "Загрузить данные Meta"}
+          </button>
+          <span className="text-xs text-muted-foreground">Сначала сохраните выбор. Дальше — каждую ночь сама.</span>
+          {syncMessage && <span className={syncMessage.ok ? "text-xs text-positive" : "text-xs text-warning"}>{syncMessage.text}</span>}
+        </div>
+      )}
     </fieldset>
   );
 }

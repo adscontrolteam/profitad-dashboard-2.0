@@ -20,6 +20,7 @@ function toRow(input: ProjectInput) {
     smmEmail: input.owners.smm,
     mediaBuyerEmail: input.owners.mediaBuyer,
     leadActions: input.agent.leadActions,
+    metaActions: input.agent.metaActions,
     currency: input.agent.currency,
     agentDailyReport: input.agent.dailyReport,
   };

@@ -122,6 +122,8 @@ export const projects = pgTable("projects", {
   mediaBuyerEmail: text("media_buyer_email"),
   /** What the AI agent needs (read by the agent through the bot_sync role; see docs/agent-contract.md). */
   leadActions: jsonb("lead_actions").$type<string[]>().notNull().default([]),
+  /** Meta action types counted as leads / subscribers (e.g. "lead", "like"); empty = defaults, see lib/meta/results.ts. */
+  metaActions: jsonb("meta_actions").$type<{ leads?: string[]; subscribers?: string[] }>().notNull().default({}),
   currency: text("currency"),
   budgetMonth: doublePrecision("budget_month"),
   agentDailyReport: boolean("agent_daily_report").notNull().default(true),

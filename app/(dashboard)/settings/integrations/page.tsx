@@ -12,6 +12,8 @@ import { serviceAccountEmail, workspaceUser } from "@/lib/google/auth";
 import { INTEGRATION_LABELS } from "@/lib/integrations/kinds";
 import { listIntegrations } from "@/lib/integrations/store";
 
+import { metaAdAccounts, metaConfigured } from "@/lib/meta/ads";
+
 export const metadata: Metadata = { title: "Подключения" };
 
 const fmt = (d: Date | null) =>
@@ -22,6 +24,11 @@ export default async function IntegrationsSettingsPage() {
   const sa = serviceAccountEmail();
   const ads = adsConfigured()
     ? await listAccounts()
+        .then((accounts) => ({ ok: true as const, accounts }))
+        .catch((e: Error) => ({ ok: false as const, error: e.message }))
+    : null;
+  const meta = metaConfigured()
+    ? await metaAdAccounts()
         .then((accounts) => ({ ok: true as const, accounts }))
         .catch((e: Error) => ({ ok: false as const, error: e.message }))
     : null;
@@ -52,7 +59,15 @@ export default async function IntegrationsSettingsPage() {
     },
     { label: "Шифрование секретов", ok: hasEncryptionKey(), detail: hasEncryptionKey() ? "TOKEN_ENCRYPTION_KEY задан" : "TOKEN_ENCRYPTION_KEY не задан — CRM-токены сохранить нельзя" },
     { label: "Ежедневная синхронизация", ok: Boolean(process.env.CRON_SECRET), detail: process.env.CRON_SECRET ? "CRON_SECRET задан, запуск каждый день в 05:00 UTC" : "CRON_SECRET не задан — Vercel Cron не сможет запускать синк" },
-    { label: "Meta Ads API", ok: false, detail: "Приложение Meta заблокировано с 30.09.2026 (по данным агента). Запуск и постинг в Meta — после разблокировки." },
+    {
+      label: "Meta Ads API (чтение статистики)",
+      ok: Boolean(meta?.ok),
+      detail: !meta
+        ? "Нужен META_SYSTEM_USER_TOKEN — токен System User нашего Business Manager с ads_read на кабинеты клиентов"
+        : meta.ok
+          ? `Кабинетов доступно: ${meta.accounts.length}${meta.accounts.length ? ` (${meta.accounts.slice(0, 5).map((a) => a.name).join(", ")}${meta.accounts.length > 5 ? "…" : ""})` : ""}`
+          : `Ошибка: ${meta.error}`,
+    },
   ];
 
   return (
