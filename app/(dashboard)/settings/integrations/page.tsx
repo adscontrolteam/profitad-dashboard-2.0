@@ -60,6 +60,13 @@ export default async function IntegrationsSettingsPage() {
     { label: "Шифрование секретов", ok: hasEncryptionKey(), detail: hasEncryptionKey() ? "TOKEN_ENCRYPTION_KEY задан" : "TOKEN_ENCRYPTION_KEY не задан — CRM-токены сохранить нельзя" },
     { label: "Ежедневная синхронизация", ok: Boolean(process.env.CRON_SECRET), detail: process.env.CRON_SECRET ? "CRON_SECRET задан, запуск каждый день в 05:00 UTC" : "CRON_SECRET не задан — Vercel Cron не сможет запускать синк" },
     {
+      label: "Telegram (напоминание «Посмотреть Лог»)",
+      ok: Boolean(process.env.TELEGRAM_BOT_TOKEN),
+      detail: process.env.TELEGRAM_BOT_TOKEN
+        ? "Раз в 3 дня в чат проекта, если в Логе есть новое. ID чата — во «Вводных» → AI-агент"
+        : "Нужен TELEGRAM_BOT_TOKEN — токен того же бота, что и у агента; бот должен быть в чатах проектов",
+    },
+    {
       label: "Meta Ads API (чтение статистики)",
       ok: Boolean(meta?.ok),
       detail: !meta

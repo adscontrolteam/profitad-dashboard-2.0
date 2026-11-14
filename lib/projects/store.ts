@@ -23,6 +23,8 @@ function toRow(input: ProjectInput) {
     metaActions: input.agent.metaActions,
     currency: input.agent.currency,
     agentLeadSource: input.agent.leadSource,
+    telegramChatId: input.agent.telegramChatId,
+    telegramThreadId: input.agent.telegramThreadId,
     agentDailyReport: input.agent.dailyReport,
   };
 }

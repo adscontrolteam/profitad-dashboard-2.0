@@ -105,6 +105,9 @@ export interface ProjectAgentSettings {
   budgetMonth: number | null;
   /** Where the agent counts leads: Google Ads conversions, the client's lead sheet / CRM, or both. */
   leadSource: "ads" | "sheet" | "both";
+  /** Project chat in Telegram (from /whereami) and its topic; the «Посмотреть Лог» reminder goes there. */
+  telegramChatId: string | null;
+  telegramThreadId: number | null;
   /** Morning report in Telegram. */
   dailyReport: boolean;
 }

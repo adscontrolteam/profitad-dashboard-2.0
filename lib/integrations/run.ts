@@ -13,6 +13,8 @@ export async function syncIntegration(rec: IntegrationRecord): Promise<string> {
   try {
     const message = await run(rec);
     await markIntegration(rec.projectId, rec.kind, null);
+    // A manual re-sync that works closes the open «не обновилась» entry right away.
+    if (rec.kind !== "drive") await (await import("@/lib/log/checks")).logSyncResults([{ projectId: rec.projectId, kind: rec.kind, ok: true, message }]);
     revalidateTag(TAGS.project(rec.projectId), "max");
     revalidateTag(TAGS.projects, "max");
     return message;
@@ -78,6 +80,12 @@ export async function syncAll() {
       results.push({ projectId: rec.projectId, kind: rec.kind, ok: false, message: (error as Error).message });
     }
   }
+  // Project log: sync failures, daily checks, then the «Посмотреть Лог» reminder (at most every 3 days).
+  const { logSyncResults, runProjectChecks } = await import("@/lib/log/checks");
+  await logSyncResults(results.filter((r) => r.kind !== "drive"));
+  await runProjectChecks();
+  const { notifyLogs } = await import("@/lib/log/notify");
+  results.push(...(await notifyLogs()));
   // A new month may have a plan set in advance: keep the agent's copy of the current plan up to date.
   const { getDb } = await import("@/db");
   const { projects } = await import("@/db/schema");

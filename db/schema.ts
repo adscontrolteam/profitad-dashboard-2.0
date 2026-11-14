@@ -130,6 +130,11 @@ export const projects = pgTable("projects", {
   budgetMonth: doublePrecision("budget_month"),
   agentDailyReport: boolean("agent_daily_report").notNull().default(true),
   /** Where the AI agent counts leads: ads = Google Ads conversions (lead_actions), sheet = client's lead sheet / CRM, both. */
+  /** Project chat in Telegram (from /whereami): the «Посмотреть Лог» reminder goes there. */
+  telegramChatId: text("telegram_chat_id"),
+  telegramThreadId: integer("telegram_thread_id"),
+  /** Last «Посмотреть Лог» reminder; the next one comes no sooner than 3 days later. */
+  logNotifiedAt: timestamp("log_notified_at", { withTimezone: true }),
   agentLeadSource: text("agent_lead_source").$type<"ads" | "sheet" | "both">().notNull().default("ads"),
   position: integer("position").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -290,6 +295,38 @@ export const salesRecords = pgTable(
   },
   (t) => [primaryKey({ columns: [t.projectId, t.source, t.externalId] }), index("sales_records_project_date_idx").on(t.projectId, t.date)],
 );
+
+/**
+ * Project log: proposals, analysis, errors and warnings from the dashboard and the AI agent.
+ * status: auto = resolved automatically, needs_you = waits for a person, done = resolved by a person.
+ * `topic` groups entries of one recurring condition (e.g. «sync:sheets_leads»): while it holds, one open entry is
+ * updated instead of piling up; when it clears, the entry is closed as resolved automatically.
+ */
+export const projectLog = pgTable(
+  "project_log",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    /** dashboard | agent */
+    source: text("source").notNull().default("dashboard"),
+    /** proposal | analysis | error | warning | info */
+    kind: text("kind").notNull().default("info"),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    status: text("status").$type<"auto" | "needs_you" | "done">().notNull(),
+    topic: text("topic"),
+    /** Optional link inside the dashboard (e.g. /inputs) or outside. */
+    link: text("link"),
+    resolvedBy: text("resolved_by"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolutionNote: text("resolution_note"),
+  },
+  (t) => [index("project_log_project_idx").on(t.projectId, t.createdAt), index("project_log_topic_idx").on(t.projectId, t.topic, t.status)],
+);
+
+export type ProjectLogRow = typeof projectLog.$inferSelect;
 
 /** Every action that changes something outside the dashboard (ad platforms, sheets, drive). */
 export const auditLog = pgTable(

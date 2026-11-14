@@ -152,6 +152,8 @@ export function ProjectEditor({
     }
   };
   const [metaActions, setMetaActions] = useState(project?.agent.metaActions ?? { leads: [], subscribers: [] });
+  const [telegramChatId, setTelegramChatId] = useState(project?.agent.telegramChatId ?? "");
+  const [telegramThreadId, setTelegramThreadId] = useState(project?.agent.telegramThreadId?.toString() ?? "");
   const [agentLeadSource, setAgentLeadSource] = useState<"ads" | "sheet" | "both">(project?.agent.leadSource ?? "ads");
   const [agentDailyReport, setAgentDailyReport] = useState(project?.agent.dailyReport ?? true);
 
@@ -192,6 +194,8 @@ export function ProjectEditor({
     budgetMonth,
     agentDailyReport,
     agentLeadSource,
+    telegramChatId,
+    telegramThreadId,
     createDrive: !project && (createDrive || createReport),
     createReport: !project && createReport,
   });
@@ -491,6 +495,17 @@ export function ProjectEditor({
             setLeadActions={setLeadActions}
             currency={currency}
             setCurrency={setCurrency}
+            telegram={
+              <div className="grid grid-cols-[1fr_120px] gap-3">
+                <Field label="Telegram-чат проекта (ID из /whereami)">
+                  <input className="field tabular-nums" placeholder="-1001234567890" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value.trim())} />
+                </Field>
+                <Field label="Ветка">
+                  <input className="field tabular-nums" placeholder="—" value={telegramThreadId} onChange={(e) => setTelegramThreadId(e.target.value.trim())} />
+                </Field>
+                <p className="col-span-2 -mt-1 text-xs text-muted-foreground">Раз в 3 дня, если в Логе проекта есть новое, сюда придёт «Посмотреть Лог».</p>
+              </div>
+            }
             leadSource={agentLeadSource}
             setLeadSource={setAgentLeadSource}
             hasLeadSheet={integrations.some((i) => i.kind === "sheets_leads" || i.kind === "crm")}
@@ -571,6 +586,7 @@ function AgentSettings({
   setLeadActions,
   currency,
   setCurrency,
+  telegram,
   leadSource,
   setLeadSource,
   hasLeadSheet,
@@ -583,6 +599,7 @@ function AgentSettings({
   setLeadActions: (v: string[]) => void;
   currency: string;
   setCurrency: (v: string) => void;
+  telegram: React.ReactNode;
   leadSource: "ads" | "sheet" | "both";
   setLeadSource: (v: "ads" | "sheet" | "both") => void;
   hasLeadSheet: boolean;
@@ -692,6 +709,7 @@ function AgentSettings({
           {!hasLeadSheet && <span className="text-xs text-muted-foreground">Таблица станет доступна, когда в «Подключениях» проекта будет таблица лидов или CRM.</span>}
         </div>
       </Field>
+      {telegram}
       <label className="flex cursor-pointer items-center gap-3 text-sm">
         <input type="checkbox" checked={dailyReport} onChange={(e) => setDailyReport(e.target.checked)} className="size-4 accent-[var(--accent)]" />
         Утренний отчёт агента в Telegram

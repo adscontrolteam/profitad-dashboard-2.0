@@ -63,6 +63,8 @@ function toProject(row: ProjectRow, metrics: Metrics, plans: MonthPlan[], range:
       budgetMonth: plan.budget ?? row.budgetMonth ?? null,
       dailyReport: row.agentDailyReport ?? true,
       leadSource: row.agentLeadSource ?? "ads",
+      telegramChatId: row.telegramChatId ?? null,
+      telegramThreadId: row.telegramThreadId ?? null,
     },
     metrics,
   };

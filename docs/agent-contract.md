@@ -116,3 +116,30 @@ WHERE project_id = $1 AND day BETWEEN $2 AND $3;
 лиды без кампании учитываются только в итоге по проекту.
 
 **Права:** владелец выполняет один раз `GRANT SELECT ON agent_leads_daily TO bot_sync;`
+
+## Лог проекта (с 14.11.2026)
+
+Владелец смотрит всё, что агент предложил, проанализировал, сделал сам или не смог, в блоке «Лог» на странице
+«Реклама → Аналитика» проекта. Telegram для этого больше не нужен: раз в 3 дня дашборд сам шлёт в чат проекта
+одно сообщение с кнопкой «Посмотреть Лог», если там есть новое.
+
+Агент пишет в таблицу `project_log` (права: `GRANT SELECT, INSERT, UPDATE ON project_log TO bot_sync;`):
+
+```sql
+INSERT INTO project_log (id, project_id, source, kind, title, body, status, topic, link)
+VALUES (gen_random_uuid()::text, $project_id, 'agent', $kind, $title, $body, $status, $topic, $link);
+```
+
+| Поле | Значение |
+|---|---|
+| `project_id` | `clients.dashboard_project_id` |
+| `kind` | `proposal` — предложение правки; `analysis` — разбор/вывод; `error` — не смог (API, данные); `warning` — заметил проблему; `info` — сделал сам |
+| `title` | одна строка, до 300 символов: что и в какой кампании |
+| `body` | детали: цифры, почему, что будет; до 4000 символов |
+| `status` | `auto` — агент решил и сделал сам («Решено автоматически»); `needs_you` — нужен человек («Ждёт вашего решения») |
+| `topic` | необязательно: ключ повторяющейся проблемы (например `cpa_high:campaign_123`), чтобы не плодить одинаковые записи — пока есть открытая запись с этим `topic` и `status = 'needs_you'`, обновлять её (`UPDATE … SET body, updated_at = now()`), а не вставлять новую |
+| `link` | необязательно: ссылка на кампанию или документ |
+
+Когда владелец подтвердил/отклонил предложение в Telegram, агент закрывает запись:
+`UPDATE project_log SET status = 'done', resolved_by = 'Telegram', resolved_at = now(), resolution_note = 'Применено' | 'Отклонено' WHERE id = $id`.
+Решить сам вопрос, который ждёт человека, агент не должен: `needs_you` закрывает только человек или исчезнувшая причина.

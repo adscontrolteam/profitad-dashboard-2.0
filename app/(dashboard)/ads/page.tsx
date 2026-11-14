@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { CampaignsTable } from "@/components/ads/campaigns-table";
+import { ProjectLog } from "@/components/ads/project-log";
+import { listLog } from "@/lib/log/store";
 import { Card } from "@/components/ui/card";
 import { BarChart, formatShortDate, KpiTile } from "@/components/workspace/charts";
 import { WorkspaceHeader } from "@/components/workspace/header";
@@ -41,6 +43,7 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
   const resultMetric = ws.project.kpis[0]?.metric ?? "leads";
   const report = await getAdsReport(ws.project, { from: ws.range.from, to: ws.range.to }, platform, resultMetric);
   const campaigns = await withLiveGoogleStatus(report.campaigns);
+  const log = await listLog(ws.project.id);
   const liveGoogle = report.source === "synced" && adsConfigured();
   const spend = report.days.reduce((a, d) => a + d.spend, 0);
   const results = report.days.reduce((a, d) => a + d.results, 0);
@@ -81,6 +84,22 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
           hint={report.reach ? `охват ${formatNumber(report.reach)}` : "нет данных об охвате"}
         />
       </section>
+
+      <ProjectLog
+        projectId={ws.project.id}
+        items={log.map((l) => ({
+          id: l.id,
+          at: l.updatedAt.toISOString(),
+          source: l.source,
+          kind: l.kind,
+          title: l.title,
+          body: l.body,
+          status: l.status,
+          link: l.link,
+          resolvedBy: l.resolvedBy,
+          resolutionNote: l.resolutionNote,
+        }))}
+      />
 
       <Card>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
