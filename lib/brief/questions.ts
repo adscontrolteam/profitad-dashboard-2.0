@@ -90,7 +90,12 @@ export const BRIEF_SECTIONS: BriefSection[] = [
       q("tech_ads", "Рекламные кабинеты Google Ads и Meta: есть ли, кто владелец, были ли блокировки?", "Рекламні кабінети Google Ads і Meta: чи є, хто власник, чи були блокування?", "Google Ads and Meta ad accounts: do you have them, who owns them, any past bans?"),
       q("tech_meta", "Business Manager, страница Facebook, Instagram: есть ли и кто администратор?", "Business Manager, сторінка Facebook, Instagram: чи є і хто адміністратор?", "Business Manager, Facebook page, Instagram: do you have them and who is the admin?"),
       q("tech_domain", "Доступ к домену и хостингу: дадите нам или ставите сами по нашей инструкции?", "Доступ до домену й хостингу: дасте нам чи ставите самі за нашою інструкцією?", "Domain and hosting access: will you give it to us or install things yourself following our guide?"),
-      q("tech_payment", "Способ оплаты рекламы: чья карта, нужны ли закрывающие документы?", "Спосіб оплати реклами: чия картка, чи потрібні закриваючі документи?", "How ads are paid: whose card, do you need accounting documents?"),
+      q(
+        "tech_payment",
+        "Способ оплаты рекламы: передадите данные своей рекламной карты нам, подключите её в аккаунт сами, она уже подключена — или нам создать свою карту, а вы будете отправлять бюджет нам?",
+        "Спосіб оплати реклами: передасте дані своєї рекламної картки нам, підключите її в акаунт самі, вона вже підключена — чи нам створити свою картку, а ви надсилатимете бюджет нам?",
+        "Paying for ads: will you pass us your ad card details, connect the card to the account yourself, is it already connected — or should we issue our own card and you send the budget to us?",
+      ),
     ],
   },
   {

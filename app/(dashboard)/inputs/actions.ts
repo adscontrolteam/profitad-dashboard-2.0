@@ -30,6 +30,8 @@ export interface ProjectActionState {
   message: string | null;
   /** Saved, but something to read before closing (e.g. Drive/report creation failed). */
   warning?: string | null;
+  /** Id of the project just created — to open its client brief straight away. */
+  projectId?: string;
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -182,7 +184,7 @@ export async function saveProjectAction(
     const provisionWarning = await provision(newId, input.name, viewer.email, Boolean(flags.createDrive), Boolean(flags.createReport));
     const warning = [provisionWarning, await accessSummary(newId, viewer.email)].filter(Boolean).join("\n") || null;
     updateTag(TAGS.projects);
-    return { ok: true, message: "Проект добавлен.", warning };
+    return { ok: true, message: "Проект добавлен.", warning, projectId: newId };
   }
 
   updateTag(TAGS.projects);

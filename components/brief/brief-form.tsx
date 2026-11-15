@@ -1,5 +1,6 @@
 "use client";
 
+import { BRIEF_HINTS } from "@/lib/brief/hints";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { BRIEF_SECTIONS, BRIEF_UI, type BriefLang } from "@/lib/brief/questions";
@@ -123,9 +124,9 @@ export function BriefForm({ lang, initial, hidden, readOnly = false, onSave, ren
                     </label>
                     <textarea
                       id={`q-${item.id}`}
-                      rows={Math.min(8, Math.max(2, Math.ceil((answers[item.id] ?? "").length / 90)))}
-                      className="field resize-y"
-                      placeholder={ui.placeholder}
+                      rows={Math.min(8, Math.max(3, Math.ceil((answers[item.id] ?? "").length / 90)))}
+                      className="field resize-y text-sm leading-5 [field-sizing:content] min-h-[4.5rem] placeholder:text-[13px] placeholder:leading-5"
+                      placeholder={BRIEF_HINTS[item.id]?.[lang] ?? ui.placeholder}
                       value={answers[item.id] ?? ""}
                       disabled={readOnly}
                       onChange={(e) => change(item.id, e.target.value)}

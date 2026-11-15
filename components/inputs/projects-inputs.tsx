@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { InfoHint } from "@/components/ui/info-hint";
 import { SourceChips } from "@/components/projects/source-chips";
@@ -102,7 +103,10 @@ export function ProjectsInputs({
                   с {formatDate(project.startDate)}
                 </td>
                 {canEdit && (
-                  <td className="rounded-r-[18px] bg-background/70 px-2 py-2 transition-colors group-hover:bg-muted">
+                  <td className="whitespace-nowrap rounded-r-[18px] bg-background/70 px-2 py-2 transition-colors group-hover:bg-muted">
+                    <Link href={`/inputs/brief/${project.id}`} className="btn-ghost px-3 py-1.5" title="Бриф клиента: ссылка для клиента, вопросы и ответы">
+                      Бриф
+                    </Link>
                     <button type="button" className="btn-ghost px-3 py-1.5" onClick={() => setEditing(project)}>
                       Изменить
                     </button>

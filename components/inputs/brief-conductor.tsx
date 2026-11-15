@@ -136,6 +136,19 @@ export function BriefConductor({
     <fieldset className="flex flex-col gap-3 rounded-2xl border border-border p-4">
       <legend className="section-kicker px-1">Бриф целиком · Дирижёр <InfoHint className="ml-1">Вставьте бриф как есть: переписку с клиентом, заметки со звонка, анкету. Дирижёр разложит его по полям проекта и спросит то, чего не хватает для
         запуска. В форму ничего не попадёт, пока вы не нажмёте «Применить».</InfoHint></legend>
+      {!projectId && (
+        <div className="flex flex-col gap-2 rounded-[16px] border border-border bg-background/60 px-3 py-3">
+          <p className="text-sm font-semibold">Бриф клиента</p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Клиент получает ссылку без регистрации и сам отвечает на вопросы о бизнесе, продукте, аудитории и рекламе; ответы сохраняются сами и
+            потом подставляются сюда, в Дирижёра. Ссылка привязана к проекту, поэтому сначала проект нужно сохранить — достаточно названия и даты
+            старта, остальное заполните после ответов клиента.
+          </p>
+          <button type="submit" name="after" value="brief" className="btn-primary w-fit px-4 py-2 text-sm">
+            Сохранить проект и открыть бриф клиента →
+          </button>
+        </div>
+      )}
       {projectId && (
         <div className="flex flex-wrap items-center gap-2">
           <Link href={`/inputs/brief/${projectId}`} className="btn-ghost border border-border px-3 py-1.5 text-xs">

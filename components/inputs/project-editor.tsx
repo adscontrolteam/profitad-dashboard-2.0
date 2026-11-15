@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useActionState, useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { InfoHint } from "@/components/ui/info-hint";
 import {
   deleteProjectAction,
@@ -162,8 +163,14 @@ export function ProjectEditor({
   const [agentLeadSource, setAgentLeadSource] = useState<"ads" | "sheet" | "both">(project?.agent.leadSource ?? "ads");
   const [agentDailyReport, setAgentDailyReport] = useState(project?.agent.dailyReport ?? true);
 
+  const router = useRouter();
   const [state, formAction, saving] = useActionState(async (prev: ProjectActionState, formData: FormData) => {
     const next = await saveProjectAction(prev, formData);
+    // «Сохранить и открыть бриф клиента»: a new project goes straight to its brief page.
+    if (next.ok && next.projectId && formData.get("after") === "brief") {
+      router.push(`/inputs/brief/${next.projectId}`);
+      return next;
+    }
     if (next.ok && !next.warning) onClose();
     return next;
   }, IDLE);
