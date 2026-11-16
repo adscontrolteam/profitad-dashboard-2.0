@@ -35,12 +35,13 @@ export default async function TasksPage({ searchParams }: PageProps<"/tasks">) {
   return (
     <div className="flex min-h-0 flex-col gap-5">
       {!archived && <TaskSummaryTiles summary={summarizeTasks(tasks, today, viewer.email)} />}
-      <TaskViewTabs archived={archived} />
+      {archived && <TaskViewTabs archived />}
       {archived ? (
         <TaskArchive tasks={tasks} projects={projectOptions} team={team} />
       ) : (
         <TaskBoard
           key="board"
+          tabs={<TaskViewTabs archived={false} />}
           tasks={tasks}
           projects={projectOptions}
           team={team}

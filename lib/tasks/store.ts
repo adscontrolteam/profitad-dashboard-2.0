@@ -135,6 +135,24 @@ export async function archiveProjectTasks(projectId: string, actorEmail: string,
     .where(and(eq(tasks.projectId, projectId), isNull(tasks.archivedAt), lt(tasks.createdAt, at)));
 }
 
+/** Bulk change from the board: only the fields present in `patch` are touched. */
+export async function assignTasks(
+  ids: string[],
+  patch: { projectId?: string | null; assigneeEmail?: string | null },
+  actorEmail: string,
+) {
+  if (ids.length === 0) return;
+  await getDb()
+    .update(tasks)
+    .set({ ...patch, updatedAt: new Date(), updatedBy: actorEmail })
+    .where(inArray(tasks.id, ids));
+}
+
+export async function deleteTasks(ids: string[]) {
+  if (ids.length === 0) return;
+  await getDb().delete(tasks).where(inArray(tasks.id, ids));
+}
+
 export async function deleteTask(id: string) {
   await getDb().delete(tasks).where(eq(tasks.id, id));
 }

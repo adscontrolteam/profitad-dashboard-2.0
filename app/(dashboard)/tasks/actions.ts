@@ -7,9 +7,11 @@ import { isTaskStage, type TaskComment } from "@/lib/tasks/stages";
 import {
   addComment,
   archiveTasks,
+  assignTasks,
   createTask,
   deleteComment,
   deleteTask,
+  deleteTasks,
   getComment,
   getTask,
   listComments,
@@ -106,6 +108,40 @@ export async function restoreTasksAction(ids: string[]): Promise<TaskActionState
   await restoreTasks(allowed, viewer.email);
   refresh();
   return { ok: true, message: `Восстановлено: ${allowed.length}` };
+}
+
+/** Sets the project and/or the assignee of many tasks at once; `null` clears the field. */
+export async function assignTasksAction(
+  ids: string[],
+  patch: { projectId?: string | null; assigneeEmail?: string | null },
+): Promise<TaskActionState> {
+  const viewer = await requireSection("tasks");
+  const next: { projectId?: string | null; assigneeEmail?: string | null } = {};
+
+  if (patch && "projectId" in patch) {
+    const projectId = typeof patch.projectId === "string" ? patch.projectId.trim().slice(0, 64) || null : null;
+    if (!canTouchProject(viewer, projectId)) return { ok: false, message: "Нет доступа к проекту." };
+    next.projectId = projectId;
+  }
+  if (patch && "assigneeEmail" in patch) {
+    const assignee = typeof patch.assigneeEmail === "string" ? normalizeEmail(patch.assigneeEmail.slice(0, 200)) : "";
+    if (assignee && !isValidEmail(assignee)) return { ok: false, message: "Некорректный исполнитель." };
+    next.assigneeEmail = assignee || null;
+  }
+  if (Object.keys(next).length === 0) return { ok: false, message: "Нечего менять." };
+
+  const allowed = await visibleTaskIds(viewer, ids);
+  await assignTasks(allowed, next, viewer.email);
+  refresh();
+  return { ok: true, message: `Обновлено: ${allowed.length}` };
+}
+
+export async function deleteTasksAction(ids: string[]): Promise<TaskActionState> {
+  const viewer = await requireSection("tasks");
+  const allowed = await visibleTaskIds(viewer, ids);
+  await deleteTasks(allowed);
+  refresh();
+  return { ok: true, message: `Удалено: ${allowed.length}` };
 }
 
 export async function deleteTaskAction(id: string): Promise<TaskActionState> {

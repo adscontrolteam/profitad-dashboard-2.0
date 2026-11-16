@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useDeferredValue, useOptimistic, useState, useTransition } from "react";
-import { archiveTasksAction, moveTaskAction } from "@/app/(dashboard)/tasks/actions";
+import { useDeferredValue, useOptimistic, useState, useTransition, type ReactNode } from "react";
+import { archiveTasksAction, assignTasksAction, deleteTasksAction, moveTaskAction } from "@/app/(dashboard)/tasks/actions";
 import { TONE_DOT } from "@/components/ui/status-badge";
 import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/format";
@@ -13,6 +13,8 @@ import { initials, memberLabel, type TaskProject } from "./types";
 
 type Move = { id: string; stage: TaskStage; position: number };
 type DropTarget = { stage: TaskStage; beforeId: string | null };
+type Patch = { projectId?: string | null; assigneeEmail?: string | null };
+type Change = Move | { remove: string[] } | { ids: string[]; patch: Patch };
 
 const ALL = "";
 const NONE = "__none";
@@ -34,6 +36,7 @@ export function TaskBoard({
   canModerate,
   personal = false,
   initialTaskId = null,
+  tabs,
 }: {
   tasks: Task[];
   projects: TaskProject[];
@@ -45,16 +48,20 @@ export function TaskBoard({
   personal?: boolean;
   /** Opens this task on load (links like /tasks?task=<id>). */
   initialTaskId?: string | null;
+  /** Shown on the left of the bulk-actions row (the Доска / Архив switch). */
+  tabs?: ReactNode;
 }) {
   const router = useRouter();
   const [optimisticTasks, applyChange] = useOptimistic(
     tasks,
-    (state, change: Move | { archive: string[] }) =>
-      "archive" in change
-        ? state.filter((t) => !change.archive.includes(t.id))
-        : state.map((t) => (t.id === change.id ? { ...t, stage: change.stage, position: change.position } : t)),
+    (state, change: Change) =>
+      "remove" in change
+        ? state.filter((t) => !change.remove.includes(t.id))
+        : "patch" in change
+          ? state.map((t) => (change.ids.includes(t.id) ? { ...t, ...change.patch } : t))
+          : state.map((t) => (t.id === change.id ? { ...t, stage: change.stage, position: change.position } : t)),
   );
-  const [archiving, startTransition] = useTransition();
+  const [busy, startTransition] = useTransition();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
   const [projectFilter, setProjectFilter] = useState(ALL);
@@ -101,8 +108,29 @@ export function TaskBoard({
     const ids = selectedIds;
     setSelected(new Set());
     startTransition(async () => {
-      applyChange({ archive: ids });
+      applyChange({ remove: ids });
       await archiveTasksAction(ids);
+    });
+  };
+
+  const deleteSelected = () => {
+    const ids = selectedIds;
+    if (ids.length === 0) return;
+    if (!window.confirm(`Удалить выбранные задачи (${ids.length}) навсегда? Для скрытия лучше отправить их в архив.`)) return;
+    setSelected(new Set());
+    startTransition(async () => {
+      applyChange({ remove: ids });
+      await deleteTasksAction(ids);
+    });
+  };
+
+  /** The selection stays, so a project and an assignee can be set one after the other. */
+  const assignSelected = (patch: Patch) => {
+    const ids = selectedIds;
+    if (ids.length === 0) return;
+    startTransition(async () => {
+      applyChange({ ids, patch });
+      await assignTasksAction(ids, patch);
     });
   };
 
@@ -125,6 +153,75 @@ export function TaskBoard({
 
   return (
     <section className="flex min-h-0 flex-col gap-3">
+      {(tabs || selectedIds.length > 0) && (
+        <div className="mb-2 flex min-h-[42px] flex-wrap items-center gap-2">
+          {tabs}
+          {selectedIds.length > 0 && (
+            <div
+              role="toolbar"
+              aria-label="Действия с выбранными задачами"
+              className="ml-auto flex flex-wrap items-center justify-end gap-2"
+            >
+              <span className="text-sm font-semibold tabular-nums">Выбрано: {selectedIds.length}</span>
+              <select
+                value=""
+                disabled={busy}
+                onChange={(e) => assignSelected({ projectId: e.target.value === NONE ? null : e.target.value })}
+                className="field w-auto max-w-[190px] rounded-full py-1.5"
+                aria-label="Назначить проект выбранным задачам"
+              >
+                <option value="" disabled>
+                  Назначить проект
+                </option>
+                <option value={NONE}>Без проекта</option>
+                {projects
+                  .filter((p) => !p.archived)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
+              <select
+                value=""
+                disabled={busy}
+                onChange={(e) => assignSelected({ assigneeEmail: e.target.value === NONE ? null : e.target.value })}
+                className="field w-auto max-w-[210px] rounded-full py-1.5"
+                aria-label="Назначить исполнителя выбранным задачам"
+              >
+                <option value="" disabled>
+                  Назначить исполнителя
+                </option>
+                <option value={NONE}>Без исполнителя</option>
+                {team.map((m) => (
+                  <option key={m.email} value={m.email}>
+                    {memberLabel(m, m.email)}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="btn-ghost px-3 py-1.5" disabled={busy} onClick={archiveSelected}>
+                В архив
+              </button>
+              <button
+                type="button"
+                className="btn-ghost px-3 py-1.5 text-negative hover:text-negative"
+                disabled={busy}
+                onClick={deleteSelected}
+              >
+                Удалить
+              </button>
+              <button
+                type="button"
+                className="btn-ghost px-3 py-1.5"
+                onClick={() => setSelected(new Set())}
+                aria-label="Снять выделение"
+              >
+                Снять
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <input
           type="search"
@@ -278,24 +375,6 @@ export function TaskBoard({
           );
         })}
       </div>
-
-      {selectedIds.length > 0 && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 flex justify-center px-3 lg:bottom-6">
-          <div
-            role="toolbar"
-            aria-label="Действия с выбранными задачами"
-            className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card py-1.5 pr-1.5 pl-4 shadow-[var(--shadow)]"
-          >
-            <span className="text-sm font-semibold tabular-nums">Выбрано: {selectedIds.length}</span>
-            <button type="button" className="btn-ghost px-3 py-1.5" onClick={() => setSelected(new Set())}>
-              Снять
-            </button>
-            <button type="button" className="btn-primary" disabled={archiving} onClick={archiveSelected}>
-              В архив
-            </button>
-          </div>
-        </div>
-      )}
 
       {drawer && (
         <TaskDrawer
