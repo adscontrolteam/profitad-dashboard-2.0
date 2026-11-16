@@ -3,7 +3,7 @@
 import { BRIEF_HINTS } from "@/lib/brief/hints";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { BRIEF_SECTIONS, BRIEF_UI, type BriefLang } from "@/lib/brief/questions";
+import { BRIEF_OUTRO, BRIEF_SECTIONS, BRIEF_UI, chosen, isAsked, type BriefLang, type BriefQuestion } from "@/lib/brief/questions";
 
 export interface BriefFormProps {
   lang: BriefLang;
@@ -85,7 +85,16 @@ export function BriefForm({ lang, initial, hidden, readOnly = false, onSave, ren
   }, [flush]);
 
   const visible = (id: string) => !hidden.includes(id);
-  const all = BRIEF_SECTIONS.flatMap((s) => s.questions.map((x) => x.id)).filter(visible);
+  // A follow-up («Какая CRM?») exists only while the answer above calls for it.
+  const all = BRIEF_SECTIONS.flatMap((s) => s.questions)
+    .filter((x) => visible(x.id) && isAsked(x, answers))
+    .map((x) => x.id);
+  /** Choices are saved at once: there is no typing to wait for. */
+  const pick = (id: string, value: string) => {
+    change(id, value);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(flush, 150);
+  };
   const done = all.filter((id) => (answers[id] ?? "").trim()).length;
   useEffect(() => {
     onProgress?.(done, all.length);
@@ -106,7 +115,7 @@ export function BriefForm({ lang, initial, hidden, readOnly = false, onSave, ren
       </div>
 
       {BRIEF_SECTIONS.map((section) => {
-        const questions = section.questions.filter((x) => showHidden || visible(x.id));
+        const questions = section.questions.filter((x) => (showHidden || visible(x.id)) && isAsked(x, answers));
         if (!questions.length) return null;
         return (
           <section key={section.id} className="rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-6">
@@ -118,18 +127,19 @@ export function BriefForm({ lang, initial, hidden, readOnly = false, onSave, ren
               {questions.map((item) => {
                 const off = !visible(item.id);
                 return (
-                  <div key={item.id} className={cn("flex flex-col gap-1.5", off && "opacity-45")}>
-                    <label htmlFor={`q-${item.id}`} className="text-sm font-medium leading-5">
+                  <div key={item.id} className={cn("flex flex-col gap-1.5", off && "opacity-45", item.when && "ml-3 border-l-2 border-border pl-3")}>
+                    <label htmlFor={`q-${item.id}`} id={`l-${item.id}`} className="text-sm font-medium leading-5">
                       {item.q[lang]}
                     </label>
-                    <textarea
-                      id={`q-${item.id}`}
-                      rows={Math.min(8, Math.max(3, Math.ceil((answers[item.id] ?? "").length / 90)))}
-                      className="field resize-y text-sm leading-5 [field-sizing:content] min-h-[4.5rem] placeholder:text-[13px] placeholder:leading-5"
-                      placeholder={BRIEF_HINTS[item.id]?.[lang] ?? ui.placeholder}
+                    {item.note && <p className="-mt-1 text-xs text-muted-foreground">{item.note[lang]}</p>}
+                    <Answer
+                      item={item}
+                      lang={lang}
                       value={answers[item.id] ?? ""}
+                      placeholder={BRIEF_HINTS[item.id]?.[lang] ?? (item.kind === "short" ? "" : ui.placeholder)}
                       disabled={readOnly}
-                      onChange={(e) => change(item.id, e.target.value)}
+                      onType={(v) => change(item.id, v)}
+                      onPick={(v) => pick(item.id, v)}
                       onBlur={flush}
                     />
                     {renderExtra?.(item.id)}
@@ -141,6 +151,105 @@ export function BriefForm({ lang, initial, hidden, readOnly = false, onSave, ren
           </section>
         );
       })}
+
+      <section className="rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-6">
+        <h2 className="section-title">{BRIEF_OUTRO[lang].title}</h2>
+        <ol className="mt-4 flex flex-col gap-4">
+          {BRIEF_OUTRO[lang].items.map((item, i) => (
+            <li key={item.title} className="flex gap-3">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-accent-foreground">{i + 1}</span>
+              <p className="text-sm leading-6 text-muted-foreground">
+                <span className="font-semibold text-foreground">{item.title}.</span> {item.text}
+              </p>
+            </li>
+          ))}
+        </ol>
+      </section>
     </div>
+  );
+}
+
+/** One answer control: a paragraph, a single line, or a set of options to pick one or several from. */
+function Answer({
+  item,
+  lang,
+  value,
+  placeholder,
+  disabled,
+  onType,
+  onPick,
+  onBlur,
+}: {
+  item: BriefQuestion;
+  lang: BriefLang;
+  value: string;
+  placeholder: string;
+  disabled: boolean;
+  onType: (value: string) => void;
+  onPick: (value: string) => void;
+  onBlur: () => void;
+}) {
+  if (item.kind === "choice" || item.kind === "multi") {
+    const picked = chosen(value);
+    const many = item.kind === "multi";
+    const toggle = (id: string) => {
+      if (!many) return onPick(picked.includes(id) ? "" : id);
+      // Stored in the order of the options, so the same choice always reads the same.
+      const next = picked.includes(id) ? picked.filter((p) => p !== id) : [...picked, id];
+      onPick((item.options ?? []).map((o) => o.id).filter((o) => next.includes(o)).join(","));
+    };
+    return (
+      <div role={many ? "group" : "radiogroup"} aria-labelledby={`l-${item.id}`} id={`q-${item.id}`} className="flex flex-wrap gap-2">
+        {(item.options ?? []).map((o) => {
+          const on = picked.includes(o.id);
+          return (
+            <button
+              key={o.id}
+              type="button"
+              role={many ? "checkbox" : "radio"}
+              aria-checked={on}
+              disabled={disabled}
+              onClick={() => toggle(o.id)}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors disabled:opacity-60",
+                on ? "border-transparent bg-accent text-accent-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              {many && (
+                <span className={cn("flex size-3.5 items-center justify-center rounded-[4px] border text-[10px] leading-none", on ? "border-current" : "border-border")} aria-hidden>
+                  {on ? "✓" : ""}
+                </span>
+              )}
+              {o.label[lang]}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+  if (item.kind === "short") {
+    return (
+      <input
+        id={`q-${item.id}`}
+        className="field text-sm placeholder:text-[13px]"
+        placeholder={placeholder}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onType(e.target.value)}
+        onBlur={onBlur}
+      />
+    );
+  }
+  return (
+    <textarea
+      id={`q-${item.id}`}
+      rows={Math.min(8, Math.max(3, Math.ceil(value.length / 90)))}
+      className="field resize-y text-sm leading-5 [field-sizing:content] min-h-[4.5rem] placeholder:text-[13px] placeholder:leading-5"
+      placeholder={placeholder}
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onType(e.target.value)}
+      onBlur={onBlur}
+    />
   );
 }

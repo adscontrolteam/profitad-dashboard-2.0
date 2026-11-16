@@ -315,7 +315,7 @@ export const projectBriefs = pgTable(
     notes: jsonb("notes").$type<Record<string, string>>().notNull().default({}),
     /** Question ids left out of this client's brief. */
     hidden: jsonb("hidden").$type<string[]>().notNull().default([]),
-    files: jsonb("files").$type<{ name: string; at: string }[]>().notNull().default([]),
+    files: jsonb("files").$type<{ name: string; at: string; /** Link the file was taken from (links of the brief are fetched once). */ url?: string }[]>().notNull().default([]),
     /** draft = being prepared / filled, submitted = the client pressed «Готово», closed = no more changes. */
     status: text("status").$type<"draft" | "submitted" | "closed">().notNull().default("draft"),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),

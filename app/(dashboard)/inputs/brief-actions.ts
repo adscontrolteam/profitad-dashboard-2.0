@@ -38,3 +38,16 @@ export async function briefTextAction(projectId: string): Promise<{ ok: boolean;
   if (!(await guard(projectId))) return { ok: false, text: "" };
   return { ok: true, text: briefAsText(await ensureBrief(projectId)) };
 }
+
+/** Copies the files and folders linked in the brief into the project's Drive folder and lists the other links there. */
+export async function collectBriefLinksAction(projectId: string): Promise<{ ok: boolean; message: string }> {
+  if (!(await guard(projectId))) return { ok: false, message: "Нет прав." };
+  await ensureBrief(projectId);
+  const { collectBriefLinks } = await import("@/lib/brief/links");
+  try {
+    const report = await collectBriefLinks(projectId);
+    return { ok: report.ok, message: report.message };
+  } catch (error) {
+    return { ok: false, message: (error as Error).message };
+  }
+}

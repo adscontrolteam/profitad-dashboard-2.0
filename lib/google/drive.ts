@@ -113,3 +113,10 @@ export async function startResumableUpload(folderId: string, name: string, mimeT
   }
   return location;
 }
+
+/** Uploads bytes we already hold (a file fetched for the client's brief, a generated list) into a folder. */
+export async function uploadBytes(folderId: string, name: string, mimeType: string, bytes: Uint8Array) {
+  const session = await startResumableUpload(folderId, name, mimeType, bytes.byteLength, "https://drive.google.com");
+  const res = await fetch(session, { method: "PUT", body: new Blob([bytes as BlobPart]), cache: "no-store" });
+  if (!res.ok) throw new Error(`Drive не принял файл (${res.status})`);
+}

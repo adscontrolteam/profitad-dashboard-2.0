@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useTransition } from "react";
 import { InfoHint } from "@/components/ui/info-hint";
-import { rotateBriefLinkAction, saveBriefAnswersAdminAction, saveBriefSettingsAction } from "@/app/(dashboard)/inputs/brief-actions";
+import { collectBriefLinksAction, rotateBriefLinkAction, saveBriefAnswersAdminAction, saveBriefSettingsAction } from "@/app/(dashboard)/inputs/brief-actions";
 import { cn } from "@/lib/cn";
 import { BRIEF_LANG_LABEL, BRIEF_LANGS, type BriefLang } from "@/lib/brief/questions";
 import { BriefForm } from "./brief-form";
@@ -40,6 +40,7 @@ export function AdminBrief({
   const [hidden, setHidden] = useState(initial.hidden);
   const [notes, setNotes] = useState(initial.notes);
   const [copied, setCopied] = useState(false);
+  const [linksNote, setLinksNote] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const link = `${origin}/brief/${token}`;
   const onSave = useCallback(async (patch: Record<string, string>) => (await saveBriefAnswersAdminAction(projectId, patch)).ok, [projectId]);
@@ -121,6 +122,26 @@ export function AdminBrief({
           >
             Новая ссылка (отозвать старую)
           </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="btn-ghost border border-border px-3 py-1.5 text-xs"
+            disabled={pending}
+            onClick={() =>
+              start(async () => {
+                setLinksNote("Собираю…");
+                setLinksNote((await collectBriefLinksAction(projectId)).message);
+              })
+            }
+          >
+            Собрать ссылки из брифа на Drive
+          </button>
+          <InfoHint>
+            Файлы и папки Google Drive из ответов копируются в папку проекта → «Бриф клиента», прямые ссылки на файлы скачиваются туда же, а ссылки на
+            сайты и соцсети складываются одним списком. Когда клиент нажимает «Готово», это происходит само.
+          </InfoHint>
+          {linksNote && <span className="text-xs text-muted-foreground">{linksNote}</span>}
         </div>
         {initial.files.length > 0 && (
           <p className="text-xs text-muted-foreground">

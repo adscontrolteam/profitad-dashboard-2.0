@@ -1,6 +1,8 @@
 "use server";
 
 import { addBriefFile, briefProgress, getBriefByToken, markSubmitted, saveAnswers } from "@/lib/brief/store";
+import { after } from "next/server";
+import { collectBriefLinks } from "@/lib/brief/links";
 import { addLog } from "@/lib/log/store";
 
 /**
@@ -32,6 +34,9 @@ export async function submitBriefAction(token: string): Promise<{ ok: boolean }>
       link: `/inputs/brief/${found.brief.projectId}`,
     }).catch(() => undefined);
   }
+  // Files and folders the client linked to go to the project's Drive folder; this must not hold up the answer.
+  const projectId = found.brief.projectId;
+  after(() => collectBriefLinks(projectId).catch((error) => console.error("brief links failed", projectId, error)));
   return { ok: true };
 }
 

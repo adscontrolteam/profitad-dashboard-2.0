@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ClientBrief } from "@/components/brief/client-brief";
 import { Logo } from "@/components/ui/logo";
-import { BRIEF_LANGS, BRIEF_UI, type BriefLang } from "@/lib/brief/questions";
+import { BRIEF_LANGS, BRIEF_UI, briefQuestion, type BriefLang } from "@/lib/brief/questions";
 import { getBriefByToken, touchSeen } from "@/lib/brief/store";
 
 export const metadata: Metadata = { title: "Бриф проекта", robots: { index: false, follow: false } };
@@ -32,7 +32,8 @@ async function Brief({ params }: { params: Promise<{ token: string }> }) {
   const ui = BRIEF_UI[lang];
   await touchSeen(brief.projectId).catch(() => undefined);
   // Hidden questions and internal notes never leave the server.
-  const answers = Object.fromEntries(Object.entries(brief.answers).filter(([id]) => !brief.hidden.includes(id)));
+  // Answers to questions of an earlier version of the brief stay in the database but are not part of it any more.
+  const answers = Object.fromEntries(Object.entries(brief.answers).filter(([id]) => !brief.hidden.includes(id) && briefQuestion(id) !== null));
 
   return (
     <>

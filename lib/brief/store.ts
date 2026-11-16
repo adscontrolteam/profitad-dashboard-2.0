@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { projectBriefs, projects, type ProjectBriefRow } from "@/db/schema";
-import { ALL_QUESTION_IDS, BRIEF_LANGS, BRIEF_SECTIONS, type BriefLang } from "./questions";
+import { ALL_QUESTION_IDS, answerText, BRIEF_LANGS, BRIEF_SECTIONS, briefQuestion, isAsked, type BriefLang } from "./questions";
 
 const newToken = () => randomBytes(24).toString("base64url");
 const isLang = (v: unknown): v is BriefLang => BRIEF_LANGS.includes(v as BriefLang);
@@ -86,10 +86,10 @@ export async function markSubmitted(projectId: string) {
   return rows.length > 0;
 }
 
-export async function addBriefFile(projectId: string, name: string) {
+export async function addBriefFile(projectId: string, name: string, url?: string) {
   await getDb()
     .update(projectBriefs)
-    .set({ files: sql`${projectBriefs.files} || ${JSON.stringify([{ name: name.slice(0, 200), at: new Date().toISOString() }])}::jsonb`, updatedAt: new Date() })
+    .set({ files: sql`${projectBriefs.files} || ${JSON.stringify([{ name: name.slice(0, 200), at: new Date().toISOString(), ...(url ? { url: url.slice(0, 2000) } : {}) }])}::jsonb`, updatedAt: new Date() })
     .where(eq(projectBriefs.projectId, projectId));
 }
 
@@ -97,9 +97,17 @@ export async function touchSeen(projectId: string) {
   await getDb().update(projectBriefs).set({ clientSeenAt: new Date() }).where(eq(projectBriefs.projectId, projectId));
 }
 
-/** Answered / shown question counts. */
+/** Questions the brief asks right now: not switched off by us and not skipped by an earlier answer. */
+export function askedIds(brief: Pick<ProjectBriefRow, "answers" | "hidden">) {
+  return ALL_QUESTION_IDS.filter((id) => {
+    const question = briefQuestion(id);
+    return question !== null && !brief.hidden.includes(id) && isAsked(question, brief.answers);
+  });
+}
+
+/** Answered / asked question counts. */
 export function briefProgress(brief: Pick<ProjectBriefRow, "answers" | "hidden">) {
-  const shown = ALL_QUESTION_IDS.filter((id) => !brief.hidden.includes(id));
+  const shown = askedIds(brief);
   return { total: shown.length, done: shown.filter((id) => (brief.answers[id] ?? "").trim()).length };
 }
 
@@ -110,8 +118,8 @@ export function briefAsText(brief: Pick<ProjectBriefRow, "answers" | "notes" | "
   for (const s of BRIEF_SECTIONS) {
     const lines: string[] = [];
     for (const item of s.questions) {
-      if (brief.hidden.includes(item.id)) continue;
-      const a = (brief.answers[item.id] ?? "").trim();
+      if (brief.hidden.includes(item.id) || !isAsked(item, brief.answers)) continue;
+      const a = answerText(item, brief.answers[item.id], lang);
       const n = (brief.notes[item.id] ?? "").trim();
       if (!a && !n) continue;
       lines.push(`— ${item.q[lang]}\n${a || "(нет ответа)"}${n ? `\n[заметка агентства: ${n}]` : ""}`);
