@@ -2,12 +2,14 @@
 
 import { refresh } from "next/cache";
 import { requireSection } from "@/lib/access/viewer";
-import type { InvoiceItem } from "@/db/schema";
+import type { InvoiceItem, InvoiceRecipient } from "@/db/schema";
 import { CURRENCIES } from "@/lib/finance/currency";
+import { EN_FIELDS } from "@/lib/finance/methods";
 import { SHARE_BASES, type ShareBase } from "@/lib/finance/rules";
 import {
   archiveMethod,
   saveBuyerRate,
+  saveCompany,
   saveMonthTerms,
   deleteExpense,
   deleteInvoice,
@@ -84,7 +86,7 @@ export async function saveTermsAction(_prev: FinState, f: FormData): Promise<Fin
 
 /* ---------------- payment methods ---------------- */
 
-const DETAIL_KEYS = ["recipient", "iban", "taxId", "bank", "mfo", "bankCode", "card", "network", "wallet", "url"];
+const DETAIL_KEYS = ["recipient", "iban", "taxId", "bank", "mfo", "bankCode", "card", "network", "wallet", "url", ...EN_FIELDS.map((f) => f.key)];
 
 export async function saveMethodAction(_prev: FinState, f: FormData): Promise<FinState> {
   await guard();
@@ -96,7 +98,7 @@ export async function saveMethodAction(_prev: FinState, f: FormData): Promise<Fi
   if (!currency) return { ok: false, message: "Выберите валюту." };
   const details: Record<string, string> = {};
   for (const k of DETAIL_KEYS) {
-    const v = text(f, `d_${k}`, 300);
+    const v = text(f, `d_${k}`, 600);
     if (v) details[k] = v;
   }
   await saveMethod({
@@ -126,7 +128,7 @@ export interface InvoicePayload {
   month: string;
   issueDate: string;
   methodId: string | null;
-  recipient: { kind: string; label: string; details: Record<string, string>; payer?: string } | null;
+  recipient: InvoiceRecipient | null;
   currency: string;
   items: InvoiceItem[];
   purpose: string;
@@ -174,6 +176,8 @@ export async function saveInvoiceAction(p: InvoicePayload): Promise<FinState> {
     },
     viewer.email,
   );
+  // «BILL TO» typed in the invoice becomes the client's company details for the next invoices.
+  if (p.projectId && p.recipient?.intl?.billTo.trim()) await saveCompany(p.projectId, p.recipient.intl.billTo.trim().slice(0, 2000));
   refresh();
   return { ok: true, message: "Сохранено.", id };
 }
@@ -313,4 +317,15 @@ export async function saveMonthTermsAction(_prev: FinState, f: FormData): Promis
   await saveMonthTerms(projectId, rows);
   refresh();
   return { ok: true, message: "Условия по месяцам сохранены." };
+}
+
+/* ---------------- client company details ---------------- */
+
+export async function saveCompanyAction(_prev: FinState, f: FormData): Promise<FinState> {
+  await guard();
+  const projectId = text(f, "projectId", 80);
+  if (!projectId) return { ok: false, message: "Нет проекта." };
+  await saveCompany(projectId, String(f.get("company") ?? "").trim().slice(0, 2000));
+  refresh();
+  return { ok: true, message: "Данные компании сохранены." };
 }

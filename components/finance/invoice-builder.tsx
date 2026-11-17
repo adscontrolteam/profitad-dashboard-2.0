@@ -11,12 +11,15 @@ import { formatInvoiceAmount } from "@/lib/finance/methods";
 import type { Invoice, PaymentMethod } from "@/lib/finance/store";
 import { Field, FormError } from "./drawer";
 import { InvoiceDocument } from "./invoice-document";
+import { InvoiceIntlDocument } from "./invoice-intl-document";
 
 export interface ProjectOption {
   id: string;
   name: string;
   /** Currency of the client's terms; null = no terms yet. */
   currency: string | null;
+  /** The client's company details for «BILL TO» (from the client's card). */
+  company: string;
   /** Amount due by the terms, per month (terms currency). */
   due: Record<string, { amount: number; currency: string }>;
 }
@@ -51,6 +54,15 @@ export function InvoiceBuilder({
   const [note, setNote] = useState(initial?.note ?? "");
   // The agreed rate typed by hand; empty = the NBU rate of today.
   const [rateInput, setRateInput] = useState(initial?.fxRate ? String(initial.fxRate) : "");
+  // English INVOICE (payment link): which FOP it is from, the client's company, and whether it is already paid.
+  const fops = methods.filter((m) => m.kind === "fop");
+  const [senderId, setSenderId] = useState<string | null>(
+    (initial?.recipient?.intl ? fops.find((m) => m.label === initial.recipient!.intl!.fromLabel)?.id : fops[0]?.id) ?? null,
+  );
+  const [billTo, setBillTo] = useState(
+    initial?.recipient?.intl?.billTo ?? projects.find((p) => p.id === (initial?.projectId ?? defaults.projectId))?.company ?? "",
+  );
+  const [paid, setPaid] = useState(initial ? initial.status === "paid" : true);
   const [error, setError] = useState<string | null>(null);
   const [saving, start] = useTransition();
 
@@ -73,9 +85,16 @@ export function InvoiceBuilder({
     if (m.purpose) setPurpose(m.purpose);
   };
 
+  const isIntl = method ? method.kind === "link" : Boolean(initial?.recipient?.intl);
+  const sender = fops.find((m) => m.id === senderId) ?? null;
+  const intl = isIntl
+    ? { fromLabel: sender?.label ?? initial?.recipient?.intl?.fromLabel ?? "", from: sender?.details ?? initial?.recipient?.intl?.from ?? {}, billTo }
+    : undefined;
   const recipient = method
-    ? { kind: method.kind, label: method.label, details: method.details, ...(showPayer && project ? { payer: project.name } : {}) }
-    : (initial?.recipient ?? null);
+    ? { kind: method.kind, label: method.label, details: method.details, ...(showPayer && project && !isIntl ? { payer: project.name } : {}), ...(intl ? { intl } : {}) }
+    : initial?.recipient
+      ? { ...initial.recipient, ...(intl ? { intl } : {}) }
+      : null;
 
   const setItem = (i: number, patch: Partial<InvoiceItem>) => setItems((list) => list.map((it, j) => (j === i ? { ...it, ...patch } : it)));
 
@@ -95,8 +114,9 @@ export function InvoiceBuilder({
       contractCurrency: needsRate ? contractCurrency : null,
       fxRate: needsRate ? rate : null,
       document: true,
-      status: initial?.status === "paid" ? "paid" : "issued",
-      paidDate: initial?.paidDate ?? null,
+      // An English invoice is usually issued after the client has paid by the link.
+      status: isIntl ? (paid ? "paid" : "issued") : initial?.status === "paid" ? "paid" : "issued",
+      paidDate: isIntl ? (paid ? (initial?.paidDate ?? issueDate) : null) : (initial?.paidDate ?? null),
       note,
     };
     start(async () => {
@@ -117,6 +137,8 @@ export function InvoiceBuilder({
               onChange={(e) => {
                 setProjectId(e.target.value);
                 setRateInput("");
+                const company = projects.find((p) => p.id === e.target.value)?.company;
+                if (company) setBillTo(company);
               }}
             >
               <option value="">Без проекта</option>
@@ -197,10 +219,40 @@ export function InvoiceBuilder({
           {!methods.length && <span className="text-sm text-muted-foreground">Добавьте реквизиты на странице «Инвойсы».</span>}
         </div>
 
-        {method?.kind === "link" && (
-          <Field label="Ссылка на оплату (Way4Pay)" hint="Вставьте ссылку, созданную для этого счёта">
-            <input className="field" value={payLink} onChange={(e) => setPayLink(e.target.value)} placeholder="https://secure.wayforpay.com/…" />
-          </Field>
+        {isIntl && (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">От кого (FROM)</span>
+              <div className="flex flex-wrap gap-1.5">
+                {fops.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setSenderId(m.id)}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
+                      m.id === senderId ? "border-transparent bg-accent text-accent-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              {sender && !sender.details.nameEn && (
+                <span className="text-xs text-warning">У «{sender.label}» не заполнены данные на английском — добавьте их в «Реквизитах» на странице «Инвойсы».</span>
+              )}
+            </div>
+            <Field label="Кому (BILL TO)" hint="Данные компании клиента, каждая строка с новой строки. Сохраняются в карточке клиента">
+              <textarea className="field resize-y" rows={6} value={billTo} onChange={(e) => setBillTo(e.target.value)} placeholder={"COMPANY SP. Z O. O.\nul. …\nNIP: …"} />
+            </Field>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={paid} onChange={(e) => setPaid(e.target.checked)} />
+              Уже оплачен (PAID) — счёт выставляется после оплаты
+            </label>
+            <Field label="Ссылка Way4Pay" hint="Для себя: по какой ссылке клиент платил. В инвойс не попадает">
+              <input className="field" value={payLink} onChange={(e) => setPayLink(e.target.value)} placeholder="https://secure.wayforpay.com/…" />
+            </Field>
+          </>
         )}
 
         <div className="flex flex-col gap-2">
@@ -247,14 +299,18 @@ export function InvoiceBuilder({
           )}
         </div>
 
-        <Field label="Призначення платежу">
-          <input className="field" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
-        </Field>
+        {!isIntl && (
+          <>
+            <Field label="Призначення платежу">
+              <input className="field" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
+            </Field>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={showPayer} onChange={(e) => setShowPayer(e.target.checked)} disabled={!project} />
-          Указать платника (название проекта) в счёте
-        </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={showPayer} onChange={(e) => setShowPayer(e.target.checked)} disabled={!project} />
+              Указать платника (название проекта) в счёте
+            </label>
+          </>
+        )}
 
         <Field label="Заметка для себя" hint="В счёт не попадает">
           <input className="field" value={note} onChange={(e) => setNote(e.target.value)} />
@@ -275,7 +331,11 @@ export function InvoiceBuilder({
       </div>
 
       <div className="min-w-0 rounded-[var(--radius)] bg-muted/60 p-3 sm:p-6">
-        <InvoiceDocument doc={{ issueDate, recipient, currency, items, purpose, payLink, payer: recipient?.payer ?? null }} />
+        {intl ? (
+          <InvoiceIntlDocument doc={{ issueDate, currency, items, paid, intl }} />
+        ) : (
+          <InvoiceDocument doc={{ issueDate, recipient, currency, items, purpose, payLink, payer: recipient?.payer ?? null }} />
+        )}
       </div>
     </div>
   );

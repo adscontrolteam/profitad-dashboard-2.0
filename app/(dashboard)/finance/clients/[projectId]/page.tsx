@@ -3,6 +3,7 @@ import { InfoHint } from "@/components/ui/info-hint";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PlanFactChart } from "@/components/finance/charts";
+import { CompanyButton } from "@/components/finance/company-button";
 import { MonthTermsButton } from "@/components/finance/month-terms";
 import { TermsButton } from "@/components/finance/terms-editor";
 import { CardHead, dateLabel, Empty, KpiTile, monthLabel, Pill, Table } from "@/components/finance/ui";
@@ -14,6 +15,7 @@ import { STATUS_META } from "@/lib/domain/statuses";
 import { money, toBase } from "@/lib/finance/fx";
 import { KPI_LABEL, KPI_TONE, termsSummary } from "@/lib/finance/labels";
 import { buildFinanceReport } from "@/lib/finance/report";
+import { listCompanies } from "@/lib/finance/store";
 import { formatNumber } from "@/lib/format";
 import { addMonths } from "@/lib/projects/plans";
 
@@ -25,7 +27,8 @@ const pctTone = (p: number) => (p >= 100 ? "good" : p >= 90 ? "warning" : "bad")
 export default async function FinanceClientPage({ params }: PageProps<"/finance/clients/[projectId]">) {
   await requireSection("finance");
   const { projectId } = await params;
-  const [r, project] = await Promise.all([buildFinanceReport(), getProject(projectId)]);
+  const [r, project, companies] = await Promise.all([buildFinanceReport(), getProject(projectId), listCompanies()]);
+  const company = companies.get(projectId) ?? "";
   const p = r.projects.find((x) => x.id === projectId);
   if (!p || !project) notFound();
 
@@ -78,6 +81,17 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
           <span>после зарплаты медиабайера {money(costAll)}</span>
         </KpiTile>
       </div>
+
+      <Card>
+        <CardHead title="Данные компании" hint="Подставляются в блок BILL TO английского инвойса (Way4Pay)">
+          <CompanyButton projectId={p.id} projectName={p.name} company={company} />
+        </CardHead>
+        {company ? (
+          <p className="whitespace-pre-line text-sm leading-6">{company}</p>
+        ) : (
+          <Empty>Не заполнены. Нужны для инвойсов иностранным клиентам: название компании, адрес, налоговые номера.</Empty>
+        )}
+      </Card>
 
       <div className="grid gap-3 lg:grid-cols-2 lg:gap-5">
         <Card>

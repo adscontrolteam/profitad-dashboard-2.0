@@ -3,7 +3,7 @@
 import { useActionState, useState, useTransition } from "react";
 import { archiveMethodAction, saveMethodAction, type FinState } from "@/app/(dashboard)/finance/actions";
 import { CURRENCIES } from "@/lib/finance/currency";
-import { METHOD_FIELDS, METHOD_KINDS, recipientRows, type MethodKind } from "@/lib/finance/methods";
+import { EN_FIELDS, METHOD_FIELDS, METHOD_KINDS, recipientRows, type MethodKind } from "@/lib/finance/methods";
 import type { PaymentMethod } from "@/lib/finance/store";
 import { Drawer, Field, FormError } from "./drawer";
 
@@ -78,6 +78,22 @@ function MethodDrawer({ method, onClose }: { method: PaymentMethod | null; onClo
             <input name={`d_${f.key}`} defaultValue={method?.details[f.key] ?? ""} placeholder={f.placeholder} className="field" />
           </Field>
         ))}
+        {kind === "fop" && (
+          <details className="rounded-[16px] border border-border px-4 py-3" open={EN_FIELDS.some((f) => method?.details[f.key])}>
+            <summary className="cursor-pointer text-sm font-medium">На английском — для INVOICE иностранным клиентам</summary>
+            <div className="mt-3 flex flex-col gap-3">
+              {EN_FIELDS.map((f) => (
+                <Field key={f.key} label={f.label}>
+                  {f.multiline ? (
+                    <textarea name={`d_${f.key}`} rows={3} defaultValue={method?.details[f.key] ?? ""} placeholder={f.placeholder} className="field resize-y" />
+                  ) : (
+                    <input name={`d_${f.key}`} defaultValue={method?.details[f.key] ?? ""} placeholder={f.placeholder} className="field" />
+                  )}
+                </Field>
+              ))}
+            </div>
+          </details>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Валюта по умолчанию">
             <select name="currency" defaultValue={method?.currency ?? "UAH"} className="field">

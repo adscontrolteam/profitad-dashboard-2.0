@@ -485,6 +485,16 @@ export const finPaymentMethods = pgTable("fin_payment_methods", {
 
 export type FinPaymentMethodRow = typeof finPaymentMethods.$inferSelect;
 
+/** Snapshot of who gets the money, as printed on the invoice. */
+export interface InvoiceRecipient {
+  kind: string;
+  label: string;
+  details: Record<string, string>;
+  payer?: string;
+  /** English «INVOICE» for foreign clients paying by a payment link: the FOP it is issued from and the client. */
+  intl?: { fromLabel: string; from: Record<string, string>; billTo: string };
+}
+
 export interface InvoiceItem {
   name: string;
   qty: number;
@@ -503,7 +513,7 @@ export const finInvoices = pgTable(
     issueDate: date("issue_date").notNull(),
     methodId: text("method_id"),
     /** Snapshot of the payment details at issue time, so later edits of the account do not change old invoices. */
-    recipient: jsonb("recipient").$type<{ kind: string; label: string; details: Record<string, string>; payer?: string }>(),
+    recipient: jsonb("recipient").$type<InvoiceRecipient>(),
     currency: text("currency").notNull(),
     items: jsonb("items").$type<InvoiceItem[]>().notNull().default([]),
     total: doublePrecision("total").notNull(),
@@ -605,3 +615,10 @@ export const finTermsMonthly = pgTable(
   },
   (t) => [primaryKey({ columns: [t.projectId, t.month] })],
 );
+
+/** The client's company details, printed in «BILL TO» of English invoices (one line per row). */
+export const finClients = pgTable("fin_clients", {
+  projectId: text("project_id").primaryKey(),
+  company: text("company").notNull().default(""),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});

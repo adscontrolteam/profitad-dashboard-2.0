@@ -1,9 +1,9 @@
-import type { InvoiceItem } from "@/db/schema";
+import type { InvoiceItem, InvoiceRecipient } from "@/db/schema";
 import { CURRENCY_WORD, formatInvoiceAmount, recipientRows } from "@/lib/finance/methods";
 
 export interface InvoiceDocData {
   issueDate: string;
-  recipient: { kind: string; label: string; details: Record<string, string>; payer?: string } | null;
+  recipient: InvoiceRecipient | null;
   currency: string;
   items: InvoiceItem[];
   purpose: string;

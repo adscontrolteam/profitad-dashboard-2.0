@@ -2,6 +2,7 @@ import { and, asc, desc, eq, max } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   finBuyerRates,
+  finClients,
   finExpenses,
   finInvoices,
   finPaymentMethods,
@@ -15,6 +16,7 @@ import {
   type FinPaymentMethodRow,
   type FinStaffRow,
   type InvoiceItem,
+  type InvoiceRecipient,
 } from "@/db/schema";
 import type { ShareBase, Terms } from "./rules";
 
@@ -97,7 +99,7 @@ export interface InvoiceInput {
   month: string;
   issueDate: string;
   methodId: string | null;
-  recipient: { kind: string; label: string; details: Record<string, string>; payer?: string } | null;
+  recipient: InvoiceRecipient | null;
   currency: string;
   items: InvoiceItem[];
   purpose: string;
@@ -256,4 +258,16 @@ export async function saveMonthTerms(projectId: string, months: Omit<MonthTerms,
     const values = { projectId, ...m, updatedAt: new Date() };
     await db.insert(finTermsMonthly).values(values).onConflictDoUpdate({ target: [finTermsMonthly.projectId, finTermsMonthly.month], set: values });
   }
+}
+
+/* ---------- client company details ---------- */
+
+export async function listCompanies(): Promise<Map<string, string>> {
+  const rows = await getDb().select().from(finClients);
+  return new Map(rows.map((r) => [r.projectId, r.company]));
+}
+
+export async function saveCompany(projectId: string, company: string) {
+  const values = { projectId, company, updatedAt: new Date() };
+  await getDb().insert(finClients).values(values).onConflictDoUpdate({ target: finClients.projectId, set: values });
 }

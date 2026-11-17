@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { InvoiceDocument } from "@/components/finance/invoice-document";
+import { InvoiceIntlDocument } from "@/components/finance/invoice-intl-document";
 import { PrintBar } from "@/components/finance/print-bar";
 import { requireSection } from "@/lib/access/viewer";
 import { getInvoice } from "@/lib/finance/store";
@@ -28,30 +29,35 @@ async function InvoicePrint({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const invoice = await getInvoice(id);
   if (!invoice) notFound();
-  const slug = (invoice.recipient?.details.recipient ?? invoice.recipient?.label ?? "")
-    .replace(/^ФОП\s+/i, "")
+  const intl = invoice.recipient?.intl;
+  const slug = ((intl ? intl.from.nameEn || intl.from.recipient : invoice.recipient?.details.recipient) ?? invoice.recipient?.label ?? "")
+    .replace(/^(ФОП|FOP)\s+/i, "")
     .split(/\s+/)[0]
     ?.toLowerCase()
     .split("")
     .map((c) => TRANSLIT[c] ?? c)
     .join("")
     .replace(/[^a-z0-9]/g, "");
-  const fileName = ["rahunok_faktura", slug, Math.round(invoice.total), invoice.currency.toLowerCase(), invoice.issueDate].filter(Boolean).join("_");
+  const fileName = [intl ? "invoice" : "rahunok_faktura", slug, Math.round(invoice.total), invoice.currency.toLowerCase(), invoice.issueDate].filter(Boolean).join("_");
 
   return (
     <main className="invoice-print min-h-dvh bg-muted/60 py-6 print:bg-white print:py-0">
       <PrintBar fileName={fileName} />
-      <InvoiceDocument
-        doc={{
-          issueDate: invoice.issueDate,
-          recipient: invoice.recipient,
-          currency: invoice.currency,
-          items: invoice.items,
-          purpose: invoice.purpose,
-          payLink: invoice.payLink,
-          payer: invoice.recipient?.payer ?? null,
-        }}
-      />
+      {intl ? (
+        <InvoiceIntlDocument doc={{ issueDate: invoice.issueDate, currency: invoice.currency, items: invoice.items, paid: invoice.status === "paid", intl }} />
+      ) : (
+        <InvoiceDocument
+          doc={{
+            issueDate: invoice.issueDate,
+            recipient: invoice.recipient,
+            currency: invoice.currency,
+            items: invoice.items,
+            purpose: invoice.purpose,
+            payLink: invoice.payLink,
+            payer: invoice.recipient?.payer ?? null,
+          }}
+        />
+      )}
     </main>
   );
 }
