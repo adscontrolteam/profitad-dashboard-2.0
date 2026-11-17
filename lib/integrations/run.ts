@@ -83,6 +83,9 @@ export async function syncAll() {
   // Specialists' accesses: retry what failed, catch up on changes.
   const { syncAllAccess } = await import("@/lib/access-sync/sync");
   results.push(...(await syncAllAccess()));
+  // Social accounts connected by clients: keep the Threads tokens alive.
+  const { refreshSocialTokens } = await import("@/lib/social/oauth");
+  results.push(...(await refreshSocialTokens().catch(() => [])));
   // Project log: sync failures, daily checks, then the «Посмотреть Лог» reminder (at most every 3 days).
   const { logSyncResults, runProjectChecks } = await import("@/lib/log/checks");
   await logSyncResults(results.filter((r) => r.kind !== "drive"));

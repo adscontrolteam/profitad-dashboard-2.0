@@ -622,3 +622,44 @@ export const finClients = pgTable("fin_clients", {
   company: text("company").notNull().default(""),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+/**
+ * Social accounts of a project, connected by the client through the public link /connect/<token>
+ * (Facebook Login for Pages and Instagram, Threads Login for Threads). One row per account.
+ * `token` is AES-GCM encrypted (lib/crypto.ts) and never leaves the server.
+ */
+export const socialConnections = pgTable(
+  "social_connections",
+  {
+    projectId: text("project_id").notNull(),
+    network: text("network").$type<"facebook" | "instagram" | "threads">().notNull(),
+    /** Page id, Instagram account id or Threads user id. */
+    externalId: text("external_id").notNull(),
+    /** Page name or @username. */
+    name: text("name").notNull(),
+    pictureUrl: text("picture_url"),
+    token: text("token").notNull(),
+    /** Null = does not expire (Page tokens); Threads tokens live 60 days and are refreshed by the daily cron. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    /** ok | error */
+    status: text("status").notNull().default("ok"),
+    lastError: text("last_error"),
+    connectedAt: timestamp("connected_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.network, t.externalId] })],
+);
+
+export type SocialConnectionRow = typeof socialConnections.$inferSelect;
+
+/** Secret of a project's public «connect your social accounts» link; a new token revokes the old link. */
+export const socialConnectLinks = pgTable(
+  "social_connect_links",
+  {
+    projectId: text("project_id").primaryKey(),
+    token: text("token").notNull(),
+    seenAt: timestamp("seen_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("social_connect_links_token_idx").on(t.token)],
+);

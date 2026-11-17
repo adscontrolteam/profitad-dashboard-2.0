@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
+import { SocialConnections } from "@/components/social/social-connections";
 import { NetworkIcon } from "@/components/smm/network-icon";
 import { Card } from "@/components/ui/card";
 import { Delta } from "@/components/ui/signal";
@@ -10,6 +12,8 @@ import { ProjectLog } from "@/components/log/project-log";
 import { listLog } from "@/lib/log/store";
 import { toLogItems } from "@/lib/log/view";
 import { formatNumber } from "@/lib/format";
+import { providerConfigured } from "@/lib/social/oauth";
+import { ensureConnectLink, listSocialAccounts } from "@/lib/social/store";
 import { resolveWorkspace } from "@/lib/workspace/context";
 import { demoConnectedNetworks, demoSmmReport } from "@/lib/workspace/demo";
 import { first, isSocialNetwork, SOCIAL_NETWORKS, workspaceHref, type SocialNetwork } from "@/lib/workspace/params";
@@ -32,6 +36,11 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
   if (!ws.project) return <div className="flex flex-col gap-5">{header}<EmptyProjects /></div>;
 
   const connected = demoConnectedNetworks(ws.project.id);
+  const canManage = permissions.canEditInputs;
+  const accounts = await listSocialAccounts(ws.project.id);
+  const connectLink = canManage ? await ensureConnectLink(ws.project.id) : null;
+  const h = await headers();
+  const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
   const report = demoSmmReport(ws.project.id, ws.project.name, net, { from: ws.range.from, to: ws.range.to });
   const views = report.days.reduce((a, d) => a + d.views, 0);
   const likes = report.days.reduce((a, d) => a + d.likes, 0);
@@ -61,6 +70,17 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
             ),
           };
         })}
+      />
+
+      <SocialConnections
+        key={ws.project.id}
+        projectId={ws.project.id}
+        origin={origin}
+        token={connectLink?.token ?? null}
+        seenAt={connectLink?.seenAt?.toISOString() ?? null}
+        accounts={accounts}
+        ready={{ meta: providerConfigured("meta"), threads: providerConfigured("threads") }}
+        canManage={canManage}
       />
 
       <DemoNotice />
