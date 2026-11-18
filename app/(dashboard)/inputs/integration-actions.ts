@@ -14,7 +14,7 @@ import { syncIntegration } from "@/lib/integrations/run";
 import { detectReport } from "@/lib/integrations/sheets";
 import { deleteIntegration, getIntegration, readSecret, saveIntegration } from "@/lib/integrations/store";
 import { REPORT_METRICS, type ReportTab } from "@/lib/integrations/types";
-import { ensureProjectFolder, ensureReport } from "@/lib/integrations/provision";
+import { ensureLeadsSheet, ensureProjectFolder, ensureReport } from "@/lib/integrations/provision";
 import { getProject } from "@/lib/data";
 
 export interface IntegrationResult {
@@ -239,7 +239,7 @@ export async function disconnectAction(projectId: string, kind: IntegrationKind)
 
 /* ---------- From templates ---------- */
 
-export async function createFromTemplateAction(projectId: string, what: "drive" | "report"): Promise<IntegrationResult> {
+export async function createFromTemplateAction(projectId: string, what: "drive" | "report" | "leads"): Promise<IntegrationResult> {
   const viewer = await admin();
   const project = await getProject(projectId);
   if (!project) return { ok: false, message: "Проект не найден." };
@@ -252,10 +252,22 @@ export async function createFromTemplateAction(projectId: string, what: "drive" 
         message: `${r.created ? "Репорт создан из шаблона" : "Найден существующий Репорт, подключён"}. ${sync}`,
       });
     }
+    if (what === "leads") {
+      const r = await ensureLeadsSheet(projectId, project.name, viewer.email);
+      return done(viewer, "integration.sheets_leads.template", projectId, {
+        ok: true,
+        message: r.created ? "Таблица Leads & Sales создана из шаблона и подключена." : "Найдена существующая таблица Leads & Sales, подключена.",
+      });
+    }
     const r = await ensureProjectFolder(projectId, project.name, viewer.email);
+    // The folder comes with the project's Leads & Sales table; a failure there must not hide the created folder.
+    const leads = await ensureLeadsSheet(projectId, project.name, viewer.email).then(
+      (l) => (l.created ? " Таблица Leads & Sales создана и подключена." : ""),
+      (error) => ` Таблицу Leads & Sales создать не удалось: ${explain(error)}`,
+    );
     return done(viewer, "integration.drive.template", projectId, {
       ok: true,
-      message: r.created ? "Папка проекта создана из шаблона." : "Найдена существующая папка проекта, подключена.",
+      message: `${r.created ? "Папка проекта создана из шаблона." : "Найдена существующая папка проекта, подключена."}${leads}`,
     });
   } catch (error) {
     return done(viewer, `integration.${what}.template`, projectId, { ok: false, message: explain(error) });

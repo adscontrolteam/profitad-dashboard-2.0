@@ -11,6 +11,7 @@ import type { SheetsLeadsConfig } from "./types";
  * ad leads (all / target / non-target) and payments from the lead tabs (count, sum, who paid).
  * Periods follow the tab's own rhythm — Mon–Tue, Wed–Thu, Fri–Sun. Rows kept by hand (before `salesAutofillFrom`)
  * are never touched; inside owned rows only the lead and sales cells are written, a comment only if empty or ours.
+ * Nothing is written until the lead tabs get their first dated row (a test lead counts): periods start with the ads.
  */
 
 const TZ = "Europe/Madrid";
@@ -69,7 +70,7 @@ function findColumns(head: string[][]): Columns | null {
   return cols.total >= 0 && cols.target >= 0 && cols.junk >= 0 && cols.salesSum >= 0 ? cols : null;
 }
 
-export async function fillSalesTab(projectId: string, cfg: SheetsLeadsConfig, today = new Date(), dryRun = false) {
+export async function fillSalesTab(projectId: string, cfg: SheetsLeadsConfig, firstLeadAt: Date | null, today = new Date(), dryRun = false) {
   if (!cfg.salesAutofill || !cfg.salesTab) return { cells: 0, from: cfg.salesAutofillFrom ?? null, message: "", planned: [] as { cell: string; value: string | number }[] };
   const values = await readRange(cfg.spreadsheetId, cfg.salesTab, "A1:Z1000", "FORMULA");
   const cols = findColumns(values.slice(0, 2));
@@ -83,15 +84,21 @@ export async function fillSalesTab(projectId: string, cfg: SheetsLeadsConfig, to
   const todayIso = new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(today);
   let from = cfg.salesAutofillFrom ?? null;
   if (!from) {
-    // First run: start right after the last hand-filled period (dates inferred backwards from today).
+    // Nothing to own yet: the table has no leads, the ads have not started.
+    if (!firstLeadAt) return { cells: 0, from: null, message: `«${cfg.salesTab}»: начнём заполнять с первого лида в таблице`, planned: [] };
+    // First run: from the period of the first lead in the table (a test lead counts)…
+    from = bucketOf(new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(firstLeadAt)).start;
+    // …but never over periods somebody filled by hand (dates inferred backwards from today).
     const lastFilled = [...rows].reverse().find((r) => r.key && filled(r.cells));
     if (lastFilled?.key) {
       const [, end] = lastFilled.key.split("|");
       let y = Number(todayIso.slice(0, 4));
       let endIso = `${y}-${end.slice(3, 5)}-${end.slice(0, 2)}`;
-      if (endIso > todayIso) endIso = `${--y}-${end.slice(3, 5)}-${end.slice(0, 2)}`;
-      from = iso(Date.parse(endIso) + DAY);
-    } else from = bucketOf(todayIso).start;
+      // The running period ends up to two days ahead: only a later date belongs to the previous year.
+      if (endIso > iso(Date.parse(todayIso) + 2 * DAY)) endIso = `${--y}-${end.slice(3, 5)}-${end.slice(0, 2)}`;
+      const afterHand = iso(Date.parse(endIso) + DAY);
+      if (afterHand > from) from = afterHand;
+    }
   }
 
   // Periods from `from` up to the one running today.

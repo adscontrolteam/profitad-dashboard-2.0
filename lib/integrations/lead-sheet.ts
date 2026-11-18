@@ -92,6 +92,8 @@ export interface ParsedTab {
   leads: NormalizedLead[];
   columns: Field[];
   skipped: number;
+  /** Earliest dated row of the tab, test rows included: the day the table came alive. */
+  firstAt: Date | null;
 }
 
 /** One lead per row. `tab` goes into raw so a lead can be traced back. */
@@ -118,6 +120,7 @@ export function parseLeadRows(tab: string, values: string[][]): ParsedTab {
   const trackingSince = tracked.length ? new Date(Math.min(...tracked.map((d) => d.getTime()))) : new Date(8.64e15);
 
   let skipped = 0;
+  let firstAt: Date | null = null;
   const leads: NormalizedLead[] = [];
   for (const row of rows) {
     if (!row.some((v) => (v ?? "").trim())) continue;
@@ -126,6 +129,7 @@ export function parseLeadRows(tab: string, values: string[][]): ParsedTab {
     const attr = parseAttribution(cell(row, "attribution"));
     const gclid = cell(row, "gclid") || attr.gclid || "";
     const leadAt = parseSheetDate(cell(row, "date"));
+    if (leadAt && (!firstAt || leadAt < firstAt)) firstAt = leadAt;
     if (!leadAt || isTest(name, phone, gclid)) {
       skipped++;
       continue;
@@ -173,7 +177,7 @@ export function parseLeadRows(tab: string, values: string[][]): ParsedTab {
       raw: { tab, message: cell(row, "message").slice(0, 500), payments },
     });
   }
-  return { leads, columns: (Object.keys(idx) as Field[]).filter((f) => idx[f] >= 0), skipped };
+  return { leads, columns: (Object.keys(idx) as Field[]).filter((f) => idx[f] >= 0), skipped, firstAt };
 }
 
 export interface Payment {

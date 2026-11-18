@@ -21,7 +21,7 @@ import { getProject } from "@/lib/data";
 import { listOwnerCandidates } from "@/lib/projects/owners";
 import { archiveProjectTasks } from "@/lib/tasks/store";
 import { audit } from "@/lib/audit";
-import { ensureProjectFolder, ensureReport } from "@/lib/integrations/provision";
+import { ensureLeadsSheet, ensureProjectFolder, ensureReport } from "@/lib/integrations/provision";
 
 const METRIC_LABELS: Record<string, string> = Object.fromEntries(Object.entries(METRICS).map(([k, v]) => [k, v.label]));
 
@@ -218,6 +218,8 @@ async function provision(projectId: string, name: string, actorEmail: string, dr
   try {
     if (report) await ensureReport(projectId, name, actorEmail);
     else await ensureProjectFolder(projectId, name, actorEmail);
+    // Every project folder comes with its Leads & Sales table.
+    await ensureLeadsSheet(projectId, name, actorEmail);
     await audit({ actorEmail, action: "project.provision", projectId, ok: true, result: report ? "папка и Репорт" : "папка" });
     return null;
   } catch (error) {

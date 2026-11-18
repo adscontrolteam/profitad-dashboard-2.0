@@ -40,15 +40,15 @@ async function run(rec: IntegrationRecord): Promise<string> {
     }
     case "sheets_leads": {
       const cfg = rec.config as SheetsLeadsConfig;
-      let { leads, sales, summary } = await readLeadsSheet(cfg);
+      let { leads, sales, summary, firstAt } = await readLeadsSheet(cfg);
       const n = await replaceLeads(rec.projectId, "sheet", leads);
       // The dashboard keeps the sales tab itself: write the owned periods, then read the tab back with them.
       let filled = "";
       if (cfg.salesAutofill && cfg.salesTab) {
         const { fillSalesTab } = await import("./sales-autofill");
-        const r = await fillSalesTab(rec.projectId, cfg);
+        const r = await fillSalesTab(rec.projectId, cfg, firstAt);
         if (r.from && r.from !== cfg.salesAutofillFrom) await patchIntegrationConfig(rec.projectId, "sheets_leads", { salesAutofillFrom: r.from });
-        if (r.cells) ({ leads, sales, summary } = await readLeadsSheet(cfg));
+        if (r.cells) ({ leads, sales, summary, firstAt } = await readLeadsSheet(cfg));
         filled = r.message ? ` · ${r.message}` : "";
       }
       const salesSource = cfg.salesTab ? `sheet:${cfg.spreadsheetId}:${cfg.salesTab}` : null;

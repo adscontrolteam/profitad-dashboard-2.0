@@ -203,10 +203,12 @@ export async function resetReportCopy(spreadsheetId: string, tabs: ReportTab[]) 
 export async function readLeadsSheet(cfg: SheetsLeadsConfig, today = new Date()) {
   const all: NormalizedLead[] = [];
   const notes: string[] = [];
+  let firstAt: Date | null = null;
   for (const tab of leadTabsOf(cfg)) {
     const parsed = parseLeadRows(tab, await readRange(cfg.spreadsheetId, tab, "A1:Z5000"));
     if (!parsed.columns.includes("date")) throw new Error(`На листе «${tab}» в первой строке нет колонки «Дата»/«Date».`);
     all.push(...parsed.leads);
+    if (parsed.firstAt && (!firstAt || parsed.firstAt < firstAt)) firstAt = parsed.firstAt;
     notes.push(`${tab}: ${parsed.leads.length}${parsed.skipped ? ` (тестовых/без даты: ${parsed.skipped})` : ""}`);
   }
   const { leads, merged } = dedupeLeads(all);
@@ -216,5 +218,5 @@ export async function readLeadsSheet(cfg: SheetsLeadsConfig, today = new Date())
     if (parsed.problem) throw new Error(parsed.problem);
     sales = parsed.sales;
   }
-  return { leads, sales, summary: `${notes.join(" · ")}${merged ? ` · дублей склеено: ${merged}` : ""}` };
+  return { leads, sales, firstAt, summary: `${notes.join(" · ")}${merged ? ` · дублей склеено: ${merged}` : ""}` };
 }

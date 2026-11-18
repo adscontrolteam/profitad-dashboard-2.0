@@ -272,6 +272,14 @@ function LeadsSheetCard({ projectId, current }: { projectId: string; current?: I
     <Shell kind="sheets_leads" current={current} projectId={projectId} summary={summary}>
       <InfoHint caption="Какой должна быть таблица">Реальные лиды клиента, даже если кабинет их не видит. Листы с лидами: одна строка — один лид, в первой строке заголовки (Дата, Имя,
         Контакт/Телефон, Статус/Qualification, gclid/Attribution, Дата оплаты, Сумма — какие есть). Лист продаж — суммы по периодам.</InfoHint>
+      {!current && (
+        <div>
+          <button type="button" className="btn-primary px-3 py-1.5 text-xs" disabled={pending} onClick={() => run(() => createFromTemplateAction(projectId, "leads"))}>
+            {pending ? "Создаю…" : "Создать из шаблона"}
+          </button>
+          <span className="ml-2 text-xs text-muted-foreground">или подключите существующую:</span>
+        </div>
+      )}
       <div className="flex gap-2">
         <input className="field" placeholder="Ссылка на Google Таблицу" value={url} onChange={(e) => setUrl(e.target.value)} />
         <button
