@@ -12,11 +12,14 @@ export type FocusKey = keyof typeof FOCUS;
  * Two questions, two blocks.
  *  - «Лог» — where is the breakage: errors, missing accesses, wrong settings, going over the budget or the rules.
  *  - «Фокус» — how to improve the result: proposals and analysis, what to scale, where a decision moves the numbers.
- * An entry is a breakage unless it is a proposal / analysis or its action is «масштабировать» / «решить».
+ * An entry goes to «Фокус» when it is a proposal / analysis or carries an action about the result: «выключить»,
+ * «масштабировать», «решить». Everything else — «починить» or no action at all — is a breakage and goes to «Лог».
  */
 export type Lane = "log" | "focus";
 export const laneOf = (entry: { kind: string; focus: string | null }): Lane =>
-  entry.kind === "proposal" || entry.kind === "analysis" || entry.focus === "scale" || entry.focus === "decide" ? "focus" : "log";
+  entry.kind === "proposal" || entry.kind === "analysis" || entry.focus === "stop" || entry.focus === "scale" || entry.focus === "decide"
+    ? "focus"
+    : "log";
 
 export const formatImpact = (value: number, currency: string | null) =>
   currency
