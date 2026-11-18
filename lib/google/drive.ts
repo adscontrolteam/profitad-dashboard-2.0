@@ -73,12 +73,19 @@ export async function copyFile(fileId: string, parentId: string, name: string) {
 }
 
 /** Drive has no "copy folder": recreate the folder tree and copy every file into it. */
-export async function copyFolderTree(templateId: string, parentId: string, name: string, depth = 0): Promise<string> {
+export async function copyFolderTree(
+  templateId: string,
+  parentId: string,
+  name: string,
+  depth = 0,
+  /** Files of the template that must not be copied (matched by name). */
+  skipFile: (fileName: string) => boolean = () => false,
+): Promise<string> {
   const target = await createFolder(parentId, name);
   if (depth > 6) return target.id;
   for (const child of await children(templateId)) {
-    if (child.mimeType === FOLDER_MIME) await copyFolderTree(child.id, target.id, child.name, depth + 1);
-    else await copyFile(child.id, target.id, child.name);
+    if (child.mimeType === FOLDER_MIME) await copyFolderTree(child.id, target.id, child.name, depth + 1, skipFile);
+    else if (!skipFile(child.name)) await copyFile(child.id, target.id, child.name);
   }
   return target.id;
 }

@@ -1,5 +1,5 @@
 import "server-only";
-import { GOOGLE_LAYOUT } from "@/config/google";
+import { GOOGLE_LAYOUT, TEMPLATE_SKIP_FILES } from "@/config/google";
 import { copyFile, copyFolderTree, findChild, FOLDER_MIME, folderUrl } from "@/lib/google/drive";
 import { spreadsheetUrl } from "@/lib/google/sheets";
 import { detectReport, resetReportCopy } from "./sheets";
@@ -17,7 +17,9 @@ export async function ensureProjectFolder(projectId: string, projectName: string
   if (existing) return { folderId: (existing.config as DriveConfig).folderId, created: false };
 
   const found = await findChild(GOOGLE_LAYOUT.projectsParent, projectName, FOLDER_MIME);
-  const folderId = found?.id ?? (await copyFolderTree(GOOGLE_LAYOUT.projectTemplate, GOOGLE_LAYOUT.projectsParent, projectName));
+  const folderId = found?.id ?? (await copyFolderTree(GOOGLE_LAYOUT.projectTemplate, GOOGLE_LAYOUT.projectsParent, projectName, 0, (file) =>
+      TEMPLATE_SKIP_FILES.some((re) => re.test(file.trim())),
+    ));
   await saveIntegration(projectId, "drive", { url: folderUrl(folderId), folderId, name: projectName }, null, actorEmail);
   await markIntegration(projectId, "drive", null);
   return { folderId, created: !found };
