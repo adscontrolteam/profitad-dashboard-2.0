@@ -30,7 +30,7 @@ const drive = <T>(path: string, init: RequestInit = {}) => googleFetch<T>(`${API
 const json = (body: object): RequestInit => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
 export async function folderInfo(id: string) {
-  return drive<{ id: string; name: string; driveId?: string; mimeType: string }>(`files/${id}?fields=id,name,driveId,mimeType&${ALL_DRIVES}`);
+  return drive<{ id: string; name: string; driveId?: string; mimeType: string; parents?: string[] }>(`files/${id}?fields=id,name,driveId,mimeType,parents&${ALL_DRIVES}`);
 }
 
 async function children(folderId: string, extraQuery = "", fields = "files(id,name,mimeType)", limit = 1000) {
@@ -70,6 +70,25 @@ export async function createFolder(parentId: string, name: string) {
 
 export async function copyFile(fileId: string, parentId: string, name: string) {
   return drive<{ id: string; name: string; mimeType: string }>(`files/${fileId}/copy?${ALL_DRIVES}&fields=id,name,mimeType`, json({ name, parents: [parentId] }));
+}
+
+export async function renameFile(fileId: string, name: string) {
+  return drive<{ id: string; name: string }>(`files/${fileId}?${ALL_DRIVES}&fields=id,name`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
+/** Every file and subfolder under a folder (not the folder itself), at most `limit` items. */
+export async function listTree(folderId: string, limit = 800, depth = 0): Promise<{ id: string; name: string; mimeType: string }[]> {
+  const out: { id: string; name: string; mimeType: string }[] = [];
+  for (const child of await children(folderId)) {
+    if (out.length >= limit) break;
+    out.push(child);
+    if (child.mimeType === FOLDER_MIME && depth < 6) out.push(...(await listTree(child.id, limit - out.length, depth + 1)));
+  }
+  return out;
 }
 
 /** Drive has no "copy folder": recreate the folder tree and copy every file into it. */

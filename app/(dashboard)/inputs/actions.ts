@@ -21,7 +21,7 @@ import { getProject } from "@/lib/data";
 import { listOwnerCandidates } from "@/lib/projects/owners";
 import { archiveProjectTasks } from "@/lib/tasks/store";
 import { audit } from "@/lib/audit";
-import { ensureLeadsSheet, ensureProjectFolder, ensureReport } from "@/lib/integrations/provision";
+import { ensureLeadsSheet, ensureProjectFolder, ensureReport, renameProjectAssets } from "@/lib/integrations/provision";
 
 const METRIC_LABELS: Record<string, string> = Object.fromEntries(Object.entries(METRICS).map(([k, v]) => [k, v.label]));
 
@@ -30,6 +30,8 @@ export interface ProjectActionState {
   message: string | null;
   /** Saved, but something to read before closing (e.g. Drive/report creation failed). */
   warning?: string | null;
+  /** Saved, and something good to read before closing (e.g. what was renamed on Drive). */
+  note?: string | null;
   /** Id of the project just created — to open its client brief straight away. */
   projectId?: string;
 }
@@ -165,7 +167,8 @@ export async function saveProjectAction(
   if (typeof input === "string") return { ok: false, message: input };
 
   const id = str((raw as Record<string, unknown>).id, 64);
-  const ownersError = await checkOwners(input, id ? ((await getProject(id))?.owners ?? null) : null);
+  const before = id ? await getProject(id) : null;
+  const ownersError = await checkOwners(input, before?.owners ?? null);
   if (ownersError) return { ok: false, message: ownersError };
 
   if (id) {
@@ -189,8 +192,14 @@ export async function saveProjectAction(
   }
 
   updateTag(TAGS.projects);
+  const renamed = before && before.name !== input.name ? await renameAssets(id, before.name, input.name, viewer.email) : null;
   const access = await accessSummary(id, viewer.email);
-  return { ok: true, message: "Проект сохранён.", warning: access };
+  return {
+    ok: true,
+    message: "Проект сохранён.",
+    note: renamed?.note ?? null,
+    warning: [renamed?.warning, access].filter(Boolean).join("\n") || null,
+  };
 }
 
 export async function deleteProjectAction(id: string): Promise<ProjectActionState> {
@@ -209,6 +218,25 @@ async function accessSummary(projectId: string, actorEmail: string): Promise<str
     return r.problems.length ? `Проект сохранён, но с доступами не всё: ${r.problems.join("; ")}` : null;
   } catch (error) {
     return `Проект сохранён, доступы не обновились: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/** A renamed project: its Drive folder and the files named after it follow. Never fails the save. */
+async function renameAssets(projectId: string, oldName: string, newName: string, actorEmail: string) {
+  try {
+    const r = await renameProjectAssets(projectId, oldName, newName);
+    const parts = [r.folder ? "папка" : null, r.files ? `файлов: ${r.files}` : null].filter(Boolean).join(", ");
+    await audit({ actorEmail, action: "project.rename", projectId, ok: true, result: `${oldName} → ${newName}; ${parts || "на Drive нечего переименовывать"}` });
+    return {
+      note: parts ? `На Google Drive переименовано: ${parts}.` : null,
+      warning: r.outside.length
+        ? `Не переименованы таблицы вне папки проекта (возможно, это таблица клиента): ${r.outside.join("; ")}. Переименуйте вручную, если нужно.`
+        : null,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await audit({ actorEmail, action: "project.rename", projectId, ok: false, result: message });
+    return { note: null, warning: `Название в дашборде изменено, но на Google Drive переименовать не удалось: ${message}` };
   }
 }
 

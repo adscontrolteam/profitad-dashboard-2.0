@@ -58,6 +58,7 @@ export function ProjectLog({
   description = "Предложения, анализ и ошибки — от агента и от проверок дашборда.",
   showArea = false,
   panel = false,
+  collapsed = false,
   only = "all",
   currency = null,
   className,
@@ -69,6 +70,8 @@ export function ProjectLog({
   showArea?: boolean;
   /** Project page: always open, a list that scrolls inside the block, with search by words. */
   panel?: boolean;
+  /** Panel with nothing to show in either block: one line, no filters, no fixed height. */
+  collapsed?: boolean;
   /**
    * Two blocks side by side: «Лог» (where is the breakage) and «Фокус» (how to improve the result).
    * See laneOf in lib/log/focus.ts.
@@ -110,6 +113,18 @@ export function ProjectLog({
         ))}
       </ul>
     );
+
+  if (panel && collapsed) {
+    return (
+      <section id={isFocus ? "focus" : "log"} className="flex min-w-0 scroll-mt-24 flex-wrap items-center gap-x-3 gap-y-1 rounded-[var(--radius)] border border-border bg-card px-4 py-3 shadow-[var(--shadow)] sm:px-5 lg:px-6">
+        <h2 className="section-title flex items-center gap-2">
+          {isFocus ? "Фокус" : "Лог"}
+          <InfoHint>{description}</InfoHint>
+        </h2>
+        <span className="text-sm text-muted-foreground">{isFocus ? "идей для роста пока нет" : "поломок нет"}</span>
+      </section>
+    );
+  }
 
   if (panel) {
     return (

@@ -172,7 +172,7 @@ export function ProjectEditor({
       router.push(`/inputs/brief/${next.projectId}`);
       return next;
     }
-    if (next.ok && !next.warning) onClose();
+    if (next.ok && !next.warning && !next.note) onClose();
     return next;
   }, IDLE);
   const [deleting, startDelete] = useTransition();
@@ -581,6 +581,7 @@ export function ProjectEditor({
             <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} className="field resize-y" />
           </Field>
 
+          {state.ok && state.note && <p className="text-sm font-medium text-positive">Проект сохранён. {state.note}</p>}
           {error && (
             <p role="alert" className="text-sm font-medium text-negative">
               {error}

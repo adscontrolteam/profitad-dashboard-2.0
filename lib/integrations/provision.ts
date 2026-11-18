@@ -1,9 +1,9 @@
 import "server-only";
 import { GOOGLE_LAYOUT, TEMPLATE_SKIP_FILES } from "@/config/google";
-import { copyFile, copyFolderTree, findChild, FOLDER_MIME, folderUrl } from "@/lib/google/drive";
+import { copyFile, copyFolderTree, findChild, FOLDER_MIME, folderInfo, folderUrl, listTree, renameFile } from "@/lib/google/drive";
 import { batchUpdate, spreadsheetInfo, spreadsheetUrl } from "@/lib/google/sheets";
 import { detectReport, resetReportCopy } from "./sheets";
-import { getIntegration, markIntegration, saveIntegration } from "./store";
+import { getIntegration, markIntegration, patchIntegrationConfig, saveIntegration } from "./store";
 import type { DriveConfig, SheetsLeadsConfig } from "./types";
 
 const SHEET_MIME = "application/vnd.google-apps.spreadsheet";
@@ -87,4 +87,67 @@ export async function ensureLeadsSheet(projectId: string, projectName: string, a
     actorEmail,
   );
   return { spreadsheetId, created: !found };
+}
+
+/**
+ * The project got a new name: the Drive folder and everything inside it that carries the old name follow.
+ *  - Any file or subfolder with the old name in its title gets the new one (case and spaces do not matter:
+ *    «LEX DIXIT», «NowaMowa»).
+ *  - The folder itself (when it sits in PROFITAD → PROJECTS), the «Репорт» and the «Leads & Sales» get their
+ *    standard names even if they still carry a name from two renames ago.
+ * Only the project folder is touched — a connected sheet that lives elsewhere (e.g. the client's own table) keeps
+ * its name and is returned in `outside`. `oldName` = null: only bring the standard names in line.
+ */
+export async function renameProjectAssets(projectId: string, oldName: string | null, newName: string) {
+  const to = newName.trim();
+  const from = (oldName ?? "").trim();
+  const result = { folder: false, files: 0, outside: [] as string[] };
+  if (!to) return result;
+  const drive = await getIntegration(projectId, "drive");
+  if (!drive) return result;
+  const { folderId } = drive.config as DriveConfig;
+  const old =
+    from.length >= 2 && from !== to
+      ? new RegExp(from.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s*"), "gi")
+      : null;
+  const has = (name: string) => Boolean(old && name.search(old) !== -1);
+  const swap = (name: string) => (old ? name.replace(old, to) : name);
+  const rename = async (id: string, current: string, next: string) => {
+    if (next === current) return false;
+    await renameFile(id, next);
+    return true;
+  };
+
+  const folder = await folderInfo(folderId);
+  const ours = (folder.parents ?? []).includes(GOOGLE_LAYOUT.projectsParent);
+  const folderName = has(folder.name) ? swap(folder.name) : ours ? to : folder.name;
+  result.folder = await rename(folderId, folder.name, folderName);
+
+  const tree = await listTree(folderId);
+  const standard = new Map<string, string>();
+  const titles: { kind: "sheets_report" | "sheets_leads"; id: string; title: string }[] = [];
+  for (const [kind, name] of [["sheets_report", `${to} — Репорт`], ["sheets_leads", leadsSheetName(to)]] as const) {
+    const rec = await getIntegration(projectId, kind);
+    if (!rec) continue;
+    const cfg = rec.config as { spreadsheetId: string; title?: string };
+    titles.push({ kind, id: cfg.spreadsheetId, title: cfg.title ?? "" });
+    standard.set(cfg.spreadsheetId, name);
+  }
+  const renamed = new Map<string, string>();
+  for (const file of tree) {
+    // A connected sheet without the old name in its title carries a stale one: give it the standard name.
+    const next = has(file.name) ? swap(file.name) : file.name.toLowerCase().includes(to.toLowerCase()) ? file.name : (standard.get(file.id) ?? file.name);
+    if (await rename(file.id, file.name, next)) {
+      renamed.set(file.id, next);
+      result.files += 1;
+    }
+  }
+  await patchIntegrationConfig(projectId, "drive", { name: folderName });
+  const inTree = new Set(tree.map((f) => f.id));
+  for (const t of titles) {
+    const name = renamed.get(t.id);
+    if (name) await patchIntegrationConfig(projectId, t.kind, { title: name });
+    else if (!inTree.has(t.id) && has(t.title)) result.outside.push(t.title);
+  }
+  return result;
 }
