@@ -24,6 +24,7 @@ function toRow(input: ProjectInput) {
     metaActions: input.agent.metaActions,
     currency: input.agent.currency,
     agentLeadSource: input.agent.leadSource,
+    leadsAllFromAds: input.agent.leadsAllFromAds,
     telegramChatId: input.agent.telegramChatId,
     telegramThreadId: input.agent.telegramThreadId,
     agentDailyReport: input.agent.dailyReport,

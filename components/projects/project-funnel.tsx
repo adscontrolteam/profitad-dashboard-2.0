@@ -17,6 +17,7 @@ export async function ProjectFunnel({
   to,
   periodLabel,
   leadPlans,
+  allFromAds = false,
 }: {
   projectId: string;
   currency: string | null;
@@ -25,6 +26,8 @@ export async function ProjectFunnel({
   periodLabel: string;
   /** Plan of ad leads per month (YYYY-MM), when the project has a leads KPI. */
   leadPlans: Record<string, number | null>;
+  /** The project's sheet holds ad leads only: every lead counts, no gclid / UTM check. */
+  allFromAds?: boolean;
 }) {
   const funnel = await projectFunnel(projectId, from, to);
   if (!funnel.hasLeads) return null;
@@ -64,7 +67,12 @@ export async function ProjectFunnel({
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="section-title">Реальные результаты</h2>
         <InfoHint label="Как считаем">
-          <span className="block">
+          {allFromAds && (
+            <span className="mb-2 block">
+              В этом проекте все лиды в таблице — с рекламы (настройка проекта): каждый считается рекламным, gclid и метки не проверяются.
+            </span>
+          )}
+          <span className={allFromAds ? "hidden" : "block"}>
             Считаем только лиды с рекламы (gclid / платная метка). Лиды и продажи — из таблицы клиента, расход — из кабинетов.
           </span>
           <span className="mt-2 block">

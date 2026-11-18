@@ -199,8 +199,10 @@ export async function dropOtherSales(projectId: string, keep: string | null) {
  * puts that into utm.ad. No marker = SEO, direct, referrals, messengers: counted only as «не с рекламы».
  * Exceptions, both only from the first day with ad spend: leads from before the site recorded click ids (utm.untracked)
  * and leads that came from a Google page without a click id (utm.google_ref) — the owner's decision of 14.11.2026.
+ * A project whose sheet holds ad leads only (projects.leads_all_from_ads, every project but Lex Dixit) skips the
+ * check: all its leads are ad leads — the owner's decision of 18.11.2026.
  */
-export const FROM_ADS = sql`((${leads.utm}->>'ad') is not null or (
+export const FROM_ADS = sql`((${leads.utm}->>'ad') is not null or (select p.leads_all_from_ads from projects p where p.id = ${leads.projectId}) or (
   (${leads.utm}->>'untracked' = '1' or ${leads.utm}->>'google_ref' = '1')
   and (${leads.leadAt} at time zone 'UTC')::date >= (
     select min(a.date) from ${adMetricsDaily} a where a.project_id = ${leads.projectId} and a.spend > 0

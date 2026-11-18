@@ -137,6 +137,11 @@ export const projects = pgTable("projects", {
   telegramThreadId: integer("telegram_thread_id"),
   /** Last «Посмотреть Лог» reminder; the next one comes no sooner than 3 days later. */
   logNotifiedAt: timestamp("log_notified_at", { withTimezone: true }),
+  /**
+   * Every lead in the project's sheet / CRM came from ads (the sheet is filled with ad leads only), so no click id
+   * or paid UTM is needed to count it. Off = only tagged leads count (Lex Dixit: the sheet also gets SEO and direct).
+   */
+  leadsAllFromAds: boolean("leads_all_from_ads").notNull().default(true),
   agentLeadSource: text("agent_lead_source").$type<"ads" | "sheet" | "both">().notNull().default("ads"),
   position: integer("position").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -250,8 +255,9 @@ export type LeadRow = typeof leads.$inferSelect;
 
 /**
  * Leads from the client's sheet / CRM per project, day and campaign, for the AI agent (role bot_sync).
- * No names, phones or emails — only counts. «ads» = the lead carries a click id or a paid UTM, or came before
- * the site recorded click ids while the ads were already running.
+ * No names, phones or emails — only counts. «ads» = every lead when the project says its sheet holds ad leads only
+ * (projects.leads_all_from_ads); otherwise the lead carries a click id or a paid UTM, or came before the site
+ * recorded click ids while the ads were already running.
  * See docs/agent-contract.md.
  */
 export const agentLeadsDaily = pgView("agent_leads_daily", {
@@ -268,9 +274,9 @@ export const agentLeadsDaily = pgView("agent_leads_daily", {
          (lead_at at time zone 'UTC')::date as day,
          coalesce(nullif(utm->>'utm_campaign', ''), nullif(campaign, ''), '') as campaign,
          (count(*) filter (where outcome <> 'junk'))::int as leads_all,
-         (count(*) filter (where outcome <> 'junk' and (utm->>'ad' is not null or ((utm->>'untracked' = '1' or utm->>'google_ref' = '1') and (lead_at at time zone 'UTC')::date >= (select min(a.date) from ad_metrics_daily a where a.project_id = leads.project_id and a.spend > 0)))))::int as leads_ads,
-         (count(*) filter (where outcome = 'no_answer' and (utm->>'ad' is not null or ((utm->>'untracked' = '1' or utm->>'google_ref' = '1') and (lead_at at time zone 'UTC')::date >= (select min(a.date) from ad_metrics_daily a where a.project_id = leads.project_id and a.spend > 0)))))::int as no_answer_ads,
-         (count(*) filter (where outcome = 'won' and (utm->>'ad' is not null or ((utm->>'untracked' = '1' or utm->>'google_ref' = '1') and (lead_at at time zone 'UTC')::date >= (select min(a.date) from ad_metrics_daily a where a.project_id = leads.project_id and a.spend > 0)))))::int as won_ads,
+         (count(*) filter (where outcome <> 'junk' and (utm->>'ad' is not null or (select p.leads_all_from_ads from projects p where p.id = leads.project_id) or ((utm->>'untracked' = '1' or utm->>'google_ref' = '1') and (lead_at at time zone 'UTC')::date >= (select min(a.date) from ad_metrics_daily a where a.project_id = leads.project_id and a.spend > 0)))))::int as leads_ads,
+         (count(*) filter (where outcome = 'no_answer' and (utm->>'ad' is not null or (select p.leads_all_from_ads from projects p where p.id = leads.project_id) or ((utm->>'untracked' = '1' or utm->>'google_ref' = '1') and (lead_at at time zone 'UTC')::date >= (select min(a.date) from ad_metrics_daily a where a.project_id = leads.project_id and a.spend > 0)))))::int as no_answer_ads,
+         (count(*) filter (where outcome = 'won' and (utm->>'ad' is not null or (select p.leads_all_from_ads from projects p where p.id = leads.project_id) or ((utm->>'untracked' = '1' or utm->>'google_ref' = '1') and (lead_at at time zone 'UTC')::date >= (select min(a.date) from ad_metrics_daily a where a.project_id = leads.project_id and a.spend > 0)))))::int as won_ads,
          (count(*) filter (where outcome = 'junk'))::int as junk
   from leads
   group by 1, 2, 3`);

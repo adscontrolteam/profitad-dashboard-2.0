@@ -162,6 +162,7 @@ export function ProjectEditor({
   const [telegramThreadId, setTelegramThreadId] = useState(project?.agent.telegramThreadId?.toString() ?? "");
   const [agentLeadSource, setAgentLeadSource] = useState<"ads" | "sheet" | "both">(project?.agent.leadSource ?? "ads");
   const [agentDailyReport, setAgentDailyReport] = useState(project?.agent.dailyReport ?? true);
+  const [leadsAllFromAds, setLeadsAllFromAds] = useState(project?.agent.leadsAllFromAds ?? true);
 
   const router = useRouter();
   const [state, formAction, saving] = useActionState(async (prev: ProjectActionState, formData: FormData) => {
@@ -206,6 +207,7 @@ export function ProjectEditor({
     currency,
     budgetMonth,
     agentDailyReport,
+    leadsAllFromAds,
     agentLeadSource,
     telegramChatId,
     telegramThreadId,
@@ -533,6 +535,8 @@ export function ProjectEditor({
             }
             leadSource={agentLeadSource}
             setLeadSource={setAgentLeadSource}
+            leadsAllFromAds={leadsAllFromAds}
+            setLeadsAllFromAds={setLeadsAllFromAds}
             hasLeadSheet={integrations.some((i) => i.kind === "sheets_leads" || i.kind === "crm")}
             dailyReport={agentDailyReport}
             setDailyReport={setAgentDailyReport}
@@ -614,6 +618,8 @@ function AgentSettings({
   telegram,
   leadSource,
   setLeadSource,
+  leadsAllFromAds,
+  setLeadsAllFromAds,
   hasLeadSheet,
   dailyReport,
   setDailyReport,
@@ -627,6 +633,8 @@ function AgentSettings({
   telegram: React.ReactNode;
   leadSource: "ads" | "sheet" | "both";
   setLeadSource: (v: "ads" | "sheet" | "both") => void;
+  leadsAllFromAds: boolean;
+  setLeadsAllFromAds: (v: boolean) => void;
   hasLeadSheet: boolean;
   dailyReport: boolean;
   setDailyReport: (v: boolean) => void;
@@ -709,7 +717,7 @@ function AgentSettings({
           {(
             [
               ["ads", "Кабинет Google Ads", "Отмеченные выше конверсии — то, что видит Google."],
-              ["sheet", "Таблица клиента", "Реальные лиды с рекламы (с gclid / меткой) из таблицы или CRM, без спама. По ним цена заявки и темп."],
+              ["sheet", "Таблица клиента", "Лиды с рекламы из таблицы или CRM, без спама. По ним цена заявки и темп."],
               ["both", "Оба источника", "Считает по таблице, кабинет показывает рядом — видно, сколько заявок Google не досчитал."],
             ] as const
           ).map(([value, title, hint]) => (
@@ -731,6 +739,22 @@ function AgentSettings({
           {!hasLeadSheet && <span className="text-xs text-muted-foreground">Таблица станет доступна, когда в «Подключениях» проекта будет таблица лидов или CRM.</span>}
         </div>
       </Field>
+      <label className="flex cursor-pointer items-start gap-3 text-sm">
+        <input
+          type="checkbox"
+          checked={leadsAllFromAds}
+          onChange={(e) => setLeadsAllFromAds(e.target.checked)}
+          className="mt-0.5 size-4 accent-[var(--accent)]"
+        />
+        <span>
+          Все лиды в таблице — с рекламы
+          <span className="block text-xs text-muted-foreground">
+            {leadsAllFromAds
+              ? "Каждый лид из таблицы считается рекламным, gclid и метки не нужны."
+              : "С рекламы — только лиды с gclid или платной меткой; остальные (SEO, прямые) показаны отдельно."}
+          </span>
+        </span>
+      </label>
       {telegram}
       <label className="flex cursor-pointer items-center gap-3 text-sm">
         <input type="checkbox" checked={dailyReport} onChange={(e) => setDailyReport(e.target.checked)} className="size-4 accent-[var(--accent)]" />

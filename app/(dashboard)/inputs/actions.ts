@@ -128,6 +128,7 @@ function parseProject(raw: unknown): ProjectInput | string {
       currency: /^[A-Z]{3}$/.test(str(data.currency, 3).toUpperCase()) ? str(data.currency, 3).toUpperCase() : null,
       budgetMonth: positive(data.budgetMonth),
       dailyReport: data.agentDailyReport !== false,
+      leadsAllFromAds: data.leadsAllFromAds !== false,
       telegramChatId: /^-?\d{5,20}$/.test(str(data.telegramChatId, 24)) ? str(data.telegramChatId, 24) : null,
       telegramThreadId: /^\d{1,10}$/.test(str(data.telegramThreadId, 10)) && Number(data.telegramThreadId) > 0 ? Number(data.telegramThreadId) : null,
       leadSource: data.agentLeadSource === "sheet" || data.agentLeadSource === "both" ? data.agentLeadSource : "ads",

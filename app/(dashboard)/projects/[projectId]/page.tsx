@@ -177,6 +177,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         to={period.to}
         periodLabel={period.label}
         leadPlans={leadPlans}
+        allFromAds={project.agent.leadsAllFromAds}
       />
 
 
