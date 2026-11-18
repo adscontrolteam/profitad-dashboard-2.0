@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { InfoHint } from "@/components/ui/info-hint";
 import { CampaignsTable } from "@/components/ads/campaigns-table";
-import { ProjectLog } from "@/components/log/project-log";
+import { LogFocus } from "@/components/log/log-focus";
 import { toLogItems } from "@/lib/log/view";
 import { listLog } from "@/lib/log/store";
 import { Card } from "@/components/ui/card";
@@ -90,11 +90,7 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
         />
       </section>
 
-      <ProjectLog
-        projectId={ws.project.id}
-        items={toLogItems(log)}
-        description="Реклама: предложения агента, ошибки кабинетов и лидов, проверки дашборда."
-      />
+      <LogFocus projectId={ws.project.id} items={toLogItems(log)} scope="ads" currency={ws.project.agent.currency} />
 
       <Card>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">

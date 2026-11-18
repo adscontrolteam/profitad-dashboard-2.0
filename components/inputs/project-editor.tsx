@@ -128,7 +128,7 @@ export function ProjectEditor({
   onClose: () => void;
 }) {
   const [name, setName] = useState(project?.name ?? "");
-  const [status, setStatus] = useState<ProjectStatus>(project?.status ?? "active");
+  const [status, setStatus] = useState<ProjectStatus>(project?.status ?? "onboarding");
   const [goal, setGoal] = useState(project?.goal ?? "");
   const plans = project?.plans ?? [];
   const [startDate, setStartDate] = useState(project?.startDate ?? `${localMonth()}-01`);

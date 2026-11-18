@@ -7,7 +7,7 @@ import { useState, useSyncExternalStore, useTransition } from "react";
 import { resolveLogAction } from "@/app/(dashboard)/log-actions";
 import { Segmented } from "@/components/workspace/form";
 import { cn } from "@/lib/cn";
-import { byImpact, FOCUS, formatImpact, type FocusKey } from "@/lib/log/focus";
+import { byImpact, FOCUS, formatImpact, laneOf, type FocusKey } from "@/lib/log/focus";
 
 export interface LogItem {
   id: string;
@@ -70,8 +70,8 @@ export function ProjectLog({
   /** Project page: always open, a list that scrolls inside the block, with search by words. */
   panel?: boolean;
   /**
-   * The project page shows two blocks side by side: «Лог» (everything that happened) and «Фокус»
-   * (actions to take now). "focus" keeps only entries with an action, "log" only those without.
+   * Two blocks side by side: «Лог» (where is the breakage) and «Фокус» (how to improve the result).
+   * See laneOf in lib/log/focus.ts.
    */
   only?: "all" | "log" | "focus";
   /** Project currency, for the price of inaction of «Фокус» entries. */
@@ -79,7 +79,7 @@ export function ProjectLog({
   className?: string;
 }) {
   const isFocus = only === "focus";
-  const scoped = isFocus ? items.filter((i) => i.focus) : only === "log" ? items.filter((i) => !i.focus) : items;
+  const scoped = only === "all" ? items : items.filter((i) => laneOf(i) === only);
   const waiting = scoped.filter((i) => i.status === "needs_you").length;
   const [filter, setFilter] = useState<"needs_you" | "auto" | "all">(waiting ? "needs_you" : "all");
   // Always folded; the «Посмотреть Лог» link from Telegram (#log) opens it.
@@ -101,7 +101,7 @@ export function ProjectLog({
   const list =
     shown.length === 0 ? (
       <p className="text-sm text-muted-foreground">
-        {words.length ? "По этим словам ничего не найдено." : filter === "needs_you" ? (isFocus ? "Сейчас ничего не горит: действий от вас не ждём." : "Решений от вас сейчас не ждём.") : "Записей пока нет."}
+        {words.length ? "По этим словам ничего не найдено." : filter === "needs_you" ? (isFocus ? "Новых идей для роста пока нет." : "Поломок и нарушений сейчас нет.") : "Записей пока нет."}
       </p>
     ) : (
       <ul className="flex flex-col divide-y divide-border">
@@ -237,7 +237,7 @@ function LogRow({ projectId, item, showArea, currency }: { projectId: string; it
         <span className={cn("ml-auto font-medium", STATUS[item.status].className)}>{STATUS[item.status].label}</span>
       </div>
       <p className="text-sm font-semibold">{item.title}</p>
-      {item.focus && (item.impact !== null || item.effortMin !== null) && (
+      {(item.impact !== null || item.effortMin !== null) && (
         <p className="text-xs text-muted-foreground">
           {item.impact !== null && (
             <>
@@ -249,7 +249,7 @@ function LogRow({ projectId, item, showArea, currency }: { projectId: string; it
         </p>
       )}
       {item.body && <p className="whitespace-pre-line text-sm text-muted-foreground">{item.body}</p>}
-      {item.focus && item.rollback && <p className="text-xs text-muted-foreground/80">Откат: {item.rollback}</p>}
+      {item.rollback && <p className="text-xs text-muted-foreground/80">Откат: {item.rollback}</p>}
       {item.status !== "needs_you" && item.resolutionNote && (
         <p className="text-xs text-muted-foreground/80">
           → {item.resolutionNote}

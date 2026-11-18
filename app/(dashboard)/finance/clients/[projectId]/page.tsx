@@ -115,7 +115,7 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
         </Card>
 
         <Card>
-          <CardHead title="Результат: план / факт" hint={metric ? `${METRICS[metric].label} по месяцам, пунктир — план` : "Главный KPI по месяцам"} />
+          <CardHead title="Результат: факт / план" hint={metric ? `${METRICS[metric].label} по месяцам, пунктир — план` : "Главный KPI по месяцам"} />
           {chart.some((m) => m.data?.kpi) ? (
             <PlanFactChart data={chart.map((m) => ({ month: m.month, fact: m.data?.kpi?.fact ?? 0, plan: m.data?.kpi?.plan ?? null, forecast: m.forecast }))} />
           ) : (

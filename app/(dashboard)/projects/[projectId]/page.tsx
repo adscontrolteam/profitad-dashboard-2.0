@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MetricsGrid } from "@/components/projects/metrics-grid";
 import { ProjectFunnel } from "@/components/projects/project-funnel";
-import { ProjectLog } from "@/components/log/project-log";
+import { LogFocus } from "@/components/log/log-focus";
+import { ProjectAsk } from "@/components/projects/project-ask";
+import { askConfigured, chatUsage, listChat } from "@/lib/ai/ask";
 import { listLog } from "@/lib/log/store";
 import { toLogItems } from "@/lib/log/view";
 import { ProjectPeriodControl } from "@/components/projects/project-period-control";
@@ -144,29 +146,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         <WeekPlanSection base={base} month={weekMonth} canEdit={permissions.canEditInputs} />
       </section>
 
-      {/* What happened (Лог) next to what to do now (Фокус): both open, each scrolls inside its block. */}
-      <section className="grid gap-5 lg:grid-cols-2">
-        <ProjectLog
-          projectId={project.id}
-          items={logItems}
-          description="Общий лог проекта: реклама, SMM, план и доступы. Предложения и анализ агента, ошибки и проверки дашборда. Действия, которые нужно сделать сейчас, вынесены в «Фокус»."
-          showArea
-          panel
-          only="log"
-          currency={project.agent.currency}
-          className="max-h-[70dvh] lg:h-[440px] lg:max-h-none"
-        />
-        <ProjectLog
-          projectId={project.id}
-          items={logItems}
-          description="Куда дать внимание сейчас, чтобы у клиента был результат: что выключить, что починить, что масштабировать и где нужно решение. Сверху — самое дорогое по цене бездействия за неделю. Запись уходит, когда вы её решили или причина исчезла."
-          showArea
-          panel
-          only="focus"
-          currency={project.agent.currency}
-          className="max-h-[70dvh] lg:h-[440px] lg:max-h-none"
-        />
-      </section>
+      <LogFocus projectId={project.id} items={logItems} currency={project.agent.currency} />
 
       <MetricsGrid metrics={project.metrics} currency={project.agent.currency} />
 
@@ -178,6 +158,14 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         periodLabel={period.label}
         leadPlans={leadPlans}
         allFromAds={project.agent.leadsAllFromAds}
+      />
+
+      <ProjectAsk
+        projectId={project.id}
+        projectName={project.name}
+        initial={await listChat(project.id)}
+        usage={await chatUsage(project.id)}
+        ready={askConfigured()}
       />
 
 

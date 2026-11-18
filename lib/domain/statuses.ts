@@ -7,6 +7,7 @@ export const STATUS_META: Record<
   { label: string; summaryLabel: string; tone: StatusTone }
 > = {
   active: { label: "Активен", summaryLabel: "Проектов активных", tone: "green" },
+  onboarding: { label: "Заводится", summaryLabel: "Проектов заводится", tone: "blue" },
   awaiting_feedback: { label: "Ждём фидбек", summaryLabel: "Проектов ждём фидбек", tone: "amber" },
   awaiting_offer: { label: "Ждёт оффер", summaryLabel: "Проектов ждёт оффер", tone: "blue" },
   need_contact: { label: "Связаться", summaryLabel: "Проектов связаться", tone: "red" },
@@ -17,6 +18,7 @@ export const STATUS_META: Record<
 /** Statuses shown as summary cards on the dashboard, in display order. */
 export const DASHBOARD_STATUSES: ProjectStatus[] = [
   "active",
+  "onboarding",
   "awaiting_feedback",
   "awaiting_offer",
   "need_contact",

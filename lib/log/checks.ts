@@ -67,7 +67,7 @@ export async function runProjectChecks() {
           body: prev?.month ? `Пока действует план за ${monthName(prev.month)}. Задайте бюджет и цели Б / Б+ / С во «Вводных».` : "Задайте бюджет и цели Б / Б+ / С во «Вводных».",
           link: "/inputs",
           area: "project",
-          focus: "decide",
+          focus: "fix",
           effortMin: 10,
         },
         "План на месяц задан",

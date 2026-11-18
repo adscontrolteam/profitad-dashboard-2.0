@@ -19,7 +19,7 @@ export function ProjectsTable({ projects }: { projects: ProjectWithStats[] }) {
             <tr className="text-left text-xs text-muted-foreground">
               <th className="px-4 pb-2 font-medium">Название</th>
               <th className="px-4 pb-2 font-medium">Статус</th>
-              <th className="px-4 pb-2 font-medium">План / факт</th>
+              <th className="px-4 pb-2 font-medium">Факт / план</th>
               <th className="px-4 pb-2 font-medium">Цель</th>
               <th className="w-64 px-4 pb-2 font-medium">Выполнение · темп</th>
             </tr>

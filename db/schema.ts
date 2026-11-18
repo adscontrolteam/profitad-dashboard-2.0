@@ -669,3 +669,25 @@ export const socialConnectLinks = pgTable(
   },
   (t) => [uniqueIndex("social_connect_links_token_idx").on(t.token)],
 );
+
+/**
+ * «Вопрос агенту» on the project page: questions and answers about one project. The history is the project's
+ * memory — the next question is answered with the previous turns in view. Shared by everyone who sees the project.
+ */
+export const projectChat = pgTable(
+  "project_chat",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    role: text("role").$type<"user" | "assistant">().notNull(),
+    content: text("content").notNull(),
+    /** Who asked (email); null for answers. */
+    author: text("author"),
+    /** API cost of the answer in USD, from the token usage. */
+    costUsd: doublePrecision("cost_usd"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("project_chat_project_idx").on(t.projectId, t.createdAt)],
+);
+
+export type ProjectChatRow = typeof projectChat.$inferSelect;

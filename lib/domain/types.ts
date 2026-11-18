@@ -1,5 +1,7 @@
 export const PROJECT_STATUSES = [
   "active",
+  /** Paid and being set up: we collect the brief and accesses, ads are not running yet. */
+  "onboarding",
   "awaiting_feedback",
   "awaiting_offer",
   "need_contact",

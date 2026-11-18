@@ -16,7 +16,7 @@ export function PlanFact({ result, elapsed, currency = null }: { result: KpiStat
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">
-            План / факт · {METRICS[kpi.metric].label.toLowerCase()}
+            Факт / план · {METRICS[kpi.metric].label.toLowerCase()}
           </p>
           <p className="mt-1 font-display text-2xl font-extrabold tracking-[-0.03em] tabular-nums">
             {formatMetric(result.fact, format, currency)}

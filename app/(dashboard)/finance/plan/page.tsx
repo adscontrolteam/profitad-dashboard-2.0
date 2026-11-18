@@ -25,11 +25,11 @@ export default async function FinancePlanPage() {
     <div className="flex flex-col gap-5">
       <div className="grid gap-3 lg:grid-cols-2 lg:gap-5">
         <Card>
-          <CardHead title="Доход: план / факт" hint="Пунктир — план, подпись — % выполнения. Текущий месяц — прогноз" />
+          <CardHead title="Доход: факт / план" hint="Пунктир — план, подпись — % выполнения. Текущий месяц — прогноз" />
           <PlanFactChart data={r.pnl.map((m) => ({ month: m.month, fact: m.revenue, plan: m.plan?.revenuePlan ?? null, forecast: m.forecast }))} />
         </Card>
         <Card>
-          <CardHead title="Прибыль: план / факт" hint="Доход минус зарплаты и расходы" />
+          <CardHead title="Прибыль: факт / план" hint="Доход минус зарплаты и расходы" />
           <PlanFactChart data={r.pnl.map((m) => ({ month: m.month, fact: m.profit, plan: m.plan?.profitPlan ?? null, forecast: m.forecast }))} />
         </Card>
       </div>
