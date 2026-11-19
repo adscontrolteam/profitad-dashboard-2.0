@@ -23,6 +23,7 @@ export function KickoffMessage({
   const [gaps, setGaps] = useState<string[]>([]);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [withDigest, setWithDigest] = useState(true);
+  const [digestError, setDigestError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState<"draft" | "send" | null>(null);
   const [, start] = useTransition();
@@ -39,6 +40,7 @@ export function KickoffMessage({
         setText(r.text);
         setGaps(r.gaps);
         setWithDigest(r.withDigest);
+        setDigestError(r.digestError);
       } else setNote({ ok: false, text: r.message });
       setBusy(null);
     });
@@ -80,7 +82,11 @@ export function KickoffMessage({
             </p>
           )}
           {!withDigest && (
-            <p className="text-xs text-muted-foreground">Пересказ брифа не собран (бриф пуст или ИИ недоступен) — в сообщении только данные из «Вводных».</p>
+            <p className={cn("text-xs leading-5", digestError ? "rounded-[14px] border border-negative/40 bg-negative/10 px-3 py-2" : "text-muted-foreground")}>
+              {digestError
+                ? `Пересказ брифа не собран: ${digestError} Сейчас в сообщении только данные из «Вводных» — блоков про бизнес, услуги, боли ЦА и точку А нет.`
+                : "Пересказ брифа не собран: бриф пуст или ИИ не подключён. В сообщении только данные из «Вводных»."}
+            </p>
           )}
           <textarea
             className="field min-h-[420px] font-mono text-[13px] leading-5"

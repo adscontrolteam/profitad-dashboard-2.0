@@ -14,7 +14,7 @@ async function guard(projectId: string) {
 }
 
 /** Draft of the project's kickoff message, for a person to read and edit before it goes to the chat. */
-export async function draftKickoffAction(projectId: string): Promise<{ ok: true; text: string; gaps: string[]; withDigest: boolean } | { ok: false; message: string }> {
+export async function draftKickoffAction(projectId: string): Promise<{ ok: true; text: string; gaps: string[]; withDigest: boolean; digestError: string | null } | { ok: false; message: string }> {
   if (!(await guard(projectId))) return { ok: false, message: "Нет прав на «Вводные» этого проекта." };
   try {
     const draft = await buildKickoff(projectId);
