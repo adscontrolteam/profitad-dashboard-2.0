@@ -66,6 +66,8 @@ export interface AdCampaign {
   /** Real ad account / campaign ids (synced data only); enable pause/enable through the platform API. */
   accountId?: string;
   externalId?: string;
+  /** The campaign's own daily series over the report window (zeros on days without delivery). */
+  days: AdDay[];
 }
 
 export interface AdsReport {
@@ -131,7 +133,15 @@ export function demoAdsReport(
   const campaigns: AdCampaign[] = campaignsIn.map((c) => {
     const spend = (totalSpend * c.weight) / (weightSum || 1);
     const impressions = Math.round((spend / c.cpm) * 1000);
+    const share = c.weight / (weightSum || 1);
     return {
+      days: daysOut.map((d) => ({
+        date: d.date,
+        spend: round2(d.spend * share),
+        results: Math.round((d.spend * share) / (cpr * c.cprFactor)),
+        impressions: Math.round(((d.spend * share) / c.cpm) * 1000),
+        clicks: Math.round(((d.spend * share) / c.cpm) * 1000 * c.ctr),
+      })),
       id: c.id,
       name: c.name,
       platform: c.platform,

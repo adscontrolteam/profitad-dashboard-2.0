@@ -40,6 +40,7 @@ export async function getAdsReport(
   const result = (row: (typeof rows)[number]) => Number(row[resultMetric] ?? 0);
   const byDay = new Map<string, AdDay>();
   const byCampaign = new Map<string, AdCampaign>();
+  const campaignDays = new Map<string, Map<string, AdDay>>();
 
   for (const row of rows) {
     const day = byDay.get(row.date) ?? { date: row.date, spend: 0, results: 0, impressions: 0, clicks: 0 };
@@ -62,12 +63,29 @@ export async function getAdsReport(
       frequency: null,
       accountId: row.accountId,
       externalId: row.campaignId,
+      days: [],
     };
     c.spend += row.spend;
     c.results += result(row);
     c.impressions += row.impressions;
     c.clicks += row.clicks;
     byCampaign.set(key, c);
+
+    const own = campaignDays.get(key) ?? new Map<string, AdDay>();
+    const cd = own.get(row.date) ?? { date: row.date, spend: 0, results: 0, impressions: 0, clicks: 0 };
+    cd.spend += row.spend;
+    cd.results += result(row);
+    cd.impressions += row.impressions;
+    cd.clicks += row.clicks;
+    own.set(row.date, cd);
+    campaignDays.set(key, own);
+  }
+
+  // Every campaign gets the same date axis as the report, so charts line up day to day.
+  const dates = [...byDay.keys()];
+  for (const [key, c] of byCampaign) {
+    const own = campaignDays.get(key);
+    c.days = dates.map((date) => own?.get(date) ?? { date, spend: 0, results: 0, impressions: 0, clicks: 0 });
   }
 
   return {
