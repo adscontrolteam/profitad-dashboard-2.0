@@ -1,19 +1,20 @@
 import "server-only";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db";
 import { projectAccess, projectIntegrations, projects, type ProjectAccessRow } from "@/db/schema";
 import { getAdminEmails } from "@/lib/access/admins";
 import { adsConfigured } from "@/lib/google/ads";
 import { serviceAccount, workspaceUser } from "@/lib/google/auth";
 import { addLog, condition } from "@/lib/log/store";
-import { createTask } from "@/lib/tasks/store";
+import { archiveTasks, createTask } from "@/lib/tasks/store";
+import { CONTENT_FOLDER, ensureSubfolder } from "@/lib/integrations/provision";
 import { ga4PropertyId, gtmIds } from "./parse";
 import * as api from "./services";
 
 /**
  * Keeps the project's specialists' accesses in line with who is assigned in «Вводные»:
  * the assigned MediaBuyer / SMM get access to the project's services, a replaced one loses what the dashboard gave.
- * Services without an API for this (Clarity, Search Console, Telegram) become tasks for the admin.
+ * Services without an API for this (Clarity, Search Console) become tasks for the admin.
  */
 
 export const SERVICE_LABEL: Record<string, string> = {
@@ -67,7 +68,6 @@ async function desired(projectId: string): Promise<{ wants: Want[]; name: string
       if (!wants.some((w) => w.service === service && w.target === target && w.email === email)) wants.push({ service, target, email, role, link });
     };
     if (folderId) add("drive", folderId);
-    if (p.telegramChatId) add("telegram", p.telegramChatId);
     if (ga4) add("ga4", ga4);
     for (const a of metaAcc) add("meta", a);
     if (role === "media_buyer") {
@@ -159,11 +159,20 @@ async function revoke(row: ProjectAccessRow, projectName: string, actor: string)
 export async function syncProjectAccess(projectId: string, actor = "дашборд") {
   const db = getDb();
   const { wants, name } = await desired(projectId);
-  const rows = await db.select().from(projectAccess).where(eq(projectAccess.projectId, projectId));
+  let rows = await db.select().from(projectAccess).where(eq(projectAccess.projectId, projectId));
   const key = (s: string, t: string, e: string) => `${s}|${t}|${e}`;
   const wanted = new Set(wants.map((w) => key(w.service, w.target, w.email)));
   const done: string[] = [];
   const problems: string[] = [];
+
+  // Telegram is no longer handled here: everyone is in the project chat already. Old rows are dropped silently.
+  const telegram = rows.filter((r) => r.service === "telegram");
+  if (telegram.length) {
+    const taskIds = telegram.map((r) => r.ref).filter((id): id is string => !!id);
+    if (taskIds.length) await archiveTasks(taskIds, actor);
+    await db.delete(projectAccess).where(inArray(projectAccess.id, telegram.map((r) => r.id)));
+  }
+  rows = rows.filter((r) => r.service !== "telegram");
 
   // Take back what the dashboard gave to people who are no longer on the project (or from a replaced resource).
   for (const row of rows.filter((r) => ["granted", "task"].includes(r.status) && !wanted.has(key(r.service, r.target, r.email)))) {
@@ -215,6 +224,14 @@ export async function syncProjectAccess(projectId: string, actor = "дашбор
 export async function syncAllAccess() {
   const list = await getDb().select({ id: projects.id }).from(projects);
   const out: { projectId: string; kind: string; ok: boolean; message: string }[] = [];
+  // Folders made before «Content» was part of the layout get it here.
+  if (serviceAccount()) {
+    const drives = await getDb().select({ config: projectIntegrations.config }).from(projectIntegrations).where(eq(projectIntegrations.kind, "drive"));
+    for (const d of drives) {
+      const folderId = (d.config as { folderId?: string }).folderId;
+      if (folderId) await ensureSubfolder(folderId, CONTENT_FOLDER).catch(() => null);
+    }
+  }
   for (const p of list) {
     try {
       const r = await syncProjectAccess(p.id);
@@ -228,5 +245,8 @@ export async function syncAllAccess() {
 
 export async function listProjectAccess(projectIds: string[]) {
   if (!projectIds.length) return [];
-  return getDb().select().from(projectAccess).where(inArray(projectAccess.projectId, projectIds));
+  return getDb()
+    .select()
+    .from(projectAccess)
+    .where(and(inArray(projectAccess.projectId, projectIds), ne(projectAccess.service, "telegram")));
 }

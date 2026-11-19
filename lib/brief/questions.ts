@@ -485,6 +485,10 @@ export function answerText(question: BriefQuestion, value: string | undefined, l
 /** Interface strings of the client page. */
 export const BRIEF_UI: Record<BriefLang, Record<string, string>> = {
   ru: {
+    dictate: "Надиктовать ответ",
+    dictateStop: "Остановить запись",
+    dictating: "Говорите — текст появится в поле",
+    dictateError: "Микрофон недоступен: разрешите доступ в браузере",
     title: "Бриф проекта",
     intro: "Ответьте на вопросы — по ним мы строим рекламу. Часть уже заполнили мы: проверьте и поправьте. Ответы сохраняются сами, можно вернуться по этой же ссылке в любой момент.",
     progress: "Заполнено",
@@ -506,6 +510,10 @@ export const BRIEF_UI: Record<BriefLang, Record<string, string>> = {
     goal: "Цель",
   },
   uk: {
+    dictate: "Надиктувати відповідь",
+    dictateStop: "Зупинити запис",
+    dictating: "Говоріть — текст з’явиться в полі",
+    dictateError: "Мікрофон недоступний: дозвольте доступ у браузері",
     title: "Бриф проєкту",
     intro: "Дайте відповіді на питання — за ними ми будуємо рекламу. Частину вже заповнили ми: перевірте й виправте. Відповіді зберігаються самі, можна повернутися за цим самим посиланням будь-коли.",
     progress: "Заповнено",
@@ -527,6 +535,10 @@ export const BRIEF_UI: Record<BriefLang, Record<string, string>> = {
     goal: "Мета",
   },
   en: {
+    dictate: "Dictate the answer",
+    dictateStop: "Stop recording",
+    dictating: "Speak — the text will appear in the field",
+    dictateError: "Microphone unavailable: allow access in the browser",
     title: "Project brief",
     intro: "Answer the questions — we build your advertising on them. We have already filled in some: please check and correct. Answers save automatically; you can come back to this link at any time.",
     progress: "Completed",

@@ -3,6 +3,7 @@
 import { BRIEF_HINTS } from "@/lib/brief/hints";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { DictateButton } from "./dictate-button";
 import { BRIEF_OUTRO, BRIEF_SECTIONS, BRIEF_UI, chosen, isAsked, type BriefLang, type BriefQuestion } from "@/lib/brief/questions";
 
 export interface BriefFormProps {
@@ -142,6 +143,9 @@ export function BriefForm({ lang, initial, hidden, readOnly = false, onSave, ren
                       onPick={(v) => pick(item.id, v)}
                       onBlur={flush}
                     />
+                    {!readOnly && (item.kind === "text" || item.kind === "short") && (
+                      <DictateButton lang={lang} value={answers[item.id] ?? ""} onText={(v) => change(item.id, v)} onDone={flush} />
+                    )}
                     {renderExtra?.(item.id)}
                   </div>
                 );

@@ -107,9 +107,6 @@ export function ProjectsInputs({
                     <Link href={`/inputs/brief/${project.id}`} className="btn-ghost px-3 py-1.5" title="Бриф клиента: ссылка для клиента, вопросы и ответы">
                       Бриф
                     </Link>
-                    <Link href={`/inputs/brief/${project.id}#kickoff`} className="btn-ghost px-3 py-1.5" title="Стартовое сообщение о проекте в Telegram-чат">
-                      В чат
-                    </Link>
                     <button type="button" className="btn-ghost px-3 py-1.5" onClick={() => setEditing(project)}>
                       Изменить
                     </button>

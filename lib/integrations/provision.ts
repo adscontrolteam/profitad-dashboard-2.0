@@ -1,12 +1,19 @@
 import "server-only";
 import { GOOGLE_LAYOUT, TEMPLATE_SKIP_FILES } from "@/config/google";
-import { copyFile, copyFolderTree, findChild, FOLDER_MIME, folderInfo, folderUrl, listTree, renameFile } from "@/lib/google/drive";
+import { copyFile, copyFolderTree, createFolder, findChild, FOLDER_MIME, folderInfo, folderUrl, listTree, renameFile } from "@/lib/google/drive";
 import { batchUpdate, spreadsheetInfo, spreadsheetUrl } from "@/lib/google/sheets";
 import { detectReport, resetReportCopy } from "./sheets";
 import { getIntegration, markIntegration, patchIntegrationConfig, saveIntegration } from "./store";
 import type { DriveConfig, SheetsLeadsConfig } from "./types";
 
 const SHEET_MIME = "application/vnd.google-apps.spreadsheet";
+
+/** Every project folder has «Content» for SMM materials. */
+export const CONTENT_FOLDER = "Content";
+
+export async function ensureSubfolder(parentId: string, name: string) {
+  return (await findChild(parentId, name, FOLDER_MIME)) ?? (await createFolder(parentId, name));
+}
 
 /**
  * The project's Drive folder: an existing folder with the project's name under PROFITAD → PROJECTS is reused,
@@ -20,6 +27,7 @@ export async function ensureProjectFolder(projectId: string, projectName: string
   const folderId = found?.id ?? (await copyFolderTree(GOOGLE_LAYOUT.projectTemplate, GOOGLE_LAYOUT.projectsParent, projectName, 0, (file) =>
       TEMPLATE_SKIP_FILES.some((re) => re.test(file.trim())),
     ));
+  await ensureSubfolder(folderId, CONTENT_FOLDER);
   await saveIntegration(projectId, "drive", { url: folderUrl(folderId), folderId, name: projectName }, null, actorEmail);
   await markIntegration(projectId, "drive", null);
   return { folderId, created: !found };
