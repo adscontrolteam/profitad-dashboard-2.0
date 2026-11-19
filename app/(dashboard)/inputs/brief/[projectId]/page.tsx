@@ -3,6 +3,9 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminBrief } from "@/components/brief/admin-brief";
+import { KickoffMessage } from "@/components/brief/kickoff-message";
+import { telegramConfigured } from "@/lib/log/notify";
+import { listLog } from "@/lib/log/store";
 import { canViewProject } from "@/lib/access/policy";
 import { requireSection } from "@/lib/access/viewer";
 import { BRIEF_LANGS, type BriefLang } from "@/lib/brief/questions";
@@ -19,6 +22,7 @@ export default async function BriefAdminPage({ params }: PageProps<"/inputs/brie
   const project = await getProject(projectId);
   if (!project) notFound();
   const brief = await ensureBrief(projectId);
+  const kickoff = (await listLog(projectId, "project", 300)).find((l) => l.topic === "kickoff");
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
 
@@ -30,6 +34,12 @@ export default async function BriefAdminPage({ params }: PageProps<"/inputs/brie
         </Link>
         <h1 className="text-lg font-semibold tracking-[-0.02em]">Бриф клиента · {project.name}</h1>
       </div>
+      <KickoffMessage
+        projectId={projectId}
+        chat={project.agent.telegramChatId}
+        telegramReady={telegramConfigured()}
+        sentAt={kickoff?.createdAt.toISOString() ?? null}
+      />
       <AdminBrief
         projectId={projectId}
         origin={origin}
