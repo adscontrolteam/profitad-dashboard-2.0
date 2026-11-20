@@ -4,7 +4,7 @@ import { getDb } from "@/db";
 import { projectLog, projects } from "@/db/schema";
 
 const EVERY = 3 * 86_400_000;
-/** Cron runs once a day: allow a few hours of drift so «every 3 days» does not slip to 4. */
+/** The digest cron runs once a day (09:00 Warsaw): allow a few hours of drift so «every 3 days» does not slip to 4. */
 const SLACK = 6 * 3_600_000;
 
 export const appUrl = () => (process.env.APP_URL || "https://profitad-dashboard-2.vercel.app").replace(/\/$/, "");

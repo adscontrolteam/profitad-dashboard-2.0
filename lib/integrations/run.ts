@@ -86,15 +86,14 @@ export async function syncAll() {
   // Social accounts connected by clients: keep the Threads tokens alive.
   const { refreshSocialTokens } = await import("@/lib/social/oauth");
   results.push(...(await refreshSocialTokens().catch(() => [])));
-  // Project log: sync failures, daily checks, then the «Посмотреть Лог» reminder (at most every 3 days).
+  // Project log: sync failures and daily checks.
   const { logSyncResults, runProjectChecks } = await import("@/lib/log/checks");
   await logSyncResults(results.filter((r) => r.kind !== "drive"));
   // Week plans first: the checks judge the week against them.
   const { materializeAllWeekPlans } = await import("@/lib/projects/week-store");
   await materializeAllWeekPlans();
   await runProjectChecks();
-  const { notifyLogs } = await import("@/lib/log/notify");
-  results.push(...(await notifyLogs()));
+  // The «Посмотреть Лог» reminder is not sent from here: it has its own cron at 09:00 Warsaw (/api/cron/digest).
   // A new month may have a plan set in advance: keep the agent's copy of the current plan up to date.
   const { getDb } = await import("@/db");
   const { projects } = await import("@/db/schema");

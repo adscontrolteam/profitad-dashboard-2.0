@@ -1,5 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "crons": [{ "path": "/api/cron/integrations", "schedule": "0 5 * * *" }]
+  "crons": [
+    { "path": "/api/cron/integrations", "schedule": "0 5 * * *" },
+    { "path": "/api/cron/digest?run=summer", "schedule": "0 7 * * *" },
+    { "path": "/api/cron/digest?run=winter", "schedule": "0 8 * * *" }
+  ]
 }
