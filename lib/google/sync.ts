@@ -134,9 +134,11 @@ export async function syncAllGoogle() {
 export async function refreshGoogleIfStale(projectId: string, sources: { platform: string; accountId: string }[], maxAgeMs = 3600_000) {
   if (!adsConfigured() || !sources.some((s) => s.platform === "google" && s.accountId)) return;
   const [row] = await getDb()
-    .select({ last: sql<string | null>`max(${adMetricsDaily.syncedAt})` })
+    .select({ last: sql<string | null>`max(${adMetricsDaily.syncedAt})`, first: sql<string | null>`min(${adMetricsDaily.date})::text` })
     .from(adMetricsDaily)
     .where(and(eq(adMetricsDaily.projectId, projectId), eq(adMetricsDaily.platform, "google")));
-  if (row?.last && Date.now() - new Date(row.last).getTime() < maxAgeMs) return;
+  // The bot refreshes the last 7 days every hour, so «fresh» alone is not enough: the history may still be missing.
+  const historyLoaded = !!row?.first && row.first < iso(Date.now() - 8 * DAY);
+  if (historyLoaded && row?.last && Date.now() - new Date(row.last).getTime() < maxAgeMs) return;
   await syncGoogleProject(projectId, 3).catch((e) => console.error("google refresh", projectId, (e as Error).message));
 }
