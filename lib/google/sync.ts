@@ -32,11 +32,13 @@ export async function syncGoogleProject(projectId: string, days = 7): Promise<st
   ];
   if (!accounts.length) return "нет кабинетов Google";
 
-  const [{ n }] = await db
-    .select({ n: sql<number>`count(*)` })
+  // History is loaded once: until the oldest Google row is older than the bot's 7-day window, take 180 days.
+  // (The bot also writes the last 7 days, so «there are rows» alone does not mean the history is there.)
+  const [{ first }] = await db
+    .select({ first: sql<string | null>`min(${adMetricsDaily.date})::text` })
     .from(adMetricsDaily)
     .where(and(eq(adMetricsDaily.projectId, projectId), eq(adMetricsDaily.platform, "google")));
-  const span = Number(n) > 0 ? days : 180;
+  const span = first && first < iso(Date.now() - 8 * DAY) ? days : 180;
   const until = iso(Date.now());
   const since = iso(Date.now() - (span - 1) * DAY);
   const declared = new Set((project.leadActions ?? []).map((a) => a.trim().toLowerCase()).filter(Boolean));
