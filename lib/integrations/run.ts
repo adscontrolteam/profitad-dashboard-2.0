@@ -69,7 +69,8 @@ async function run(rec: IntegrationRecord): Promise<string> {
 export async function syncAll() {
   // Ad stats first: the daily reports below are filled from them.
   const { syncAllMeta } = await import("@/lib/meta/sync");
-  const results: { projectId: string; kind: string; ok: boolean; message: string }[] = await syncAllMeta();
+  const { syncAllGoogle } = await import("@/lib/google/sync");
+  const results: { projectId: string; kind: string; ok: boolean; message: string }[] = [...(await syncAllMeta()), ...(await syncAllGoogle())];
   for (const r of results) if (r.ok) revalidateTag(TAGS.project(r.projectId), "max");
   const all = await listIntegrations();
   for (const rec of all) {

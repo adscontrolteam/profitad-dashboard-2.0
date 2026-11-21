@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
+import { refreshGoogleIfStale } from "@/lib/google/sync";
 import { InfoHint } from "@/components/ui/info-hint";
 import { CampaignsTable } from "@/components/ads/campaigns-table";
 import { LogFocus } from "@/components/log/log-focus";
@@ -41,6 +43,10 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
   );
 
   if (!ws.project) return <div className="flex flex-col gap-5">{header}<EmptyProjects /></div>;
+
+  // Google numbers older than an hour are pulled again once the page is sent (the nightly run is only daily).
+  const { id: projectId, sources } = ws.project;
+  after(() => refreshGoogleIfStale(projectId, sources));
 
   // Money on ad pages is in the currency of the project's ad account, set in «Вводные».
   const currency = ws.project.agent.currency;

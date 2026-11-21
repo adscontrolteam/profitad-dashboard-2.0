@@ -17,10 +17,11 @@ const KIND_LABEL: Record<string, string> = {
   sheets_report: "таблица «Репорт»",
   crm: "CRM",
   meta_ads: "Meta Ads",
+  google_ads: "статистика Google Ads",
   drive: "папка Drive",
 };
 /** Which log shows a sync problem: ad stats and leads → «Реклама», the rest → the project. */
-const AREA_OF_KIND: Record<string, "ads" | "smm" | "project"> = { meta_ads: "ads", sheets_leads: "ads", crm: "ads" };
+const AREA_OF_KIND: Record<string, "ads" | "smm" | "project"> = { meta_ads: "ads", google_ads: "ads", sheets_leads: "ads", crm: "ads" };
 
 const MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 const monthName = (m: string) => `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
