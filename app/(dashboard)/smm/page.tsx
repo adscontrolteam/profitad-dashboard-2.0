@@ -40,6 +40,10 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
   const canManage = permissions.canEditInputs;
   const accounts = await listSocialAccounts(ws.project.id);
   const connectLink = canManage ? await ensureConnectLink(ws.project.id) : null;
+  /** Networks with a working account in this project. */
+  const live = new Set<SocialNetwork>(accounts.filter((x) => x.status === "ok").map((x) => x.network));
+  // The connect block is only for the networks it can connect, and only until the open one is connected; after that it lives in «Вводные».
+  const showConnections = (net === "instagram" || net === "facebook" || net === "threads") && !live.has(net);
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
   const report = demoSmmReport(ws.project.id, ws.project.name, net, { from: ws.range.from, to: ws.range.to });
@@ -57,7 +61,7 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
       <PillTabs
         label="Соцсеть"
         items={SOCIAL_NETWORKS.map((n) => {
-          const isOn = connected.includes(n.id);
+          const isOn = connected.includes(n.id) || live.has(n.id);
           return {
             href: workspaceHref("/smm", ws.query, { net: n.id === "instagram" ? undefined : n.id }),
             active: n.id === net,
@@ -73,16 +77,18 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
         })}
       />
 
-      <SocialConnections
-        key={ws.project.id}
-        projectId={ws.project.id}
-        origin={origin}
-        token={connectLink?.token ?? null}
-        seenAt={connectLink?.seenAt?.toISOString() ?? null}
-        accounts={accounts}
-        ready={{ meta: providerConfigured("meta"), threads: providerConfigured("threads"), business: businessPagesConfigured() }}
-        canManage={canManage}
-      />
+      {showConnections && (
+        <SocialConnections
+          key={ws.project.id}
+          projectId={ws.project.id}
+          origin={origin}
+          token={connectLink?.token ?? null}
+          seenAt={connectLink?.seenAt?.toISOString() ?? null}
+          accounts={accounts}
+          ready={{ meta: providerConfigured("meta"), threads: providerConfigured("threads"), business: businessPagesConfigured() }}
+          canManage={canManage}
+        />
+      )}
 
       <DemoNotice />
 
