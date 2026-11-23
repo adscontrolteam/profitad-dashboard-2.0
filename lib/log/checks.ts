@@ -6,6 +6,7 @@ import { FROM_ADS } from "@/lib/integrations/store";
 import { currentMonth } from "@/lib/projects/plans";
 import { dbSource } from "@/lib/data/sources/db";
 import { METRICS } from "@/lib/domain/metrics";
+import { CATCH_UP_DAYS, catchUp, periodDays, withStats } from "@/lib/domain/stats";
 import { formatMetric } from "@/lib/format";
 import { monthOf } from "@/lib/projects/plans";
 import { listWeekOverrides } from "@/lib/projects/week-store";
@@ -50,6 +51,7 @@ export async function runProjectChecks() {
   for (const p of list) {
     if (p.status !== "active") continue;
     await checkWeekPace(p.id).catch((error) => console.error("week pace check failed", p.id, error));
+    await checkMonthPace(p.id).catch((error) => console.error("month pace check failed", p.id, error));
     try {
       // 1. The month has its own plan.
       const [own] = await db
@@ -189,5 +191,60 @@ async function checkWeekPace(projectId: string) {
       effortMin: 30,
     },
     "Неделя вернулась в план",
+  );
+}
+
+/**
+ * The month is behind its plan. Two different messages: the last two days are fast enough to close the gap («догоняем» —
+ * a note, nothing to do), or it is not («не догоняем» — goes to «Фокус» with what is needed per day).
+ * Closed by itself once the project is back on plan.
+ */
+async function checkMonthPace(projectId: string) {
+  const today = new Date().toISOString().slice(0, 10);
+  const base = await dbSource.getProject(projectId);
+  if (!base) return;
+  const stats = withStats(base, new Date()).stats;
+  const primary = stats.primary;
+  const metric = primary?.kpi.metric;
+  const topic = `pace:${currentMonth()}`;
+  if (!primary || !metric || stats.elapsed < 0.15) return condition(projectId, topic, false, { kind: "warning", title: "" }, "Месяц идёт по плану");
+  const recent = await dbSource.getProject(projectId, { start: addDays(today, -CATCH_UP_DAYS), end: addDays(today, -1) });
+  const gap = catchUp({
+    plan: primary.kpi.plan,
+    fact: primary.fact,
+    pace: primary.pace,
+    elapsed: stats.elapsed,
+    periodDays: periodDays(base.period),
+    recent: recent?.metrics[metric] ?? 0,
+  });
+  const unit = METRICS[metric].label.toLowerCase();
+  const num = (v: number) => formatMetric(Math.round(v * 10) / 10, METRICS[metric].format, base.agent.currency);
+  const share = `${Math.round((primary.pace ?? 0) * 100)} %`;
+  const price = primary.kpi.cpaPlan ?? null;
+  await condition(
+    projectId,
+    topic,
+    gap !== null,
+    gap?.catching
+      ? {
+          kind: "info",
+          area: "project",
+          title: `Отстаём от плана месяца, но догоняем: ${unit} ${num(primary.fact)} из ${num(primary.kpi.plan ?? 0)}`,
+          body: `По темпу всего месяца вышло бы ${share} плана. Но за последние 2 дня идёт ${num(gap.recentPerDay)} в день, а чтобы закрыть план, нужно ${num(gap.needPerDay)} в день. Если держать этот темп до конца месяца — план закроется. Ничего менять не нужно, следим.`,
+          link: `/projects/${projectId}`,
+        }
+      : {
+          kind: "warning",
+          area: "project",
+          title: `Отстаём от плана месяца: ${unit} ${num(primary.fact)} из ${num(primary.kpi.plan ?? 0)}, по темпу выйдет ${share}`,
+          body: gap
+            ? `До плана не хватает ${num(gap.missing)}. Чтобы закрыть его, нужно ${num(gap.needPerDay)} в день до конца месяца, а за последние 2 дня шло ${num(gap.recentPerDay)} в день — этим темпом план не закрыть. Решите: добавить бюджет, усилить работающие кампании или согласовать с клиентом новый план.`
+            : "",
+          link: `/projects/${projectId}`,
+          focus: "decide",
+          impact: gap && price ? Math.round(gap.missing * price * 100) / 100 : null,
+          effortMin: 30,
+        },
+    "Месяц вернулся в план",
   );
 }

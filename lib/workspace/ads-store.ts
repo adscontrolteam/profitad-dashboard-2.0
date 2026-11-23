@@ -4,12 +4,12 @@ import { getDb } from "@/db";
 import { adMetricsDaily } from "@/db/schema";
 import { TAGS } from "@/lib/data/tags";
 import type { ResultMetric } from "@/lib/domain/types";
-import { demoAdsReport, type AdCampaign, type AdDay, type AdsReport } from "./demo";
+import type { AdCampaign, AdDay, AdsReport } from "./demo";
 import type { AdPlatformFilter } from "./params";
 
 /**
- * Ads report for a project: real rows from ad_metrics_daily when the sync has written any,
- * otherwise demo numbers so the workspace is usable before the APIs are connected.
+ * Ads report for a project from the rows the sync wrote to ad_metrics_daily. No rows for the window = an empty
+ * report (`source: "empty"`): the page then says what is missing instead of drawing made-up numbers.
  */
 export async function getAdsReport(
   project: { id: string; name: string },
@@ -35,7 +35,7 @@ export async function getAdsReport(
     )
     .orderBy(asc(adMetricsDaily.date));
 
-  if (rows.length === 0) return demoAdsReport(project.id, project.name, window, platform);
+  if (rows.length === 0) return { source: "empty", days: [], campaigns: [], reach: null, profileVisits: null };
 
   const result = (row: (typeof rows)[number]) => Number(row[resultMetric] ?? 0);
   const byDay = new Map<string, AdDay>();

@@ -23,6 +23,7 @@ export function ProjectsInputs({
   integrations,
   access,
   social,
+  openId = null,
   serviceAccountEmail,
   adsAccounts,
   metaAccounts,
@@ -36,6 +37,8 @@ export function ProjectsInputs({
   access: Record<string, AccessView[]>;
   /** Null for viewers who cannot edit the inputs. */
   social: SocialInputs | null;
+  /** Project to open in the editor at once (from a «Подключить» link). */
+  openId?: string | null;
   serviceAccountEmail: string | null;
   /** Google Ads accounts under the MCC; null when the API is not configured. */
   adsAccounts: AdsAccountOption[] | null;
@@ -45,7 +48,7 @@ export function ProjectsInputs({
   canCreate: boolean;
   canDelete: boolean;
 }) {
-  const [editing, setEditing] = useState<EditableProject | "new" | null>(null);
+  const [editing, setEditing] = useState<EditableProject | "new" | null>(() => projects.find((p) => p.id === openId) ?? null);
   const labelOf = new Map([...owners.smm, ...owners.mediaBuyer].map((o) => [o.email, o.label.replace(" · админ", "")]));
   const ownerName = (email: string | null) => (email ? (labelOf.get(email) ?? email.split("@")[0]) : "—");
 

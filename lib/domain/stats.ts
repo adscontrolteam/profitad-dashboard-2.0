@@ -54,12 +54,49 @@ export function summarizeStatuses(projects: Project[]): StatusSummary {
   return summary;
 }
 
+/**
+ * From this pace on the project counts as «в плане». Not a strict 1: results come in whole units and today's are
+ * still arriving, so a project that is a hair under the line (12 of the 12.1 due by now) is on plan, not behind.
+ */
+export const PACE_ON_PLAN = 0.95;
+/** Below this the gap is serious (red). */
+export const PACE_WARNING = 0.85;
+
 /** "none" = nothing to judge yet (no plan set or no synced data). */
 export type PaceLevel = "good" | "warning" | "bad" | "none";
 
 export function paceLevel(pace: number | null | undefined): PaceLevel {
   if (pace === null || pace === undefined) return "none";
-  if (pace >= 1) return "good";
-  if (pace >= 0.85) return "warning";
+  if (pace >= PACE_ON_PLAN) return "good";
+  if (pace >= PACE_WARNING) return "warning";
   return "bad";
 }
+
+/** The tempo that says «догоняем» is the one of the last two whole days: a week is too long to notice a turn. */
+export const CATCH_UP_DAYS = 2;
+
+export interface CatchUp {
+  /** Results still missing to the plan. */
+  missing: number;
+  /** Per day needed until the end of the period to close the plan. */
+  needPerDay: number;
+  /** Per day over the last CATCH_UP_DAYS whole days. */
+  recentPerDay: number;
+  /** True when the recent tempo is enough to reach the plan by the end of the period. */
+  catching: boolean;
+}
+
+/**
+ * Behind the plan — but are the last two days fast enough to close the gap? `recent` = results of those days. Null when the project is on plan,
+ * the period is over or there is no plan.
+ */
+export function catchUp(input: { plan: number | null; fact: number; pace: number | null; elapsed: number; periodDays: number; recent: number }): CatchUp | null {
+  if (!input.plan || input.pace === null || input.pace >= PACE_ON_PLAN || input.elapsed >= 1) return null;
+  const daysLeft = (1 - input.elapsed) * input.periodDays;
+  const missing = Math.max(input.plan - input.fact, 0);
+  const needPerDay = daysLeft > 0 ? missing / daysLeft : missing;
+  const recentPerDay = input.recent / CATCH_UP_DAYS;
+  return { missing, needPerDay, recentPerDay, catching: missing > 0 && recentPerDay >= needPerDay };
+}
+
+export const periodDays = (period: { start: string; end: string }) => Math.round((Date.parse(period.end) - Date.parse(period.start)) / 86_400_000) + 1;

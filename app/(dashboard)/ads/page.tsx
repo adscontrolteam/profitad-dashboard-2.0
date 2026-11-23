@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { after } from "next/server";
 import { refreshGoogleIfStale } from "@/lib/google/sync";
 import { metaAccountReach, metaCampaignReach, metaCampaignStatuses, metaConfigured } from "@/lib/meta/ads";
@@ -11,7 +12,7 @@ import { listLog } from "@/lib/log/store";
 import { Card } from "@/components/ui/card";
 import { BarChart, formatShortDate, KpiTile } from "@/components/workspace/charts";
 import { WorkspaceHeader } from "@/components/workspace/header";
-import { DemoNotice, EmptyProjects, PillTabs } from "@/components/workspace/toolbar";
+import { EmptyProjects, PillTabs } from "@/components/workspace/toolbar";
 import { requireSection } from "@/lib/access/viewer";
 import { METRICS } from "@/lib/domain/metrics";
 import { formatMetric, formatNumber } from "@/lib/format";
@@ -69,6 +70,9 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
   const reach =
     report.reach ?? (onlyMeta && metaAccounts.length === 1 && metaConfigured() ? (await metaAccountReach(metaAccounts[0], ws.range.from, ws.range.to).catch(() => 0)) || null : null);
   const resultLabel = METRICS[resultMetric]?.label ?? "Результаты";
+  // Ad accounts of the project that the open platform tab is about.
+  const connectedSources = sources.filter((x) => x.accountId && (platform === "all" || x.platform === platform));
+  const platformName = platform === "all" ? "Реклама" : (AD_PLATFORMS.find((p) => p.id === platform)?.label ?? "Реклама");
 
   return (
     <div className="flex flex-col gap-5">
@@ -85,11 +89,34 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
           }))}
         />
         <span className="text-xs text-muted-foreground">
-          {report.source === "synced" ? "Данные из синхронизации кабинетов" : "Демо-данные"} · {ws.range.label}
+          {report.source === "synced" ? "Данные из синхронизации кабинетов · " : ""}
+          {ws.range.label}
         </span>
       </div>
 
-      {report.source === "demo" && <DemoNotice />}
+      {report.source !== "synced" && (
+        <Card className="flex flex-col items-start gap-3">
+          <h2 className="section-title">{connectedSources.length ? "За этот период данных нет" : `${platformName} — не подключено`}</h2>
+          <p className="max-w-xl text-sm text-muted-foreground">
+            {connectedSources.length
+              ? "Кабинет подключён, но за выбранные даты расходов не было или статистика ещё не загрузилась. Выберите другой период или загляните позже: данные подтягиваются при открытии страницы и каждую ночь."
+              : "У проекта не выбран рекламный кабинет. Подключите его во «Вводных» → «Источники трафика» — после этого здесь появятся расходы, результаты и кампании."}
+          </p>
+          {!connectedSources.length &&
+            (permissions.canEditInputs ? (
+              <Link href={`/inputs?edit=${encodeURIComponent(ws.project.id)}`} className="btn-primary">
+                Подключить
+              </Link>
+            ) : (
+              <span className="text-xs text-muted-foreground">Подключение делает администратор.</span>
+            ))}
+        </Card>
+      )}
+
+      <LogFocus projectId={ws.project.id} items={toLogItems(log)} scope="ads" currency={ws.project.agent.currency} />
+
+      {report.source === "synced" && (
+        <>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <KpiTile label="Расход" value={formatCurrency(spend)} hint={ws.range.phrase} />
@@ -111,8 +138,6 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
         ) : null}
       </section>
 
-      <LogFocus projectId={ws.project.id} items={toLogItems(log)} scope="ads" currency={ws.project.agent.currency} />
-
       <Card>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="section-title">По дням <InfoHint className="ml-1">Столбик — расход за день, цифра — {resultLabel.toLowerCase()}</InfoHint></h2>
@@ -132,9 +157,7 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
               ? "Только просмотр"
               : liveGoogle
                 ? ""
-                : report.source === "demo"
-                  ? "Демо: пауза и включение без отправки"
-                  : "Управление появится после настройки Google Ads API"}
+                : "Управление появится после настройки Google Ads API"}
           </p>
         </div>
         <CampaignsTable
@@ -142,11 +165,13 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
           currency={currency}
           campaigns={campaigns}
           resultLabel={resultLabel}
-          canManage={permissions.canManageAds && (report.source === "demo" || liveGoogle)}
+          canManage={permissions.canManageAds && liveGoogle}
           live={liveGoogle}
           visitConversion={resultMetric === "subscribers"}
         />
       </Card>
+        </>
+      )}
     </div>
   );
 }

@@ -17,8 +17,11 @@ import type { AccessView } from "@/components/inputs/project-access";
 
 export const metadata: Metadata = { title: "Вводные" };
 
-export default async function InputsPage() {
+export default async function InputsPage({ searchParams }: PageProps<"/inputs">) {
   const { permissions } = await requireSection("inputs");
+  // «Подключить» on the Ads and SMM pages opens the project straight in the editor.
+  const edit = (await searchParams).edit;
+  const openId = typeof edit === "string" ? edit : null;
   const [projects, owners, integrations, adsAccounts] = await Promise.all([
     getVisibleProjects(permissions),
     listOwnerCandidates(),
@@ -53,6 +56,7 @@ export default async function InputsPage() {
         integrations={integrationsByProject}
         access={accessByProject}
         social={social}
+        openId={permissions.canEditInputs ? openId : null}
         serviceAccountEmail={serviceAccountEmail()}
         adsAccounts={adsAccounts}
         metaAccounts={metaAccounts}

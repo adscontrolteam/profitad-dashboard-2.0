@@ -8,7 +8,7 @@ import type { SmmAnalyticsData } from "@/lib/social/report";
 /**
  * The SMM analytics of a connected account in four tabs: «Обзор» (views, followers, follows vs unfollows),
  * «Контент» (formats, content types, interactions, best publications by a chosen measure), «Аудитория» and «Сообщения».
- * «Сообщения» is a preview on sample numbers until ManyChat is connected.
+ * «Сообщения» shows the funnel steps ManyChat automations report (see «Вводные»).
  */
 type Post = SmmAnalyticsData["posts"][number];
 type Tab = "overview" | "content" | "audience" | "messages";
@@ -101,10 +101,6 @@ function Line({ label, value, share, color = "var(--accent)" }: { label: React.R
     </div>
   );
 }
-
-const Sample = ({ children = "пример" }: { children?: React.ReactNode }) => (
-  <span className="rounded-full border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground">{children}</span>
-);
 
 function Tip({ x, y, children }: { x: number; y: number; children: React.ReactNode }) {
   return (
@@ -657,69 +653,74 @@ function Audience({ data }: { data: SmmAnalyticsData }) {
   );
 }
 
-/* ---------- Messages: a preview on sample numbers until ManyChat is connected ---------- */
+/* ---------- Messages: funnel steps reported by ManyChat ---------- */
 
-const FUNNELS: [string, number, number, number][] = [
-  ["КОНСУЛЬТАЦИЯ", 214, 131, 38],
-  ["РАЗБОР", 168, 97, 31],
-  ["ГАЙД", 96, 61, 9],
-  ["ПРАЙС", 74, 49, 17],
-];
 const HOURS = ["0", "3", "6", "9", "12", "15", "18", "21"];
 const WEEK = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 function Messages({ data }: { data: SmmAnalyticsData }) {
-  const outside = 86;
-  const started = sumOf(FUNNELS, (f) => f[1]) + outside;
-  const leads = sumOf(FUNNELS, (f) => f[3]);
-  const most = Math.max(...FUNNELS.map((f) => f[1]));
-  const bestConv = Math.max(...FUNNELS.map((f) => f[3] / f[1]));
-  const views = sumOf(data.days, (d) => d.views);
-  const samplePosts = [...data.posts].sort((a, b) => b.shares + b.comments - (a.shares + a.comments)).slice(0, 5);
-  const counts = [63, 58, 44, 41, 29];
-  const heat = useMemo(() => {
-    const base = [0.08, 0.03, 0.12, 0.5, 0.62, 0.48, 0.9, 1];
-    let seed = 23;
-    return WEEK.map((_, di) =>
-      base.map((b) => {
-        seed = (seed * 9301 + 49297) % 233280;
-        return Math.min(1, b * (di === 1 || di === 3 ? 1.1 : di > 4 ? 0.7 : 0.95) * (0.8 + (seed / 233280) * 0.4));
-      }),
+  const m = data.messages;
+  if (!m.connected)
+    return (
+      <Card className="flex flex-col gap-2">
+        <h2 className="section-title">ManyChat ещё не подключён</h2>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Здесь будут воронки по кодовым словам: сколько человек написали слово, сколько стали лидом, когда пишут и после какого контента. Адрес и
+          инструкция для автоматизаций — во «Вводных», блок «ManyChat: воронки в сообщениях».
+        </p>
+      </Card>
     );
-  }, []);
+  const started = sumOf(m.funnels, (f) => f.start);
+  const leads = sumOf(m.funnels, (f) => f.lead);
+  if (!started && !leads)
+    return (
+      <Card>
+        <p className="text-sm text-muted-foreground">За этот период событий из ManyChat не было.</p>
+      </Card>
+    );
+
+  const views = sumOf(data.days, (d) => d.views);
+  const most = Math.max(...m.funnels.map((f) => f.start), 1);
+  const conv = (f: (typeof m.funnels)[number]) => (f.start ? f.lead / f.start : 0);
+  const bestConv = Math.max(...m.funnels.map(conv));
+  const hasContact = m.funnels.some((f) => f.contact > 0);
+  const heatMax = Math.max(...m.heat.flat(), 1);
   let peak = { v: 0, d: 0, h: 0 };
-  heat.forEach((row, d) => row.forEach((v, h) => v > peak.v && (peak = { v, d, h })));
+  m.heat.forEach((row, d) => row.forEach((v, h) => v > peak.v && (peak = { v, d, h })));
 
   return (
     <>
-      <p className="rounded-[18px] border border-dashed border-border bg-card/60 px-4 py-2.5 text-xs leading-5 text-muted-foreground">
-        Пример на условных цифрах: так вкладка будет выглядеть после подключения ManyChat. Слова, воронки и время сообщений придут оттуда.
-      </p>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Kpi label="Начато диалогов" value={nf(started)} hint="за период" />
-        <Kpi label="По кодовым словам" value={nf(started - outside)} hint={`${Math.round(((started - outside) / started) * 100)} % всех диалогов`} />
-        <Kpi label="Заявок из сообщений" value={nf(leads)} hint={`${pf((leads / started) * 100)} от диалогов`} />
-        <Kpi label="Диалогов на 1000 просмотров" value={views ? ((started / views) * 1000).toFixed(1).replace(".", ",") : "—"} hint="насколько контент побуждает писать" />
+        <Kpi label="Запусков воронок" value={nf(started)} hint="человек написали кодовое слово" />
+        <Kpi label="Лидов передано" value={nf(leads)} hint="дошли до передачи в CRM" />
+        <Kpi label="Конверсия в лид" value={started ? pf((leads / started) * 100) : "—"} hint="лиды / запуски" />
+        <Kpi label="Запусков на 1000 просмотров" value={views ? ((started / views) * 1000).toFixed(1).replace(".", ",") : "—"} hint="насколько контент побуждает писать" />
       </div>
 
       <Card className="min-w-0">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 className="section-title">Воронки по кодовым словам</h2>
-          <span className="text-xs text-muted-foreground">написали слово → оставили контакт → заявка</span>
-          <Sample />
+          <span className="text-xs text-muted-foreground">написали слово → {hasContact ? "оставили контакт → " : ""}лид</span>
         </div>
         <div className="mt-4 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-          {FUNNELS.map(([word, wrote, contact, lead]) => (
-            <div key={word} className="flex min-w-0 flex-col gap-2.5 rounded-[20px] border border-border px-4 py-4">
+          {m.funnels.map((f) => (
+            <div key={f.keyword} className="flex min-w-0 flex-col gap-2.5 rounded-[20px] border border-border px-4 py-4">
               <div className="flex flex-wrap items-center gap-2">
-                <b className="text-[15px]">{word}</b>
+                <b className="text-[15px] [overflow-wrap:anywhere]">{f.keyword}</b>
                 <span className="flex-1" />
-                {wrote === most && <span className="rounded-full bg-cta px-2 py-0.5 text-[11px] font-semibold text-cta-foreground">пишут чаще всего</span>}
-                {lead / wrote === bestConv && <span className="rounded-full bg-cta px-2 py-0.5 text-[11px] font-semibold text-cta-foreground">лучшая конверсия</span>}
+                {m.funnels.length > 1 && f.start === most && <span className="rounded-full bg-cta px-2 py-0.5 text-[11px] font-semibold text-cta-foreground">пишут чаще всего</span>}
+                {m.funnels.length > 1 && bestConv > 0 && conv(f) === bestConv && <span className="rounded-full bg-cta px-2 py-0.5 text-[11px] font-semibold text-cta-foreground">лучшая конверсия</span>}
               </div>
-              <Line label={<span className="text-muted-foreground">Написали слово</span>} value={nf(wrote)} share={(wrote / most) * 100} />
-              <Line label={<span className="text-muted-foreground">Оставили контакт</span>} value={`${nf(contact)} · ${Math.round((contact / wrote) * 100)} %`} share={(contact / most) * 100} color="var(--muted-foreground)" />
-              <Line label={<span className="text-muted-foreground">Заявка</span>} value={`${nf(lead)} · ${Math.round((lead / wrote) * 100)} %`} share={(lead / most) * 100} color="var(--positive)" />
+              <Line label={<span className="text-muted-foreground">Написали слово</span>} value={nf(f.start)} share={(f.start / most) * 100} />
+              {hasContact && (
+                <Line
+                  label={<span className="text-muted-foreground">Оставили контакт</span>}
+                  value={`${nf(f.contact)}${f.start ? ` · ${Math.round((f.contact / f.start) * 100)} %` : ""}`}
+                  share={(f.contact / most) * 100}
+                  color="var(--muted-foreground)"
+                />
+              )}
+              <Line label={<span className="text-muted-foreground">Лид</span>} value={`${nf(f.lead)}${f.start ? ` · ${Math.round(conv(f) * 100)} %` : ""}`} share={(f.lead / most) * 100} color="var(--positive)" />
             </div>
           ))}
         </div>
@@ -727,34 +728,34 @@ function Messages({ data }: { data: SmmAnalyticsData }) {
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card className="min-w-0">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h2 className="section-title">После какого контента пишут</h2>
-            <Sample />
-          </div>
-          <p className="mt-1.5 mb-3.5 text-xs text-muted-foreground">Публикации по числу диалогов, начатых в первые 48 часов после выхода.</p>
+          <h2 className="section-title">После какого контента пишут</h2>
+          <p className="mt-1.5 mb-3.5 text-xs text-muted-foreground">
+            Запуски воронок в первые 48 часов после публикации. ManyChat не сообщает, под каким постом написали, поэтому запуск относится к ближайшей
+            публикации — сначала к той, где названо это слово.
+          </p>
           <div className="flex flex-col gap-3">
-            {samplePosts.map((p, i) => (
+            {m.posts.map((p) => (
               <Line
                 key={p.id}
                 label={
                   <span className="block">
                     <span className="line-clamp-1">{p.title}</span>
                     <span className="text-xs text-muted-foreground">
-                      {p.kind} · {dayLabel(p.date)} · слово {FUNNELS[i % FUNNELS.length][0]}
+                      {p.kind} · {dayLabel(p.date)}
                     </span>
                   </span>
                 }
-                value={nf(counts[i])}
-                share={(counts[i] / counts[0]) * 100}
+                value={nf(p.count)}
+                share={(p.count / Math.max(1, m.posts[0].count)) * 100}
               />
             ))}
-            {!samplePosts.length && <span className="text-sm text-muted-foreground">За этот период публикаций нет.</span>}
+            {!m.posts.length && <span className="text-sm text-muted-foreground">Запусков рядом с публикациями периода не было.</span>}
           </div>
         </Card>
         <Card className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h2 className="section-title">Когда пишут</h2>
-            <Sample />
+            <span className="text-xs text-muted-foreground">запуски воронок, время по Варшаве</span>
           </div>
           <div className="mt-4 grid grid-cols-[28px_repeat(8,minmax(0,1fr))] items-center gap-1 text-[11px] text-muted-foreground">
             <span />
@@ -763,38 +764,34 @@ function Messages({ data }: { data: SmmAnalyticsData }) {
                 {h}
               </span>
             ))}
-            {heat.map((row, d) => [
+            {m.heat.map((row, d) => [
               <span key={`d${d}`}>{WEEK[d]}</span>,
-              ...row.map((v, h) => <i key={`${d}-${h}`} className="block h-[22px] rounded-md bg-accent" style={{ opacity: 0.08 + v * 0.82 }} />),
+              ...row.map((v, h) => (
+                <i key={`${d}-${h}`} title={`${WEEK[d]}, ${HOURS[h]}:00–${Number(HOURS[h]) + 3}:00 — ${nf(v)}`} className="block h-[22px] rounded-md bg-accent" style={{ opacity: v ? 0.15 + (v / heatMax) * 0.75 : 0.06 }} />
+              )),
             ])}
           </div>
-          <p className="mt-2.5 text-xs text-muted-foreground">
-            Чаще всего пишут: {WEEK[peak.d]}, {HOURS[peak.h]}:00–{Number(HOURS[peak.h]) + 3}:00. В это время важно быстро отвечать и стоит выпускать посты с кодовым словом.
-          </p>
+          {peak.v > 0 && (
+            <p className="mt-2.5 text-xs text-muted-foreground">
+              Чаще всего пишут: {WEEK[peak.d]}, {HOURS[peak.h]}:00–{Number(HOURS[peak.h]) + 3}:00. В это время важно быстро отвечать и стоит выпускать посты с кодовым словом.
+            </p>
+          )}
         </Card>
       </div>
 
-      <Card className="min-w-0">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="section-title">Что пишут</h2>
-          <span className="text-xs text-muted-foreground">первое сообщение в диалоге</span>
-          <Sample />
-        </div>
-        <div className="mt-4 grid gap-5 lg:grid-cols-2">
-          <div className="flex flex-col gap-3">
-            <span className="text-xs text-muted-foreground">Кодовые слова</span>
-            {FUNNELS.map(([word, wrote]) => (
-              <Line key={word} label={word} value={`${Math.round((wrote / started) * 100)} %`} share={(wrote / most) * 100} />
+      {m.texts.length > 0 && (
+        <Card className="min-w-0">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 className="section-title">Что пишут</h2>
+            <span className="text-xs text-muted-foreground">последнее сообщение перед запуском, когда это не само кодовое слово</span>
+          </div>
+          <div className="mt-4 flex flex-col gap-3">
+            {m.texts.map((t) => (
+              <Line key={t.text} label={<span className="line-clamp-1">{t.text}</span>} value={nf(t.count)} share={(t.count / m.texts[0].count) * 100} color="var(--muted-foreground)" />
             ))}
           </div>
-          <div className="flex flex-col gap-3">
-            <span className="text-xs text-muted-foreground">Вне воронок — {outside} диалогов</span>
-            {([["Вопрос про цену или условия", 31], ["Просят перезвонить", 22], ["Ответ на сторис", 19], ["Другое", 14]] as const).map(([label, value]) => (
-              <Line key={label} label={label} value={nf(value)} share={(value / 31) * 100} color="var(--muted-foreground)" />
-            ))}
-          </div>
-        </div>
-      </Card>
+        </Card>
+      )}
     </>
   );
 }

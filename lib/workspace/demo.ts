@@ -73,7 +73,8 @@ export interface AdCampaign {
 }
 
 export interface AdsReport {
-  source: "demo" | "synced";
+  /** "empty" = nothing synced for the window; "demo" is only produced by demoAdsReport, which the pages no longer use. */
+  source: "demo" | "synced" | "empty";
   days: AdDay[];
   campaigns: AdCampaign[];
   reach: number | null;

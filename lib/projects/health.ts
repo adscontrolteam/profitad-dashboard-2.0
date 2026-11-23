@@ -2,6 +2,7 @@ import "server-only";
 import type { ProjectLogRow } from "@/db/schema";
 import { getProject } from "@/lib/data";
 import { projectHealth, type Health } from "@/lib/domain/health";
+import { CATCH_UP_DAYS, catchUp, periodDays } from "@/lib/domain/stats";
 import type { ProjectWithStats } from "@/lib/domain/types";
 import { byImpact } from "@/lib/log/focus";
 import { listFocus } from "@/lib/log/store";
@@ -26,8 +27,9 @@ export async function projectsAttention(projects: ProjectWithStats[]): Promise<M
     projects.map(async (p) => {
       const focus = byImpact(allFocus.filter((f) => f.projectId === p.id));
       const metric = p.stats.primary?.kpi.metric;
-      const [recent, week, overrides] = await Promise.all([
+      const [recent, lastDays, week, overrides] = await Promise.all([
         getProject(p.id, addDays(today, -7), addDays(today, -1)),
+        getProject(p.id, addDays(today, -CATCH_UP_DAYS), addDays(today, -1)),
         // Whole days of the week so far; on Monday there is nothing to judge yet.
         elapsed > 0 ? getProject(p.id, weekStart, addDays(today, -1)) : null,
         listWeekOverrides(p.id),
@@ -45,6 +47,14 @@ export async function projectsAttention(projects: ProjectWithStats[]): Promise<M
         spend: p.metrics.spend ?? 0,
         week: metric && week && expected >= 1 ? { fact: week.metrics[metric] ?? 0, expected } : null,
         recent: { results: metric ? (recent?.metrics[metric] ?? 0) : 0, spend: recent?.metrics.spend ?? 0 },
+        catchUp: catchUp({
+          plan: p.stats.primary?.kpi.plan ?? null,
+          fact: p.stats.primary?.fact ?? 0,
+          pace: p.stats.primary?.pace ?? null,
+          elapsed: p.stats.elapsed,
+          periodDays: periodDays(p.period),
+          recent: metric ? (lastDays?.metrics[metric] ?? 0) : 0,
+        }),
         issues: focus.flatMap((f) => (f.focus ? [{ focus: f.focus }] : [])),
       });
       return [p.id, { health, focus }] as const;

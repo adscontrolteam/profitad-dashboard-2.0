@@ -7,6 +7,8 @@
  * weights are rescaled — a missing number must not look like a bad or a good one.
  */
 
+import { PACE_ON_PLAN, type CatchUp } from "./stats";
+
 export type HealthZone = "green" | "yellow" | "red" | "none";
 
 export interface HealthPart {
@@ -42,6 +44,8 @@ export interface HealthInput {
   week: { fact: number; expected: number } | null;
   /** Last 7 whole days. */
   recent: { results: number; spend: number };
+  /** Behind the plan: what is needed per day and what the last week gives. Null = on plan or nothing to judge. */
+  catchUp: CatchUp | null;
   /** Open «Фокус» entries. */
   issues: { focus: "scale" | "stop" | "fix" | "decide" }[];
 }
@@ -63,16 +67,32 @@ function curve(value: number, points: [number, number][]) {
 const ISSUE_COST = { stop: 40, fix: 35, decide: 25, scale: 0 } as const;
 const pct = (v: number) => `${Math.round(v * 100)} %`;
 
+const perDay = (v: number) => (v >= 10 ? String(Math.round(v)) : String(Math.round(v * 10) / 10).replace(".", ","));
+
 export function projectHealth(i: HealthInput): Health {
+  const behind = i.pace !== null && i.pace < PACE_ON_PLAN && i.elapsed < 1;
+  const catching = behind && !!i.catchUp?.catching;
+  const tempo = i.catchUp ? `нужно ${perDay(i.catchUp.needPerDay)} в день, за последние 2 дня шло ${perDay(i.catchUp.recentPerDay)}` : "";
+  // On plan (within 5%) = 90–100, 15% behind = 60, half the plan = 25.
+  const byPace = i.pace !== null ? curve(i.pace, [[0, 0], [0.5, 25], [0.85, 60], [PACE_ON_PLAN, 90], [1, 100]]) : null;
   const parts: HealthPart[] = [
     {
       key: "result",
       label: "Результат к плану месяца",
       weight: 40,
-      // On plan = 100, 15% behind = 70 (the yellow line), half the plan = 30.
       // A plan without a pace means there is no data yet: after the first days of the month that is a zero, not a gap.
-      score: i.pace !== null ? curve(i.pace, [[0, 0], [0.5, 30], [0.85, 70], [1, 100]]) : i.plan !== null && i.elapsed >= 0.1 ? 0 : null,
-      note: i.pace !== null ? `по темпу выйдет ${pct(i.pace)} плана` : i.plan === null ? "план не задан" : "данных о результате нет",
+      // Behind, but the last two days are fast enough to close the plan: judged as nearly on plan.
+      score: byPace !== null ? (catching ? Math.max(byPace, 85) : byPace) : i.plan !== null && i.elapsed >= 0.1 ? 0 : null,
+      note:
+        i.pace === null
+          ? i.plan === null
+            ? "план не задан"
+            : "данных о результате нет"
+          : !behind
+            ? `в плане: по темпу выйдет ${pct(i.pace)}`
+            : catching
+              ? `отстаём (по темпу месяца ${pct(i.pace)} плана), но догоняем: ${tempo}`
+              : `отстаём: по темпу выйдет ${pct(i.pace)} плана${tempo ? `, ${tempo}` : ""}`,
     },
     {
       key: "week",
@@ -129,6 +149,11 @@ export function projectHealth(i: HealthInput): Health {
 
   // Hard rule: a quarter of the month gone and not one result — the project is red whatever else looks fine.
   let cap: string | null = null;
+  // Hard rule: behind the plan and the current tempo does not close the gap — never green, whatever else looks fine.
+  if (behind && !catching && score >= HEALTH_GREEN) {
+    cap = `отстаём от плана на ${pct(1 - (i.pace as number))}, текущий темп не догоняет`;
+    score = HEALTH_GREEN - 1;
+  }
   if (i.plan !== null && i.elapsed >= 0.25 && i.fact === 0) {
     cap = "четверть месяца позади, а результатов нет";
     score = Math.min(score, 30);
@@ -140,7 +165,7 @@ export function projectHealth(i: HealthInput): Health {
 
 export const HEALTH_LABEL: Record<HealthZone, string> = {
   green: "всё идёт, внимания не требует",
-  yellow: "нужно внимание: результат просел",
+  yellow: "нужно внимание: отстаём от плана или просела цена",
   red: "горит: результата нет или он далеко от плана",
   none: "пока нечего оценивать",
 };
