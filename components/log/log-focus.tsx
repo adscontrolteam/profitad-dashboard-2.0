@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { laneOf } from "@/lib/log/focus";
 import { ProjectLog, type LogItem } from "./project-log";
 
 const WHAT: Record<"all" | "ads" | "smm", { log: string; focus: string }> = {
@@ -8,7 +9,7 @@ const WHAT: Record<"all" | "ads" | "smm", { log: string; focus: string }> = {
 };
 
 /**
- * «Лог» next to «Фокус», both open, each scrolls inside its block.
+ * «Лог» next to «Фокус», each scrolls inside its block; an empty one is a single line.
  * Лог answers «где поломка», Фокус — «как улучшить результат».
  */
 export function LogFocus({
@@ -25,18 +26,20 @@ export function LogFocus({
   currency?: string | null;
   className?: string;
 }) {
-  const panel = "max-h-[70dvh] lg:h-[440px] lg:max-h-none";
-  // Nothing in either block: both folded to one line. An entry in one of them opens both, so the pair stays level.
-  const collapsed = items.length === 0;
+  // As tall as its entries, up to a limit; longer lists scroll inside.
+  const panel = "max-h-[70dvh] lg:max-h-[440px]";
+  // A block with no entries of its own is folded to one line; it opens only when there is something to read in it.
+  const logEmpty = !items.some((i) => laneOf(i) === "log");
+  const focusEmpty = !items.some((i) => laneOf(i) === "focus");
   return (
-    <section className={cn("grid gap-5 lg:grid-cols-2", className)}>
+    <section className={cn("grid items-start gap-5 lg:grid-cols-2", className)}>
       <ProjectLog
         projectId={projectId}
         items={items}
         description={`Где поломка и что с ней сделать (${WHAT[scope].log}): не выдан доступ, не обновились данные, ошибка в настройке или в объявлении, заканчивается или перерасходуется бюджет, нарушено правило. Пишут агент-сторож и проверки дашборда. Запись уходит, когда вы её решили или причина исчезла.`}
         showArea={scope === "all"}
         panel
-        collapsed={collapsed}
+        collapsed={logEmpty}
         only="log"
         currency={currency}
         className={panel}
@@ -47,7 +50,7 @@ export function LogFocus({
         description={`Как улучшить результат (${WHAT[scope].focus}): предложения и анализ агента, что масштабировать, что проверить гипотезой, где нужно ваше решение. Сверху — самое дорогое по цене бездействия за неделю.`}
         showArea={scope === "all"}
         panel
-        collapsed={collapsed}
+        collapsed={focusEmpty}
         only="focus"
         currency={currency}
         className={panel}
