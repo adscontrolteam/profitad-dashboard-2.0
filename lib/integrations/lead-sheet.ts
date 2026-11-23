@@ -195,7 +195,7 @@ function paymentColumns(header: string[]) {
   header.forEach((h, i) => {
     const t = norm(h);
     const d = t.match(/^(?:дата оплаты|дата оплати|payment date|paid at|paid_at)\s*(\d*)$/);
-    const a = t.match(/^(?:сумма|сума|value|amount)(?: оплаты| оплати)?(?: eur| usd| pln|, eur)?\s*(\d*)$/);
+    const a = t.match(/^(?:сумма|сума|value|amount)(?: оплаты| оплати)?(?:,? ?(?:eur|usd|pln|uah|грн|€|\$|zł|₴))?\s*(\d*)$/);
     const m = d ?? a;
     if (!m) return;
     const n = Number(m[1] || 1);
