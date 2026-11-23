@@ -1,14 +1,45 @@
 import "server-only";
 import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { getDb } from "@/db";
-import { socialConnections, socialMetricsDaily, socialPosts } from "@/db/schema";
+import { socialConnections, socialMetricsDaily, socialPosts, type SocialAudience } from "@/db/schema";
 import { datesIn, type SmmPost, type SmmReport } from "@/lib/workspace/demo";
 import { shiftIso } from "@/lib/workspace/params";
 
 export type LiveNetwork = "facebook" | "instagram" | "threads";
 export const isLiveNetwork = (v: string): v is LiveNetwork => v === "facebook" || v === "instagram" || v === "threads";
 
+/** Everything the analytics tabs draw, already cut to the chosen period. Plain data: it crosses to the browser. */
+export interface SmmAnalyticsData {
+  network: LiveNetwork;
+  handle: string;
+  followers: number;
+  days: { date: string; views: number; reach: number; follows: number | null; unfollows: number | null }[];
+  posts: {
+    id: string;
+    title: string;
+    date: string;
+    kind: SmmPost["kind"];
+    views: number;
+    likes: number;
+    comments: number;
+    shares: number;
+    saves: number;
+    thumbnailUrl: string | null;
+    permalink: string | null;
+  }[];
+  /** The same numbers of the period right before; null where we hold no data for it. */
+  prev: { views: number | null; reach: number | null; interactions: number | null; postViews: number | null; saves: number | null; shares: number | null };
+  /** Instagram: views by content type and by follower / non-follower; null when not loaded. */
+  byType: Record<string, number> | null;
+  byFollower: Record<string, number> | null;
+  linkTaps: number | null;
+  profileViews: number | null;
+  audience: SocialAudience | null;
+  dailyViews: boolean;
+}
+
 export interface LiveSmmReport extends SmmReport {
+  analytics: SmmAnalyticsData;
   /** When the numbers were last pulled; null = never yet. */
   syncedAt: string | null;
   /** Why the last pull failed, if it did. */
@@ -115,7 +146,55 @@ export async function liveSmmReport(projectId: string, network: LiveNetwork, win
       permalink: p.permalink,
     }));
 
+  const toPost = (p: (typeof posts)[number]) => ({
+    id: p.postId,
+    title: p.title || "Без подписи",
+    date: day(p.publishedAt),
+    kind: KIND[p.kind] ?? ("Пост" as const),
+    views: p.views,
+    likes: p.likes,
+    comments: p.comments,
+    shares: p.shares,
+    saves: p.saves,
+    thumbnailUrl: p.thumbnailUrl,
+    permalink: p.permalink,
+  });
+  const before = posts.filter((p) => !inWindow(day(p.publishedAt)));
+  const prevDaily = daily.filter((d) => !inWindow(d.date));
+  const total = (rows: typeof daily, pick: (d: (typeof daily)[number]) => number | null | undefined) =>
+    rows.some((d) => pick(d) != null) ? rows.reduce((a, d) => a + (pick(d) ?? 0), 0) : null;
+  const merged = (pick: (d: (typeof daily)[number]) => Record<string, number> | undefined) => {
+    const out: Record<string, number> = {};
+    for (const d of windowDaily) for (const [k, v] of Object.entries(pick(d) ?? {})) out[k] = (out[k] ?? 0) + v;
+    return Object.keys(out).length ? out : null;
+  };
+  const analytics: SmmAnalyticsData = {
+    network,
+    handle: account.name,
+    followers: lastTotal?.followers ?? 0,
+    days: dates.map((date) => {
+      const d = dailyByDate.get(date);
+      return { date, views: dailyViews ? (d?.views ?? 0) : postViews(current, date), reach: d?.reach ?? 0, follows: d?.follows ?? null, unfollows: d?.unfollows ?? null };
+    }),
+    posts: current.map(toPost),
+    prev: {
+      views: total(prevDaily, (d) => d.views),
+      reach: total(prevDaily, (d) => d.reach),
+      interactions: before.length ? before.reduce((a, p) => a + p.likes + p.comments + p.shares + p.saves, 0) : null,
+      postViews: before.length ? before.reduce((a, p) => a + p.views, 0) : null,
+      saves: before.length ? before.reduce((a, p) => a + p.saves, 0) : null,
+      shares: before.length ? before.reduce((a, p) => a + p.shares, 0) : null,
+    },
+    byType: merged((d) => d.extra?.byType),
+    byFollower: merged((d) => d.extra?.byFollower),
+    linkTaps: total(windowDaily, (d) => d.extra?.linkTaps),
+    profileViews: total(windowDaily, (d) => d.extra?.profileViews),
+    audience: account.audience ?? null,
+    dailyViews,
+  };
+
   return {
+    analytics,
     connected: true,
     handle: account.name,
     followers: lastTotal?.followers ?? 0,

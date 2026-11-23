@@ -2,7 +2,7 @@ import "server-only";
 import { createHmac } from "node:crypto";
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { socialConnections, socialMetricsDaily, socialPosts, type SocialConnectionRow } from "@/db/schema";
+import { socialConnections, socialMetricsDaily, socialPosts, type SocialAudience, type SocialConnectionRow, type SocialDayExtra } from "@/db/schema";
 import { decrypt } from "@/lib/crypto";
 
 /**
@@ -58,6 +58,7 @@ interface DayRow {
   reach: number | null;
   follows: number | null;
   unfollows: number | null;
+  extra?: SocialDayExtra | null;
 }
 interface PostRow {
   postId: string;
@@ -76,6 +77,7 @@ interface Pulled {
   followers: number | null;
   days: DayRow[];
   posts: PostRow[];
+  audience?: SocialAudience | null;
   /** Parts Meta refused; the rest is still stored. */
   warnings: string[];
 }
@@ -90,6 +92,8 @@ async function pullInstagram(id: string, token: string, days: number): Promise<P
   const dates = Array.from({ length: days }, (_, i) => iso(Date.now() - (i + 1) * DAY));
   let dayFailure: string | null = null;
   let followFailure: string | null = null;
+  type Split = { dimension_values?: string[]; value?: number };
+  const refused: Partial<Record<"byType" | "byFollower" | "linkTaps" | "profileViews", string>> = {};
   const dayRows = await pool(dates, 5, async (date): Promise<DayRow | null> => {
     const since = Math.floor(Date.parse(`${date}T00:00:00Z`) / 1000);
     try {
@@ -105,7 +109,6 @@ async function pullInstagram(id: string, token: string, days: number): Promise<P
       let follows: number | null = null;
       let unfollows: number | null = null;
       try {
-        type Split = { dimension_values?: string[]; value?: number };
         const f = await graph<{ data?: { total_value?: { breakdowns?: { results?: Split[] }[] } }[] }>(token, `${id}/insights`, {
           metric: "follows_and_unfollows",
           period: "day",
@@ -121,7 +124,33 @@ async function pullInstagram(id: string, token: string, days: number): Promise<P
       } catch (error) {
         followFailure = (error as Error).message;
       }
-      return { date, views: value("views"), reach: value("reach"), follows, unfollows };
+      // The splits the Instagram app shows: each is its own call, and one Meta refuses is not asked for again in this run.
+      const extra: SocialDayExtra = {};
+      const window = { period: "day", metric_type: "total_value", since: String(since), until: String(since + 86_400) };
+      for (const part of ["byType", "byFollower", "linkTaps", "profileViews"] as const) {
+        if (refused[part]) continue;
+        try {
+          if (part === "byType" || part === "byFollower") {
+            const b = await graph<{ data?: { total_value?: { breakdowns?: { results?: Split[] }[] } }[] }>(token, `${id}/insights`, {
+              metric: "views",
+              breakdown: part === "byType" ? "media_product_type" : "follower_type",
+              ...window,
+            });
+            const out: Record<string, number> = {};
+            for (const x of b.data?.[0]?.total_value?.breakdowns?.[0]?.results ?? []) if (x.dimension_values?.[0]) out[x.dimension_values[0]] = x.value ?? 0;
+            extra[part] = out;
+          } else {
+            const b = await graph<{ data?: { total_value?: { value?: number } }[] }>(token, `${id}/insights`, {
+              metric: part === "linkTaps" ? "profile_links_taps" : "profile_views",
+              ...window,
+            });
+            extra[part] = b.data?.[0]?.total_value?.value ?? 0;
+          }
+        } catch (error) {
+          refused[part] = (error as Error).message;
+        }
+      }
+      return { date, views: value("views"), reach: value("reach"), follows, unfollows, extra };
     } catch (error) {
       dayFailure = (error as Error).message;
       return null;
@@ -129,6 +158,29 @@ async function pullInstagram(id: string, token: string, days: number): Promise<P
   });
   if (dayFailure) warnings.push(`просмотры по дням: ${dayFailure}`);
   if (followFailure) warnings.push(`подписки и отписки: ${followFailure}`);
+  // Profile visits are not in Meta's current metric table: their absence is expected and not worth a warning.
+  const PART_LABEL = { byType: "просмотры по типу контента", byFollower: "подписчики и не подписчики", linkTaps: "переходы по ссылке профиля" } as const;
+  for (const part of Object.keys(PART_LABEL) as (keyof typeof PART_LABEL)[]) if (refused[part]) warnings.push(`${PART_LABEL[part]}: ${refused[part]}`);
+
+  // Who the followers are. Meta gives it only to accounts with 100+ followers.
+  const audience: SocialAudience = {};
+  let audienceFailure: string | null = null;
+  for (const group of ["age", "gender", "city"] as const) {
+    try {
+      const a = await graph<{ data?: { total_value?: { breakdowns?: { results?: Split[] }[] } }[] }>(token, `${id}/insights`, {
+        metric: "follower_demographics",
+        period: "lifetime",
+        metric_type: "total_value",
+        breakdown: group,
+      });
+      const out: Record<string, number> = {};
+      for (const x of a.data?.[0]?.total_value?.breakdowns?.[0]?.results ?? []) if (x.dimension_values?.[0]) out[x.dimension_values[0]] = x.value ?? 0;
+      if (Object.keys(out).length) audience[group] = out;
+    } catch (error) {
+      audienceFailure = (error as Error).message;
+    }
+  }
+  if (audienceFailure) warnings.push(`аудитория: ${audienceFailure}`);
 
   interface Media {
     id: string;
@@ -189,7 +241,7 @@ async function pullInstagram(id: string, token: string, days: number): Promise<P
   });
   if (insightFailure) warnings.push(`просмотры публикаций: ${insightFailure}`);
 
-  return { followers: me.followers_count ?? null, days: dayRows.filter((d): d is DayRow => d !== null), posts, warnings };
+  return { followers: me.followers_count ?? null, days: dayRows.filter((d): d is DayRow => d !== null), posts, audience: Object.keys(audience).length ? audience : null, warnings };
 }
 
 /* ---------- Facebook Page ---------- */
@@ -296,7 +348,7 @@ async function store(row: SocialConnectionRow, pulled: Pulled) {
   const key = { projectId: row.projectId, network: row.network, accountId: row.externalId };
   const target = [socialMetricsDaily.projectId, socialMetricsDaily.network, socialMetricsDaily.accountId, socialMetricsDaily.date];
   for (const d of pulled.days) {
-    const values = { views: d.views, reach: d.reach, follows: d.follows, unfollows: d.unfollows, syncedAt: new Date() };
+    const values = { views: d.views, reach: d.reach, follows: d.follows, unfollows: d.unfollows, ...(d.extra ? { extra: d.extra } : {}), syncedAt: new Date() };
     await db.insert(socialMetricsDaily).values({ ...key, date: d.date, ...values }).onConflictDoUpdate({ target, set: values });
   }
   if (pulled.followers !== null) {
@@ -326,7 +378,10 @@ export async function syncSocialAccount(row: SocialConnectionRow, firstRun: bool
     const pulled = row.network === "instagram" ? await pullInstagram(row.externalId, token, days) : await pullFacebook(row.externalId, token, days);
     await store(row, pulled);
     const note = pulled.warnings.length ? `Часть данных Meta не отдала — ${pulled.warnings.join("; ")}` : null;
-    await db.update(socialConnections).set({ statsSyncedAt: new Date(), statsError: note }).where(mine(row));
+    await db
+      .update(socialConnections)
+      .set({ statsSyncedAt: new Date(), statsError: note, ...(pulled.audience ? { audience: pulled.audience } : {}) })
+      .where(mine(row));
     return { ok: !note, message: note ?? `дней: ${pulled.days.length}, публикаций: ${pulled.posts.length}` };
   } catch (error) {
     const message = (error as Error).message;

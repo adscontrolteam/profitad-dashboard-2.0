@@ -655,6 +655,8 @@ export const socialConnections = pgTable(
     /** Statistics: when they were last pulled and what went wrong (null = fine). */
     statsSyncedAt: timestamp("stats_synced_at", { withTimezone: true }),
     statsError: text("stats_error"),
+    /** Who the followers are (age, gender, city shares), refreshed by the statistics sync. */
+    audience: jsonb("audience").$type<SocialAudience | null>(),
     connectedAt: timestamp("connected_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -662,6 +664,21 @@ export const socialConnections = pgTable(
 );
 
 export type SocialConnectionRow = typeof socialConnections.$inferSelect;
+
+export interface SocialDayExtra {
+  /** Views by Instagram content type: REEL, POST, STORY, CAROUSEL_CONTAINER… */
+  byType?: Record<string, number>;
+  /** Views by FOLLOWER / NON_FOLLOWER. */
+  byFollower?: Record<string, number>;
+  linkTaps?: number;
+  profileViews?: number;
+}
+/** Follower counts by group, as the network reports them. */
+export interface SocialAudience {
+  age?: Record<string, number>;
+  gender?: Record<string, number>;
+  city?: Record<string, number>;
+}
 
 /**
  * Organic numbers of a connected social account, one row per day. `views`/`follows` come from the network's
@@ -680,6 +697,8 @@ export const socialMetricsDaily = pgTable(
     follows: integer("follows"),
     /** Accounts that unfollowed that day, when the network reports it. */
     unfollows: integer("unfollows"),
+    /** Instagram splits of the day: views by content type and by follower / non-follower, taps on the profile link, profile visits. */
+    extra: jsonb("extra").$type<SocialDayExtra | null>(),
     /** Total followers, only on the days the sync ran. */
     followers: integer("followers"),
     syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull(),

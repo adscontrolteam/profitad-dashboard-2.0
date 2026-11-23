@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { after } from "next/server";
+import { SmmAnalytics } from "@/components/smm/analytics";
 import { StatsRefresh } from "@/components/social/stats-refresh";
 import { SocialConnections } from "@/components/social/social-connections";
 import { NetworkIcon } from "@/components/smm/network-icon";
@@ -117,7 +118,9 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
 
       <LogFocus projectId={ws.project.id} items={toLogItems(await listLog(ws.project.id, "smm"))} scope="smm" currency={ws.project.agent.currency} />
 
-      {!report.connected ? (
+      {liveReport ? (
+        <SmmAnalytics data={liveReport.analytics} />
+      ) : !report.connected ? (
         <Card className="flex flex-col items-start gap-3">
           <h2 className="section-title">{SOCIAL_NETWORKS.find((n) => n.id === net)?.label} не подключён</h2>
           <p className="max-w-xl text-sm text-muted-foreground">
@@ -161,19 +164,7 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
             <KpiTile label="Репосты" value={formatCompact(report.shares)} />
             <KpiTile label="Сохранения" value={formatCompact(report.saves)} />
             <KpiTile label="Прирост подписчиков" value={`${report.followersDelta >= 0 ? "+" : "−"}${formatNumber(Math.abs(report.followersDelta))}`} />
-            {liveReport ? (
-              <KpiTile
-                label="Отток подписчиков"
-                value={
-                  liveReport.unfollows === null
-                    ? "—"
-                    : `${formatNumber(liveReport.unfollows)} · ${pct.format(report.followers ? liveReport.unfollows / report.followers : 0)}`
-                }
-                hint={liveReport.unfollows === null ? "соцсеть не отдала отписки" : `отписались · доля от всех подписчиков${liveReport.newFollowers !== null ? ` · пришло ${formatNumber(liveReport.newFollowers)}` : ""}`}
-              />
-            ) : (
-              <KpiTile label="На 1000 просмотров" value={views ? `${((report.followersDelta / views) * 1000).toFixed(1)}` : "—"} hint="новых подписчиков" />
-            )}
+            <KpiTile label="На 1000 просмотров" value={views ? `${((report.followersDelta / views) * 1000).toFixed(1)}` : "—"} hint="новых подписчиков" />
           </section>
 
           <section className="grid gap-5 lg:grid-cols-2">
