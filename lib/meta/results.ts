@@ -3,13 +3,20 @@
 /** Readable names of the common Meta action types. */
 export const META_ACTION_LABELS: Record<string, string> = {
   lead: "Лиды (все: формы Meta + сайт)",
-  "onsite_conversion.lead_grouped": "Лиды из форм Meta",
+  "onsite_conversion.lead_grouped": "Лид-форма Meta",
+  onsite_web_lead: "Лиды с сайта (форма на сайте)",
   "offsite_conversion.fb_pixel_lead": "Лиды на сайте (пиксель)",
   like: "Отметки «Нравится» страницы",
   instagram_profile_follow: "Подписки на Instagram (с рекламы)",
   follow: "Подписки",
   "onsite_conversion.messaging_conversation_started_7d": "Начатые переписки",
   "onsite_conversion.messaging_first_reply": "Первые ответы в переписке",
+  "onsite_conversion.total_messaging_connection": "Новые контакты в переписке",
+  contact_total: "Контакты",
+  submit_application_total: "Отправленные заявки",
+  schedule_total: "Записи на приём",
+  click_to_call_call_confirm: "Звонки",
+  "offsite_conversion.fb_pixel_custom": "Своя конверсия пикселя",
   complete_registration: "Регистрации",
   "offsite_conversion.fb_pixel_complete_registration": "Регистрации на сайте (пиксель)",
   purchase: "Покупки",
@@ -23,6 +30,28 @@ export const META_ACTION_LABELS: Record<string, string> = {
   "onsite_conversion.post_save": "Сохранения публикации",
   video_view: "Просмотры видео (3 сек)",
 };
+
+/**
+ * What a project may count as a lead — always offered, whether or not the account had such actions lately
+ * (a new campaign has none yet). Pick one kind: «Лиды (все)» already contains the form and the site leads.
+ */
+export const META_LEAD_OPTIONS = [
+  "lead",
+  "onsite_conversion.lead_grouped",
+  "offsite_conversion.fb_pixel_lead",
+  "onsite_web_lead",
+  "onsite_conversion.messaging_conversation_started_7d",
+  "onsite_conversion.messaging_first_reply",
+  "onsite_conversion.total_messaging_connection",
+  "complete_registration",
+  "contact_total",
+  "submit_application_total",
+  "schedule_total",
+  "click_to_call_call_confirm",
+  "offsite_conversion.fb_pixel_custom",
+];
+/** The same for subscribers. */
+export const META_SUBSCRIBER_OPTIONS = ["instagram_profile_follow", "like"];
 
 export const metaActionLabel = (type: string) => META_ACTION_LABELS[type] ?? type;
 

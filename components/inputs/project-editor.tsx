@@ -18,7 +18,7 @@ import { ProjectIntegrations } from "./project-integrations";
 import { SocialConnections } from "@/components/social/social-connections";
 import type { SocialAccountView } from "@/lib/social/store";
 import { ProjectAccess, type AccessView } from "./project-access";
-import { metaActionLabel } from "@/lib/meta/results";
+import { META_LEAD_OPTIONS, META_SUBSCRIBER_OPTIONS, metaActionLabel } from "@/lib/meta/results";
 import { BriefConductor } from "./brief-conductor";
 import { STATUS_META } from "@/lib/domain/statuses";
 import {
@@ -853,33 +853,38 @@ function MetaResults({
 
   const group = (key: "leads" | "subscribers", title: string, hint: string) => {
     const chosen = value[key];
-    const options = [...new Set([...(available ?? []).map((a) => a.type), ...chosen])];
+    // The usual kinds are always on offer; whatever else the account did is one click away.
+    const main = [...new Set([...(key === "leads" ? META_LEAD_OPTIONS : META_SUBSCRIBER_OPTIONS), ...chosen])];
+    const other = (available ?? []).map((a) => a.type).filter((t) => !main.includes(t));
     const count = (t: string) => available?.find((a) => a.type === t)?.count;
     const toggle = (t: string) => onChange({ ...value, [key]: chosen.includes(t) ? chosen.filter((x) => x !== t) : [...chosen, t] });
+    const chip = (t: string) => (
+      <button
+        key={t}
+        type="button"
+        onClick={() => toggle(t)}
+        aria-pressed={chosen.includes(t)}
+        title={t}
+        className={
+          chosen.includes(t)
+            ? "rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground"
+            : "rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+        }
+      >
+        {metaActionLabel(t)}
+        <span className="ml-1 opacity-60 tabular-nums">{Math.round(count(t) ?? 0)}</span>
+      </button>
+    );
     return (
       <Field label={title}>
         <div className="flex flex-col gap-2">
           <span className="text-xs text-muted-foreground">{hint}</span>
-          {options.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {options.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => toggle(t)}
-                  aria-pressed={chosen.includes(t)}
-                  title={t}
-                  className={
-                    chosen.includes(t)
-                      ? "rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground"
-                      : "rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
-                  }
-                >
-                  {metaActionLabel(t)}
-                  {count(t) !== undefined && <span className="ml-1 opacity-60 tabular-nums">{Math.round(count(t)!)}</span>}
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-wrap gap-1.5">{main.map(chip)}</div>
+          {other.length > 0 && (
+            <details className="text-xs text-muted-foreground">
+              <summary className="cursor-pointer select-none">Другие действия кабинета ({other.length})</summary>
+              <div className="mt-2 flex flex-wrap gap-1.5">{other.map(chip)}</div>
+            </details>
           )}
         </div>
       </Field>
@@ -888,8 +893,8 @@ function MetaResults({
 
   return (
     <fieldset className="flex flex-col gap-3">
-      <legend className="section-kicker mb-2">Meta: что считать результатом <InfoHint className="ml-1">Действия кабинета {accountId} за последние 30 дней, цифра — сколько их было. Выберите, что идёт в «Лиды» и в «Подписчики»; можно несколько,
-        они сложатся.</InfoHint></legend>
+      <legend className="section-kicker mb-2">Meta: что считать результатом <InfoHint className="ml-1">Цифра — сколько таких действий было в кабинете {accountId} за последние 30 дней; 0 значит, что пока не было. Выберите, что идёт в «Лиды» и в «Подписчики»;
+        несколько выбранных сложатся, поэтому не отмечайте «Лиды (все)» вместе с лид-формой или лидами с сайта — они уже внутри.</InfoHint></legend>
       {available === null && <span className="text-xs text-muted-foreground">Загружаю действия кабинета…</span>}
       {loadError && <span className="text-xs text-warning">{loadError}</span>}
       {group("leads", "Лиды", "Не выбрано — берём «Лиды (все)».")}
