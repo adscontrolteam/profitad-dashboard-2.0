@@ -32,6 +32,7 @@ export function CampaignsTable({
   canManage,
   live = false,
   currency = null,
+  visitConversion = false,
 }: {
   projectId: string;
   /** Currency of the project's ad account. */
@@ -41,6 +42,8 @@ export function CampaignsTable({
   canManage: boolean;
   /** Real Google campaigns: toggles go to the Google Ads API. */
   live?: boolean;
+  /** Results are followers: show which share of the Instagram profile visits became one. */
+  visitConversion?: boolean;
 }) {
   const formatCurrency = (v: number) => formatMetric(v, "currency", currency);
   const [overrides, setOverrides] = useState<Record<string, CampaignStatus>>({});
@@ -142,7 +145,14 @@ export function CampaignsTable({
                 <td className="py-3 pr-3 text-right">{formatCurrency(c.spend)}</td>
                 <td className="py-3 pr-3 text-right">{formatNumber(c.clicks)}</td>
                 <td className="py-3 pr-3 text-right">{c.clicks ? formatCurrency(c.spend / c.clicks) : "—"}</td>
-                <td className="py-3 pr-3 text-right">{formatNumber(c.results)}</td>
+                <td className="py-3 pr-3 text-right">
+                  {formatNumber(c.results)}
+                  {visitConversion && c.profileVisits ? (
+                    <span className="block text-[11px] text-muted-foreground" title={`Посещений профиля Instagram: ${formatNumber(c.profileVisits)}`}>
+                      {pct.format(c.results / c.profileVisits)} из посещений
+                    </span>
+                  ) : null}
+                </td>
                 <td className="py-3 pr-3 text-right">{c.results ? formatCurrency(c.spend / c.results) : "—"}</td>
                 <td className="py-3 pr-3 text-right">{c.impressions ? pct.format(c.clicks / c.impressions) : "—"}</td>
                 <td className="py-3 pr-3 text-right">

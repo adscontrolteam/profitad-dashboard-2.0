@@ -893,7 +893,7 @@ function MetaResults({
       {available === null && <span className="text-xs text-muted-foreground">Загружаю действия кабинета…</span>}
       {loadError && <span className="text-xs text-warning">{loadError}</span>}
       {group("leads", "Лиды", "Не выбрано — берём «Лиды (все)».")}
-      {group("subscribers", "Подписчики", "Не выбрано — подписчиков считать не будем.")}
+      {group("subscribers", "Подписчики", "Не выбрано — считаем подписки на Instagram с рекламы, если Meta их отдаёт.")}
       {projectId && (
         <div className="flex flex-wrap items-center gap-3">
           <button

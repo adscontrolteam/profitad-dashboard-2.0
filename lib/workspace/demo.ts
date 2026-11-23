@@ -63,6 +63,8 @@ export interface AdCampaign {
   clicks: number;
   /** null when the source does not report reach. */
   frequency: number | null;
+  /** Meta: Instagram profile visits from ads; undefined when not reported. */
+  profileVisits?: number;
   /** Real ad account / campaign ids (synced data only); enable pause/enable through the platform API. */
   accountId?: string;
   externalId?: string;
@@ -75,6 +77,8 @@ export interface AdsReport {
   days: AdDay[];
   campaigns: AdCampaign[];
   reach: number | null;
+  /** Meta: Instagram profile visits from ads in the window; null when not reported. */
+  profileVisits?: number | null;
 }
 
 const CAMPAIGN_STEMS = ["Quiz_CONV", "Lead_Form", "Retarget_7d", "Video_Views", "Search_Brand", "PMax_Sales"];

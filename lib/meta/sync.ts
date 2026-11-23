@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { adMetricsDaily, projects } from "@/db/schema";
-import { campaignInsights, metaConfigured } from "./ads";
+import { campaignInsights, instagramAdsNote, metaConfigured } from "./ads";
 import { countLeads, countSubscribers } from "./results";
 
 const DAY = 86_400_000;
@@ -48,6 +48,7 @@ export async function syncMetaProject(projectId: string, days = 3): Promise<stri
       clicks: Math.round(Number(r.inline_link_clicks ?? 0)),
       leads: countLeads(r.actions, chosen.leads),
       subscribers: countSubscribers(r.actions, chosen.subscribers),
+      profileVisits: r.profile_visits ?? null,
       syncedAt: new Date(),
     }));
     // Replace the window: a campaign that dropped to zero must not keep its old numbers.
@@ -66,7 +67,10 @@ export async function syncMetaProject(projectId: string, days = 3): Promise<stri
       for (let i = 0; i < values.length; i += 500) await tx.insert(adMetricsDaily).values(values.slice(i, i + 500)).onConflictDoNothing();
     });
     const spend = values.reduce((a, v) => a + v.spend, 0);
-    parts.push(`${accountId}: ${values.length} строк за ${since} — ${until}, расход ${Math.round(spend * 100) / 100}`);
+    const subscribers = values.reduce((a, v) => a + v.subscribers, 0);
+    parts.push(
+      `${accountId}: ${values.length} строк за ${since} — ${until}, расход ${Math.round(spend * 100) / 100}, подписчиков ${subscribers} (${instagramAdsNote.get(accountId) ?? "нет данных Instagram"})`,
+    );
   }
   return parts.join(" · ");
 }
@@ -85,4 +89,25 @@ export async function syncAllMeta() {
     }
   }
   return results;
+}
+
+/**
+ * Called after the «Реклама» page is sent: when the project's Meta numbers are older than `maxAgeMs` (or there are none yet),
+ * pull them again — the nightly run alone would leave a newly connected account empty until the morning.
+ * The result goes to the project log, so a refused account is visible instead of a silent empty page.
+ */
+export async function refreshMetaIfStale(projectId: string, sources: { platform: string; accountId: string }[], maxAgeMs = 3600_000) {
+  if (!metaConfigured() || !sources.some((s) => s.platform === "meta" && s.accountId)) return;
+  const [row] = await getDb()
+    .select({ last: sql<string | null>`max(${adMetricsDaily.syncedAt})` })
+    .from(adMetricsDaily)
+    .where(and(eq(adMetricsDaily.projectId, projectId), eq(adMetricsDaily.platform, "meta")));
+  if (row?.last && Date.now() - new Date(row.last).getTime() < maxAgeMs) return;
+  const result = await syncMetaProject(projectId).then(
+    (message) => ({ ok: true, message }),
+    (error) => ({ ok: false, message: (error as Error).message }),
+  );
+  const { logSyncResults } = await import("@/lib/log/checks");
+  await logSyncResults([{ projectId, kind: "meta_ads", ...result }]).catch(() => undefined);
+  if (!result.ok) console.error("meta refresh", projectId, result.message);
 }

@@ -7,10 +7,11 @@ import { decrypt } from "@/lib/crypto";
 
 /**
  * Organic statistics of the connected Facebook Pages and Instagram accounts (Graph API, Page token).
- *  - Instagram: account `views`/`reach` exist only as a total for a window, so every day is asked for separately;
+ *  - Instagram: account `views`/`reach` and `follows_and_unfollows` exist only as a total for a window, so every
+ *    day is asked for separately;
  *    publications come from /media with their own insights (`views`, `saved`, `shares`).
  *  - Facebook: /insights gives days in one call (`page_media_view`, `page_total_media_view_unique`,
- *    `page_daily_follows_unique`); publications come from /published_posts, their views from `post_media_view`.
+ *    `page_daily_follows_unique`, `page_daily_unfollows_unique`); publications come from /published_posts, their views from `post_media_view`.
  * The old `impressions` / `page_impressions` / `page_fans` metrics were removed by Meta in 2025 — do not bring them back.
  * Threads is not read here yet.
  */
@@ -56,6 +57,7 @@ interface DayRow {
   views: number | null;
   reach: number | null;
   follows: number | null;
+  unfollows: number | null;
 }
 interface PostRow {
   postId: string;
@@ -87,6 +89,7 @@ async function pullInstagram(id: string, token: string, days: number): Promise<P
   // Yesterday and back: today's numbers are not final and Meta's data lags.
   const dates = Array.from({ length: days }, (_, i) => iso(Date.now() - (i + 1) * DAY));
   let dayFailure: string | null = null;
+  let followFailure: string | null = null;
   const dayRows = await pool(dates, 5, async (date): Promise<DayRow | null> => {
     const since = Math.floor(Date.parse(`${date}T00:00:00Z`) / 1000);
     try {
@@ -98,13 +101,34 @@ async function pullInstagram(id: string, token: string, days: number): Promise<P
         until: String(since + 86_400),
       });
       const value = (name: string) => r.data?.find((m) => m.name === name)?.total_value?.value ?? null;
-      return { date, views: value("views"), reach: value("reach"), follows: null };
+      // Who followed and who left that day: its own call, the breakdown is not allowed next to the other metrics.
+      let follows: number | null = null;
+      let unfollows: number | null = null;
+      try {
+        type Split = { dimension_values?: string[]; value?: number };
+        const f = await graph<{ data?: { total_value?: { breakdowns?: { results?: Split[] }[] } }[] }>(token, `${id}/insights`, {
+          metric: "follows_and_unfollows",
+          period: "day",
+          metric_type: "total_value",
+          breakdown: "follow_type",
+          since: String(since),
+          until: String(since + 86_400),
+        });
+        const parts = f.data?.[0]?.total_value?.breakdowns?.[0]?.results ?? [];
+        const of = (type: string) => parts.find((x) => x.dimension_values?.[0] === type)?.value ?? 0;
+        follows = of("FOLLOWER");
+        unfollows = of("NON_FOLLOWER");
+      } catch (error) {
+        followFailure = (error as Error).message;
+      }
+      return { date, views: value("views"), reach: value("reach"), follows, unfollows };
     } catch (error) {
       dayFailure = (error as Error).message;
       return null;
     }
   });
   if (dayFailure) warnings.push(`просмотры по дням: ${dayFailure}`);
+  if (followFailure) warnings.push(`подписки и отписки: ${followFailure}`);
 
   interface Media {
     id: string;
@@ -170,7 +194,12 @@ async function pullInstagram(id: string, token: string, days: number): Promise<P
 
 /* ---------- Facebook Page ---------- */
 
-const PAGE_METRICS = { page_media_view: "views", page_total_media_view_unique: "reach", page_daily_follows_unique: "follows" } as const;
+const PAGE_METRICS = {
+  page_media_view: "views",
+  page_total_media_view_unique: "reach",
+  page_daily_follows_unique: "follows",
+  page_daily_unfollows_unique: "unfollows",
+} as const;
 
 async function pullFacebook(id: string, token: string, days: number): Promise<Pulled> {
   const warnings: string[] = [];
@@ -199,7 +228,7 @@ async function pullFacebook(id: string, token: string, days: number): Promise<Pu
     for (const v of s.values ?? []) {
       // `end_time` closes the day it reports.
       const date = iso(Date.parse(v.end_time) - DAY);
-      const row = byDate.get(date) ?? { date, views: null, reach: null, follows: null };
+      const row = byDate.get(date) ?? { date, views: null, reach: null, follows: null, unfollows: null };
       row[field] = typeof v.value === "number" ? v.value : null;
       byDate.set(date, row);
     }
@@ -267,7 +296,7 @@ async function store(row: SocialConnectionRow, pulled: Pulled) {
   const key = { projectId: row.projectId, network: row.network, accountId: row.externalId };
   const target = [socialMetricsDaily.projectId, socialMetricsDaily.network, socialMetricsDaily.accountId, socialMetricsDaily.date];
   for (const d of pulled.days) {
-    const values = { views: d.views, reach: d.reach, follows: d.follows, syncedAt: new Date() };
+    const values = { views: d.views, reach: d.reach, follows: d.follows, unfollows: d.unfollows, syncedAt: new Date() };
     await db.insert(socialMetricsDaily).values({ ...key, date: d.date, ...values }).onConflictDoUpdate({ target, set: values });
   }
   if (pulled.followers !== null) {

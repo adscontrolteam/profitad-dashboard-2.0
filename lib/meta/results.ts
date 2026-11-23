@@ -6,6 +6,7 @@ export const META_ACTION_LABELS: Record<string, string> = {
   "onsite_conversion.lead_grouped": "Лиды из форм Meta",
   "offsite_conversion.fb_pixel_lead": "Лиды на сайте (пиксель)",
   like: "Отметки «Нравится» страницы",
+  instagram_profile_follow: "Подписки на Instagram (с рекламы)",
   follow: "Подписки",
   "onsite_conversion.messaging_conversation_started_7d": "Начатые переписки",
   "onsite_conversion.messaging_first_reply": "Первые ответы в переписке",
@@ -27,7 +28,7 @@ export const metaActionLabel = (type: string) => META_ACTION_LABELS[type] ?? typ
 
 /**
  * Leads without a choice: Meta's aggregated «lead» (forms + pixel); when the account reports only the parts,
- * the first one present. Subscribers have no safe default — the project chooses.
+ * the first one present.
  */
 const LEAD_FALLBACK = ["lead", "onsite_conversion.lead_grouped", "offsite_conversion.fb_pixel_lead"];
 
@@ -39,4 +40,6 @@ export function countResult(actions: { action_type: string; value: string }[] | 
 }
 
 export const countLeads = (actions: { action_type: string; value: string }[] | undefined, chosen: string[]) => countResult(actions, chosen, LEAD_FALLBACK);
-export const countSubscribers = (actions: { action_type: string; value: string }[] | undefined, chosen: string[]) => countResult(actions, chosen);
+/** Subscribers without a choice: Instagram follows from ads, when Meta reports them. Nothing else is safe to guess. */
+const SUBSCRIBER_FALLBACK = ["instagram_profile_follow"];
+export const countSubscribers = (actions: { action_type: string; value: string }[] | undefined, chosen: string[]) => countResult(actions, chosen, SUBSCRIBER_FALLBACK);

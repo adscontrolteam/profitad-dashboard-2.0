@@ -69,6 +69,7 @@ export async function getAdsReport(
     c.results += result(row);
     c.impressions += row.impressions;
     c.clicks += row.clicks;
+    if (row.profileVisits !== null) c.profileVisits = (c.profileVisits ?? 0) + row.profileVisits;
     byCampaign.set(key, c);
 
     const own = campaignDays.get(key) ?? new Map<string, AdDay>();
@@ -93,5 +94,6 @@ export async function getAdsReport(
     days: [...byDay.values()],
     campaigns: [...byCampaign.values()].sort((a, b) => b.spend - a.spend),
     reach: null,
+    profileVisits: rows.some((r) => r.profileVisits !== null) ? rows.reduce((a, r) => a + (r.profileVisits ?? 0), 0) : null,
   };
 }

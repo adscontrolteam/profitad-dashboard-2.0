@@ -161,7 +161,19 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
             <KpiTile label="Репосты" value={formatCompact(report.shares)} />
             <KpiTile label="Сохранения" value={formatCompact(report.saves)} />
             <KpiTile label="Прирост подписчиков" value={`${report.followersDelta >= 0 ? "+" : "−"}${formatNumber(Math.abs(report.followersDelta))}`} />
-            <KpiTile label="На 1000 просмотров" value={views ? `${((report.followersDelta / views) * 1000).toFixed(1)}` : "—"} hint="новых подписчиков" />
+            {liveReport ? (
+              <KpiTile
+                label="Отток подписчиков"
+                value={
+                  liveReport.unfollows === null
+                    ? "—"
+                    : `${formatNumber(liveReport.unfollows)} · ${pct.format(report.followers ? liveReport.unfollows / report.followers : 0)}`
+                }
+                hint={liveReport.unfollows === null ? "соцсеть не отдала отписки" : `отписались · доля от всех подписчиков${liveReport.newFollowers !== null ? ` · пришло ${formatNumber(liveReport.newFollowers)}` : ""}`}
+              />
+            ) : (
+              <KpiTile label="На 1000 просмотров" value={views ? `${((report.followersDelta / views) * 1000).toFixed(1)}` : "—"} hint="новых подписчиков" />
+            )}
           </section>
 
           <section className="grid gap-5 lg:grid-cols-2">

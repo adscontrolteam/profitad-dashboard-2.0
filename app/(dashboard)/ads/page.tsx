@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { after } from "next/server";
 import { refreshGoogleIfStale } from "@/lib/google/sync";
+import { metaAccountReach, metaCampaignReach, metaCampaignStatuses, metaConfigured } from "@/lib/meta/ads";
+import { refreshMetaIfStale } from "@/lib/meta/sync";
 import { InfoHint } from "@/components/ui/info-hint";
 import { CampaignsTable } from "@/components/ads/campaigns-table";
 import { LogFocus } from "@/components/log/log-focus";
@@ -47,19 +49,25 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
   // Google numbers older than an hour are pulled again once the page is sent (the nightly run is only daily).
   const { id: projectId, sources } = ws.project;
   after(() => refreshGoogleIfStale(projectId, sources));
+  after(() => refreshMetaIfStale(projectId, sources));
 
   // Money on ad pages is in the currency of the project's ad account, set in «Вводные».
   const currency = ws.project.agent.currency;
   const formatCurrency = (v: number) => formatMetric(v, "currency", currency);
   const resultMetric = ws.project.kpis[0]?.metric ?? "leads";
   const report = await getAdsReport(ws.project, { from: ws.range.from, to: ws.range.to }, platform, resultMetric);
-  const campaigns = await withLiveGoogleStatus(report.campaigns);
+  const campaigns = await withLiveMeta(await withLiveGoogleStatus(report.campaigns), { from: ws.range.from, to: ws.range.to });
   const log = await listLog(ws.project.id, "ads");
   const liveGoogle = report.source === "synced" && adsConfigured();
   const spend = report.days.reduce((a, d) => a + d.spend, 0);
   const results = report.days.reduce((a, d) => a + d.results, 0);
   const impressions = report.days.reduce((a, d) => a + d.impressions, 0);
   const clicks = report.days.reduce((a, d) => a + d.clicks, 0);
+  // Reach is people, so it is asked from Meta for the exact period — and only when the page shows one Meta account alone.
+  const metaAccounts = [...new Set(campaigns.filter((c) => c.platform === "meta" && c.accountId).map((c) => c.accountId as string))];
+  const onlyMeta = report.source === "synced" && campaigns.length > 0 && campaigns.every((c) => c.platform === "meta");
+  const reach =
+    report.reach ?? (onlyMeta && metaAccounts.length === 1 && metaConfigured() ? (await metaAccountReach(metaAccounts[0], ws.range.from, ws.range.to).catch(() => 0)) || null : null);
   const resultLabel = METRICS[resultMetric]?.label ?? "Результаты";
 
   return (
@@ -91,9 +99,16 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
         <KpiTile label="CPM" value={impressions ? formatCurrency((spend / impressions) * 1000) : "—"} hint={`показов ${formatNumber(impressions)}`} />
         <KpiTile
           label="Частота"
-          value={report.reach ? (impressions / report.reach).toFixed(2) : "—"}
-          hint={report.reach ? `охват ${formatNumber(report.reach)}` : "нет данных об охвате"}
+          value={reach ? (impressions / reach).toFixed(2) : "—"}
+          hint={reach ? `охват ${formatNumber(reach)}` : "нет данных об охвате"}
         />
+        {resultMetric === "subscribers" && report.profileVisits ? (
+          <KpiTile
+            label="Конверсия в подписчика"
+            value={pct.format(results / report.profileVisits)}
+            hint={`подписки ÷ посещения профиля · ${formatNumber(report.profileVisits)} посещений`}
+          />
+        ) : null}
       </section>
 
       <LogFocus projectId={ws.project.id} items={toLogItems(log)} scope="ads" currency={ws.project.agent.currency} />
@@ -116,7 +131,7 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
             {!permissions.canManageAds
               ? "Только просмотр"
               : liveGoogle
-                ? "Пауза и включение уходят прямо в Google Ads"
+                ? ""
                 : report.source === "demo"
                   ? "Демо: пауза и включение без отправки"
                   : "Управление появится после настройки Google Ads API"}
@@ -129,6 +144,7 @@ export default async function AdsAnalyticsPage({ searchParams }: PageProps<"/ads
           resultLabel={resultLabel}
           canManage={permissions.canManageAds && (report.source === "demo" || liveGoogle)}
           live={liveGoogle}
+          visitConversion={resultMetric === "subscribers"}
         />
       </Card>
     </div>
@@ -152,5 +168,32 @@ async function withLiveGoogleStatus(campaigns: AdCampaign[]): Promise<AdCampaign
   return campaigns.map((c) => {
     const s = c.accountId && c.externalId ? statuses.get(c.accountId)?.get(c.externalId) : undefined;
     return s ? { ...c, status: s === "ENABLED" ? "active" : "paused" } : c;
+  });
+}
+
+/** Status, reach and frequency of synced Meta campaigns straight from Meta for the shown period; skipped quietly when Meta does not answer. */
+async function withLiveMeta(campaigns: AdCampaign[], range: { from: string; to: string }): Promise<AdCampaign[]> {
+  if (!metaConfigured()) return campaigns;
+  const accounts = [...new Set(campaigns.filter((c) => c.platform === "meta" && c.accountId).map((c) => c.accountId as string))];
+  const live = new Map<string, { statuses?: Map<string, string>; reach?: Map<string, { reach: number; frequency: number }> }>();
+  await Promise.all(
+    accounts.map(async (a) => {
+      const [statuses, reach] = await Promise.all([
+        metaCampaignStatuses(a).catch(() => undefined),
+        metaCampaignReach(a, range.from, range.to).catch(() => undefined),
+      ]);
+      live.set(a, { statuses, reach });
+    }),
+  );
+  return campaigns.map((c) => {
+    if (c.platform !== "meta" || !c.accountId || !c.externalId) return c;
+    const mine = live.get(c.accountId);
+    const status = mine?.statuses?.get(c.externalId);
+    const reach = mine?.reach?.get(c.externalId);
+    return {
+      ...c,
+      status: status ? (status === "ACTIVE" ? "active" : "paused") : c.status,
+      frequency: reach?.frequency ? reach.frequency : c.frequency,
+    };
   });
 }

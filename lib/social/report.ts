@@ -15,6 +15,10 @@ export interface LiveSmmReport extends SmmReport {
   error: string | null;
   /** False while the network gives no per-day views and the chart is built from publications. */
   dailyViews: boolean;
+  /** Accounts that unfollowed in the period; null when the network did not report it. */
+  unfollows: number | null;
+  /** New followers in the period, before the unfollows; null when not reported. */
+  newFollowers: number | null;
 }
 
 const KIND: Record<string, SmmPost["kind"]> = { reel: "Рилс", carousel: "Карусель", video: "Видео", post: "Пост", thread: "Тред" };
@@ -87,12 +91,12 @@ export async function liveSmmReport(projectId: string, network: LiveNetwork, win
   // Growth: the network's own «new followers» when it reports them, otherwise the change between our snapshots in the period.
   const windowDaily = daily.filter((d) => inWindow(d.date));
   const follows = windowDaily.filter((d) => d.follows !== null);
+  const left = windowDaily.filter((d) => d.unfollows !== null);
   const snapshots = windowDaily.filter((d) => d.followers !== null).sort((a, b) => a.date.localeCompare(b.date));
-  const followersDelta = follows.length
-    ? follows.reduce((a, d) => a + (d.follows ?? 0), 0)
-    : snapshots.length > 1
-      ? (snapshots.at(-1)!.followers ?? 0) - (snapshots[0].followers ?? 0)
-      : 0;
+  const newFollowers = follows.length ? follows.reduce((a, d) => a + (d.follows ?? 0), 0) : null;
+  const unfollows = left.length ? left.reduce((a, d) => a + (d.unfollows ?? 0), 0) : null;
+  const followersDelta =
+    newFollowers !== null ? newFollowers - (unfollows ?? 0) : snapshots.length > 1 ? (snapshots.at(-1)!.followers ?? 0) - (snapshots[0].followers ?? 0) : 0;
 
   const top = [...current]
     .sort((a, b) => b.views - a.views || b.likes - a.likes)
@@ -124,5 +128,7 @@ export async function liveSmmReport(projectId: string, network: LiveNetwork, win
     syncedAt: account.statsSyncedAt?.toISOString() ?? null,
     error: account.statsError,
     dailyViews,
+    unfollows,
+    newFollowers,
   };
 }

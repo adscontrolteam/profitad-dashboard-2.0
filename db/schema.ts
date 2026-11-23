@@ -186,6 +186,8 @@ export const adMetricsDaily = pgTable(
     clicks: integer("clicks").notNull().default(0),
     leads: doublePrecision("leads").notNull().default(0),
     subscribers: doublePrecision("subscribers").notNull().default(0),
+    /** Meta: visits of the Instagram profile from ads (the base of «конверсия в подписчика»). Null = not reported. */
+    profileVisits: doublePrecision("profile_visits"),
     sales: doublePrecision("sales"),
     revenue: doublePrecision("revenue"),
     syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull(),
@@ -676,6 +678,8 @@ export const socialMetricsDaily = pgTable(
     reach: integer("reach"),
     /** New followers that day, when the network reports it. */
     follows: integer("follows"),
+    /** Accounts that unfollowed that day, when the network reports it. */
+    unfollows: integer("unfollows"),
     /** Total followers, only on the days the sync ran. */
     followers: integer("followers"),
     syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull(),
