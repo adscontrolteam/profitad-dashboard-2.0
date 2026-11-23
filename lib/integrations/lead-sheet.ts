@@ -157,8 +157,10 @@ export function parseLeadRows(tab: string, values: string[][]): ParsedTab {
     // From ads = a click id or a paid UTM medium. Nothing of the kind (SEO, direct, messengers, referrals) — not ads.
     const paidMedium = /^(cpc|ppc|paid|cpm|cpa|paid[_-]?social|display|ads?)$/i.test(utm.utm_medium ?? "");
     const isMeta = /facebook|instagram|meta|\bfb\b|\big\b/i.test(utm.utm_source ?? "");
+    // Meta lead forms have no click id: the form's own «platform» (ig / fb) in the channel column marks the lead.
+    const metaForm = /^(ig|fb|instagram|facebook|meta|messenger|an)$/i.test(utm.channel ?? "");
     if (utm.gclid || utm.gbraid || utm.wbraid || (paidMedium && !isMeta)) utm.ad = "google";
-    else if (utm.fbclid || (paidMedium && isMeta)) utm.ad = "meta";
+    else if (utm.fbclid || (paidMedium && isMeta) || metaForm) utm.ad = "meta";
     // Before the site started recording click ids nothing tells ads from SEO: the funnel decides by the ad spend dates.
     if (!utm.ad && leadAt < trackingSince) utm.untracked = "1";
     // Came from a Google page without a click id (the id got lost on the way) — owner's call: counts as ads while ads run.
@@ -268,7 +270,7 @@ export function parseSalesRows(tab: string, values: string[][], today = new Date
     }),
   );
   if (amountCol < 0) return { sales: [], problem: `На листе «${tab}» не нашли колонку «Сума»/«Сумма».` };
-  const currency = /eur|€/i.test(head.flat().join(" ")) ? "EUR" : /usd|\$/i.test(head.flat().join(" ")) ? "USD" : /pln|zł/i.test(head.flat().join(" ")) ? "PLN" : "";
+  const currency = /eur|€/i.test(head.flat().join(" ")) ? "EUR" : /usd|\$/i.test(head.flat().join(" ")) ? "USD" : /pln|zł/i.test(head.flat().join(" ")) ? "PLN" : /uah|грн|₴/i.test(head.flat().join(" ")) ? "UAH" : "";
   const noteCol = head.flat().findIndex((c) => /(коментар|комментар|comment|примечан)/.test(norm(c)));
 
   type Raw = { label: string; sd: number; sm: number; ed: number; em: number; count: number; amount: number; note: string; cur: string };

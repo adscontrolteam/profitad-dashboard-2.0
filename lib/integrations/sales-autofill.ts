@@ -44,6 +44,10 @@ interface Columns {
   salesCount: number;
   salesSum: number;
   note: number;
+  /** «Інстаграм / Meta → Всього / Цільові / Нецільові», when the tab has such a block. */
+  meta: { total: number; target: number; junk: number } | null;
+  /** Currency named in the sum header («Сума ГРН» → грн). */
+  currency: string;
 }
 
 /** Finds «Google ADS → Всього / Цільові / Нецільові» and «Продажі → Кількість / Сума» in the two header rows. */
@@ -59,13 +63,19 @@ function findColumns(head: string[][]): Columns | null {
     for (let i = from; i < Math.max(sub.length, from + 4); i++) if (re.test(n(sub[i]))) return i;
     return -1;
   };
+  const m = block(/інстаграм|инстаграм|instagram|meta|facebook/);
+  const metaCols = m >= 0 ? { total: after(m, /^(всього|всего|total)/), target: after(m, /^ц[іi]льов|^целев/), junk: after(m, /^неціл|^нецел/) } : null;
+  const salesSum = after(sales, /сум|amount/);
+  const sumHead = n(sub[salesSum]);
   const cols = {
     total: after(g, /^(всього|всего|total)/),
     target: after(g, /^ц[іi]льов|^целев/),
     junk: after(g, /^неціл|^нецел/),
     salesCount: after(sales, /кільк|колич|count/),
-    salesSum: after(sales, /сум|amount/),
+    salesSum,
     note,
+    meta: metaCols && metaCols.total >= 0 && metaCols.target >= 0 && metaCols.junk >= 0 ? metaCols : null,
+    currency: /грн|uah|₴/.test(sumHead) ? "грн" : /usd|\$/.test(sumHead) ? "$" : /pln|zł/.test(sumHead) ? "zł" : "€",
   };
   return cols.total >= 0 && cols.target >= 0 && cols.junk >= 0 && cols.salesSum >= 0 ? cols : null;
 }
@@ -87,7 +97,10 @@ export async function fillSalesTab(projectId: string, cfg: SheetsLeadsConfig, fi
     // Nothing to own yet: the table has no leads, the ads have not started.
     if (!firstLeadAt) return { cells: 0, from: null, message: `«${cfg.salesTab}»: начнём заполнять с первого лида в таблице`, planned: [] };
     // First run: from the period of the first lead in the table (a test lead counts)…
-    from = bucketOf(new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(firstLeadAt)).start;
+    // A sample row left in the template («01.01.2019») must not open years of empty periods: at most 120 days back.
+    const earliest = iso(Date.parse(todayIso) - 120 * DAY);
+    const first = new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(firstLeadAt);
+    from = bucketOf(first < earliest ? earliest : first).start;
     // …but never over periods somebody filled by hand (dates inferred backwards from today).
     const lastFilled = [...rows].reverse().find((r) => r.key && filled(r.cells));
     if (lastFilled?.key) {
@@ -114,19 +127,24 @@ export async function fillSalesTab(projectId: string, cfg: SheetsLeadsConfig, fi
   const leadRows = await db
     .select({
       day,
+      meta: sql<boolean>`${leads.utm}->>'ad' = 'meta'`,
       total: sql<number>`count(*)`,
       junk: sql<number>`count(*) filter (where ${leads.outcome} = 'junk')`,
     })
     .from(leads)
     .where(and(eq(leads.projectId, projectId), FROM_ADS, sql`${leads.leadAt} >= ${from}::date - interval '1 day'`))
-    .groupBy(sql`1`);
+    .groupBy(sql`1, 2`);
   const pays = (
     await db.execute(sql`
-      select p->>'date' as day, (p->>'amount')::float8 as amount, ${leads.id} as id, ${leads.name} as name
-      from ${leads}, jsonb_array_elements(coalesce(${leads.raw}->'payments', '[]'::jsonb)) p
-      where ${leads.projectId} = ${projectId} and coalesce(p->>'date', '') >= ${from} and (p->>'amount')::float8 > 0`)
+      select d.day, (p->>'amount')::float8 as amount, ${leads.id} as id, ${leads.name} as name
+      from ${leads}, jsonb_array_elements(coalesce(${leads.raw}->'payments', '[]'::jsonb)) p,
+           -- A payment without a date counts on the day the lead came.
+           lateral (select coalesce(nullif(p->>'date', ''), to_char(${leads.leadAt} at time zone ${TZ}, 'YYYY-MM-DD')) as day) d
+      where ${leads.projectId} = ${projectId} and d.day >= ${from} and (p->>'amount')::float8 > 0`)
   ).rows as { day: string; amount: number; id: string; name: string }[];
 
+  // The «Інстаграм» block is ours only in projects that really have Meta leads; elsewhere it stays as kept by hand.
+  const useMeta = Boolean(cols.meta) && leadRows.some((l) => l.meta);
   const cells: { tab: string; cell: string; value: string | number }[] = [];
   const letter = (i: number) => String.fromCharCode(65 + i);
   let nextFree = (() => {
@@ -146,13 +164,29 @@ export async function fillSalesTab(projectId: string, cfg: SheetsLeadsConfig, fi
       const above = values[rowNo - 2]?.[1];
       const here = values[rowNo - 1]?.[1];
       if (!here && typeof above === "string" && above.startsWith("=")) cells.push({ tab: cfg.salesTab, cell: `B${rowNo}`, value: shiftFormulaRows(above, 1) });
+      // A fresh tab has no formula to continue: total = Google + Meta leads of the row.
+      else if (!here && cols.total === 2) {
+        cells.push({ tab: cfg.salesTab, cell: `B${rowNo}`, value: `=${letter(cols.total)}${rowNo}${cols.meta ? `+${letter(cols.meta.total)}${rowNo}` : ""}` });
+      }
       values[rowNo - 1] = [periodLabel(b), values[rowNo - 1]?.[1] ?? ""];
       target = { row: rowNo, cells: values[rowNo - 1], key };
     }
     const inB = (d: string) => d >= b.start && d <= b.end;
-    const ls = leadRows.filter((l) => inB(l.day));
+    // Meta leads go to the «Інстаграм» block when the tab has one, everything else to «Google ADS».
+    const toMeta = (l: { meta: boolean | null }) => Boolean(useMeta && l.meta);
+    const ls = leadRows.filter((l) => inB(l.day) && !toMeta(l));
     const total = ls.reduce((a, l) => a + Number(l.total), 0);
     const junk = ls.reduce((a, l) => a + Number(l.junk), 0);
+    if (cols.meta && useMeta) {
+      const ms = leadRows.filter((l) => inB(l.day) && toMeta(l));
+      const mt = ms.reduce((a, l) => a + Number(l.total), 0);
+      const mj = ms.reduce((a, l) => a + Number(l.junk), 0);
+      cells.push(
+        { tab: cfg.salesTab, cell: `${letter(cols.meta.total)}${rowNo}`, value: mt },
+        { tab: cfg.salesTab, cell: `${letter(cols.meta.target)}${rowNo}`, value: mt - mj },
+        { tab: cfg.salesTab, cell: `${letter(cols.meta.junk)}${rowNo}`, value: mj },
+      );
+    }
     const ps = pays.filter((p) => inB(p.day));
     const sum = Math.round(ps.reduce((a, p) => a + Number(p.amount), 0) * 100) / 100;
     const payers = new Set(ps.map((p) => p.id)).size;
@@ -166,7 +200,7 @@ export async function fillSalesTab(projectId: string, cfg: SheetsLeadsConfig, fi
     if (cols.salesCount >= 0) cells.push({ tab: cfg.salesTab, cell: `${letter(cols.salesCount)}${rowNo}`, value: payers || "" });
     const note = String(target!.cells[cols.note] ?? "").trim();
     if (cols.note >= 0 && (!note || note.startsWith(AUTO))) {
-      const who = ps.map((p) => `${p.name || "без имени"} ${Math.round(Number(p.amount))} €`).join(", ");
+      const who = ps.map((p) => `${p.name || "без имени"} ${Math.round(Number(p.amount))} ${cols.currency}`).join(", ");
       cells.push({ tab: cfg.salesTab, cell: `${letter(cols.note)}${rowNo}`, value: who ? `${AUTO} ${who}` : "" });
     }
   }
