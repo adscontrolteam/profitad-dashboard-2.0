@@ -1,6 +1,6 @@
 import "server-only";
 import { createHmac } from "node:crypto";
-import { decrypt } from "@/lib/crypto";
+import { decrypt, safeEqual } from "@/lib/crypto";
 import { appUrl } from "@/lib/log/notify";
 import { expiringConnections, markConnection, type NewConnection } from "./store";
 
@@ -142,4 +142,22 @@ export async function refreshSocialTokens() {
     }
   }
   return results;
+}
+
+/**
+ * Threads calls our uninstall and delete URLs with a form field `signed_request` = `<signature>.<payload>` (both base64url);
+ * the signature is HMAC-SHA256 of the payload text with the Threads app secret. Returns the user id, or null when it is not from Threads.
+ */
+export function threadsSignedUserId(signedRequest: string): string | null {
+  const { secret } = creds("threads");
+  const [signature, payload] = signedRequest.split(".");
+  if (!secret || !signature || !payload) return null;
+  const expected = createHmac("sha256", secret).update(payload).digest("base64url");
+  if (!safeEqual(expected, signature.replace(/=+$/, ""))) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { user_id?: string | number };
+    return data.user_id ? String(data.user_id) : null;
+  } catch {
+    return null;
+  }
 }

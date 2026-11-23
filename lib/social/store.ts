@@ -142,3 +142,20 @@ export async function markConnection(row: Pick<SocialConnectionRow, "projectId" 
     })
     .where(and(eq(socialConnections.projectId, row.projectId), eq(socialConnections.network, row.network), eq(socialConnections.externalId, row.externalId)));
 }
+
+/** The network told us the client took the app's access away: every project's row of that account. */
+export async function markAccountRevoked(network: ConnectedNetwork, externalId: string, message: string) {
+  return getDb()
+    .update(socialConnections)
+    .set({ status: "error", lastError: message, updatedAt: new Date() })
+    .where(and(eq(socialConnections.network, network), eq(socialConnections.externalId, externalId)))
+    .returning({ projectId: socialConnections.projectId, name: socialConnections.name });
+}
+
+/** The network asked us to delete what we hold about an account: its rows (and tokens) in every project. */
+export async function deleteAccountEverywhere(network: ConnectedNetwork, externalId: string) {
+  return getDb()
+    .delete(socialConnections)
+    .where(and(eq(socialConnections.network, network), eq(socialConnections.externalId, externalId)))
+    .returning({ projectId: socialConnections.projectId, name: socialConnections.name });
+}
