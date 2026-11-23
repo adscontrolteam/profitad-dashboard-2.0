@@ -316,6 +316,14 @@ export async function projectFunnel(projectId: string, from: string, to: string)
   // Per-lead payments (each «Дата оплати N» + «Сума N» pair) count in the month they were paid — the cash view.
   // A sales sheet, when connected, is the money source instead, so nothing is counted twice.
   // Ad money is always taken from the per-lead payments: a sales sheet does not say where the client came from.
+  const [leadSheet] = await db
+    .select({ config: projectIntegrations.config })
+    .from(projectIntegrations)
+    .where(and(eq(projectIntegrations.projectId, projectId), eq(projectIntegrations.kind, "sheets_leads")))
+    .limit(1);
+  const sheetCfg = leadSheet?.config as { salesAutofill?: boolean; salesAutofillFrom?: string | null } | undefined;
+  const autofillFromMonth = sheetCfg?.salesAutofill && sheetCfg.salesAutofillFrom ? sheetCfg.salesAutofillFrom.slice(0, 7) : null;
+
   const paid = (
     await db.execute(sql`
       select left(coalesce(nullif(p->>'date', ''), to_char(${leads.leadAt}, 'YYYY-MM-DD')), 7) as month,
@@ -410,7 +418,9 @@ export async function projectFunnel(projectId: string, from: string, to: string)
         clientsAll: Number(c?.all_n ?? 0),
         salesCount: Number(s?.count ?? p?.n ?? 0),
         revenueAds: Number(p?.ads ?? 0),
-        revenue: Number(ss.length ? (s?.amount ?? 0) : (p?.amount ?? 0)),
+        // A sales tab the dashboard fills itself only repeats the leads' payments, shifted to period ends
+        // (30.10–01.11 lands in November): from its first owned month the leads' own payments are the total.
+        revenue: Number(ss.length && !(autofillFromMonth && m >= autofillFromMonth && p?.amount) ? (s?.amount ?? 0) : (p?.amount ?? 0)),
       };
     }),
   };
