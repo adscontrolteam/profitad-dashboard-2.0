@@ -29,7 +29,7 @@ interface DateWindow {
   to: string;
 }
 
-function datesIn({ from, to }: DateWindow) {
+export function datesIn({ from, to }: DateWindow) {
   const out: string[] = [];
   for (let d = from; d <= to; d = shiftIso(d, 1)) out.push(d);
   return out;
@@ -180,6 +180,9 @@ export interface SmmPost {
   comments: number;
   shares: number;
   hue: number;
+  /** Real publications: preview picture and link to the post. */
+  thumbnailUrl?: string | null;
+  permalink?: string | null;
 }
 
 export interface SmmReport {

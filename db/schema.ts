@@ -650,6 +650,9 @@ export const socialConnections = pgTable(
     /** ok | error */
     status: text("status").notNull().default("ok"),
     lastError: text("last_error"),
+    /** Statistics: when they were last pulled and what went wrong (null = fine). */
+    statsSyncedAt: timestamp("stats_synced_at", { withTimezone: true }),
+    statsError: text("stats_error"),
     connectedAt: timestamp("connected_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -657,6 +660,52 @@ export const socialConnections = pgTable(
 );
 
 export type SocialConnectionRow = typeof socialConnections.$inferSelect;
+
+/**
+ * Organic numbers of a connected social account, one row per day. `views`/`follows` come from the network's
+ * account statistics; `followers` is the total we saw that day (a snapshot taken by the sync).
+ */
+export const socialMetricsDaily = pgTable(
+  "social_metrics_daily",
+  {
+    projectId: text("project_id").notNull(),
+    network: text("network").$type<"facebook" | "instagram" | "threads">().notNull(),
+    accountId: text("account_id").notNull(),
+    date: date("date").notNull(),
+    views: integer("views"),
+    reach: integer("reach"),
+    /** New followers that day, when the network reports it. */
+    follows: integer("follows"),
+    /** Total followers, only on the days the sync ran. */
+    followers: integer("followers"),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.network, t.accountId, t.date] })],
+);
+
+/** Publications of a connected social account with their current counters (refreshed by the sync). */
+export const socialPosts = pgTable(
+  "social_posts",
+  {
+    projectId: text("project_id").notNull(),
+    network: text("network").$type<"facebook" | "instagram" | "threads">().notNull(),
+    accountId: text("account_id").notNull(),
+    postId: text("post_id").notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
+    /** reel | carousel | post | video */
+    kind: text("kind").notNull().default("post"),
+    title: text("title").notNull().default(""),
+    permalink: text("permalink"),
+    thumbnailUrl: text("thumbnail_url"),
+    views: integer("views").notNull().default(0),
+    likes: integer("likes").notNull().default(0),
+    comments: integer("comments").notNull().default(0),
+    shares: integer("shares").notNull().default(0),
+    saves: integer("saves").notNull().default(0),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.network, t.postId] }), index("social_posts_project_idx").on(t.projectId, t.network, t.publishedAt)],
+);
 
 /** Secret of a project's public «connect your social accounts» link; a new token revokes the old link. */
 export const socialConnectLinks = pgTable(

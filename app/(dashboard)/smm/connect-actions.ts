@@ -4,6 +4,7 @@ import { canViewProject } from "@/lib/access/policy";
 import { requireSection } from "@/lib/access/viewer";
 import { addLog } from "@/lib/log/store";
 import { connectBusinessPages, listBusinessPages, type BusinessPageView } from "@/lib/social/business";
+import { refreshSocialStats } from "@/lib/social/stats";
 import { removeConnection, rotateConnectLink, type ConnectedNetwork, type SocialAccountView } from "@/lib/social/store";
 
 /** The link and the connected accounts are managed by whoever edits the project's inputs (admins). */
@@ -48,6 +49,19 @@ export async function connectBusinessPagesAction(projectId: string, pageIds: str
       title: `Подключены соцсети из Business Manager: ${added.map((a) => `${a.network} ${a.name}`).join(", ")}`,
     }).catch(() => undefined);
     return { ok: true, accounts };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+}
+
+/** «Обновить» on the SMM page: pulls the statistics now. Anyone who sees the project's SMM may ask; problems stay on the accounts. */
+export async function refreshSocialStatsAction(projectId: string): Promise<{ ok: boolean; error?: string }> {
+  const viewer = await requireSection("smm");
+  if (!canViewProject(viewer.permissions, projectId)) return { ok: false, error: "Нет прав." };
+  try {
+    const results = await refreshSocialStats(projectId, { maxAgeMs: 60_000 });
+    const failed = results.find((r) => !r.ok);
+    return failed ? { ok: false, error: `${failed.name}: ${failed.message}` } : { ok: true };
   } catch (error) {
     return { ok: false, error: (error as Error).message };
   }

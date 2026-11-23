@@ -5,6 +5,7 @@ import { requireSection } from "@/lib/access/viewer";
 import { getVisibleProjects } from "@/lib/data";
 import { listOwnerCandidates } from "@/lib/projects/owners";
 import { adsConfigured, listAccounts } from "@/lib/google/ads";
+import { metaAdAccounts, metaConfigured } from "@/lib/meta/ads";
 import { serviceAccountEmail } from "@/lib/google/auth";
 import { listIntegrations, toView } from "@/lib/integrations/store";
 import { listProjectAccess } from "@/lib/access-sync/sync";
@@ -24,6 +25,7 @@ export default async function InputsPage() {
     permissions.canEditInputs ? listIntegrations() : Promise.resolve([]),
     permissions.canEditInputs && adsConfigured() ? listAccounts().catch(() => null) : Promise.resolve(null),
   ]);
+  const metaAccounts = permissions.canEditInputs && metaConfigured() ? await metaAdAccounts().catch(() => null) : null;
   const accessRows = permissions.canEditInputs ? await listProjectAccess(projects.map((p) => p.id)) : [];
   const accessByProject: Record<string, AccessView[]> = {};
   for (const r of accessRows)
@@ -53,6 +55,7 @@ export default async function InputsPage() {
         social={social}
         serviceAccountEmail={serviceAccountEmail()}
         adsAccounts={adsAccounts}
+        metaAccounts={metaAccounts}
         projects={projects.map(({ metrics: _m, stats: _s, ...project }) => project)}
         canEdit={permissions.canEditInputs}
         canCreate={permissions.canEditInputs && permissions.projects === "all"}

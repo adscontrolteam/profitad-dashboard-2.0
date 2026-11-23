@@ -43,6 +43,13 @@ export interface SocialInputs {
   byProject: Record<string, { accounts: SocialAccountView[]; token: string; seenAt: string | null }>;
 }
 
+export interface MetaAccountOption {
+  id: string;
+  name: string;
+  currency: string;
+  active: boolean;
+}
+
 export interface AdsAccountOption {
   id: string;
   name: string;
@@ -125,6 +132,7 @@ export function ProjectEditor({
   social,
   serviceAccountEmail,
   adsAccounts,
+  metaAccounts,
   canDelete,
   onClose,
 }: {
@@ -135,6 +143,7 @@ export function ProjectEditor({
   social: SocialInputs | null;
   serviceAccountEmail: string | null;
   adsAccounts: AdsAccountOption[] | null;
+  metaAccounts: MetaAccountOption[] | null;
   canDelete: boolean;
   onClose: () => void;
 }) {
@@ -453,6 +462,23 @@ export function ProjectEditor({
                       {adsAccounts.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.name || "Без названия"} · {a.id.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")} · {a.currency}
+                        </option>
+                      ))}
+                    </select>
+                  ) : source.platform === "meta" && metaAccounts && metaAccounts.length > 0 ? (
+                    <select
+                      value={source.accountId.replace(/\D/g, "")}
+                      onChange={(e) => setSources(sources.map((s, j) => (j === i ? { ...s, accountId: e.target.value } : s)))}
+                      className="field tabular-nums"
+                    >
+                      <option value="">Нет доступа / не выбран</option>
+                      {source.accountId && !metaAccounts.some((a) => a.id === source.accountId.replace(/\D/g, "")) && (
+                        <option value={source.accountId.replace(/\D/g, "")}>{source.accountId} (нет доступа у нашего BM)</option>
+                      )}
+                      {metaAccounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name || "Без названия"} · {a.id} · {a.currency}
+                          {a.active ? "" : " · не активен"}
                         </option>
                       ))}
                     </select>

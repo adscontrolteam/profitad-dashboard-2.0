@@ -101,6 +101,9 @@ export async function syncAll() {
   // Social accounts connected by clients: keep the Threads tokens alive.
   const { refreshSocialTokens } = await import("@/lib/social/oauth");
   results.push(...(await refreshSocialTokens().catch(() => [])));
+  // Organic numbers of the connected Facebook Pages and Instagram accounts.
+  const { syncAllSocialStats } = await import("@/lib/social/stats");
+  results.push(...(await syncAllSocialStats().catch(() => [])));
   // Project log: sync failures and daily checks.
   const { logSyncResults, runProjectChecks } = await import("@/lib/log/checks");
   await logSyncResults(results.filter((r) => r.kind !== "drive"));

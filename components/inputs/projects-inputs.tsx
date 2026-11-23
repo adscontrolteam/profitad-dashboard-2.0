@@ -15,7 +15,7 @@ import type { IntegrationView } from "@/lib/integrations/types";
 import type { AccessView } from "./project-access";
 import { cn } from "@/lib/cn";
 import type { AdsAccountOption } from "./project-editor";
-import { ProjectEditor, type EditableProject, type SocialInputs } from "./project-editor";
+import { ProjectEditor, type EditableProject, type MetaAccountOption, type SocialInputs } from "./project-editor";
 
 export function ProjectsInputs({
   projects,
@@ -25,6 +25,7 @@ export function ProjectsInputs({
   social,
   serviceAccountEmail,
   adsAccounts,
+  metaAccounts,
   canEdit,
   canCreate,
   canDelete,
@@ -38,6 +39,8 @@ export function ProjectsInputs({
   serviceAccountEmail: string | null;
   /** Google Ads accounts under the MCC; null when the API is not configured. */
   adsAccounts: AdsAccountOption[] | null;
+  /** Meta ad accounts our System User can read; null when the token is not set or Meta did not answer. */
+  metaAccounts: MetaAccountOption[] | null;
   canEdit: boolean;
   canCreate: boolean;
   canDelete: boolean;
@@ -132,6 +135,7 @@ export function ProjectsInputs({
           social={social}
           serviceAccountEmail={serviceAccountEmail}
           adsAccounts={adsAccounts}
+          metaAccounts={metaAccounts}
           canDelete={canDelete}
           onClose={() => setEditing(null)}
         />

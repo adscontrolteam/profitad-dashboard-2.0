@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { after } from "next/server";
+import { StatsRefresh } from "@/components/social/stats-refresh";
 import { SocialConnections } from "@/components/social/social-connections";
 import { NetworkIcon } from "@/components/smm/network-icon";
 import { Card } from "@/components/ui/card";
@@ -14,6 +16,8 @@ import { toLogItems } from "@/lib/log/view";
 import { formatNumber } from "@/lib/format";
 import { businessPagesConfigured } from "@/lib/social/business";
 import { providerConfigured } from "@/lib/social/oauth";
+import { liveSmmReport } from "@/lib/social/report";
+import { refreshSocialStats } from "@/lib/social/stats";
 import { ensureConnectLink, listSocialAccounts } from "@/lib/social/store";
 import { resolveWorkspace } from "@/lib/workspace/context";
 import { demoConnectedNetworks, demoSmmReport } from "@/lib/workspace/demo";
@@ -46,7 +50,12 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
   const showConnections = (net === "instagram" || net === "facebook" || net === "threads") && !live.has(net);
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
-  const report = demoSmmReport(ws.project.id, ws.project.name, net, { from: ws.range.from, to: ws.range.to });
+  // A connected Facebook Page or Instagram account shows its own numbers; everything else is still the demo.
+  const liveReport = net === "facebook" || net === "instagram" ? await liveSmmReport(ws.project.id, net, { from: ws.range.from, to: ws.range.to }) : null;
+  const report = liveReport ?? demoSmmReport(ws.project.id, ws.project.name, net, { from: ws.range.from, to: ws.range.to });
+  // Numbers older than an hour are pulled again once the page is sent (the nightly run is only daily).
+  const projectId = ws.project.id;
+  if (liveReport) after(() => refreshSocialStats(projectId).then(() => undefined, (e) => console.error("social stats", projectId, (e as Error).message)));
   const views = report.days.reduce((a, d) => a + d.views, 0);
   const likes = report.days.reduce((a, d) => a + d.likes, 0);
   const comments = report.days.reduce((a, d) => a + d.comments, 0);
@@ -90,7 +99,21 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
         />
       )}
 
-      <DemoNotice />
+      {liveReport ? (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[18px] border border-dashed border-border bg-card/60 px-4 py-2.5 text-xs leading-5 text-muted-foreground">
+          <span className={`size-1.5 shrink-0 rounded-full ${liveReport.error ? "bg-negative" : "bg-positive"}`} aria-hidden />
+          <span>
+            {liveReport.syncedAt
+              ? `Данные из ${net === "facebook" ? "Facebook" : "Instagram"} ${liveReport.handle} · обновлено ${new Date(liveReport.syncedAt).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Warsaw" })}`
+              : "Первая загрузка статистики идёт в фоне — нажмите «Обновить» через минуту."}
+            {!liveReport.dailyViews && liveReport.syncedAt ? " · просмотры показаны по дате публикации" : ""}
+          </span>
+          <StatsRefresh projectId={ws.project.id} />
+          {liveReport.error && <span className="basis-full text-negative">{liveReport.error}</span>}
+        </p>
+      ) : (
+        <DemoNotice />
+      )}
 
       <LogFocus projectId={ws.project.id} items={toLogItems(await listLog(ws.project.id, "smm"))} scope="smm" currency={ws.project.agent.currency} />
 
@@ -137,7 +160,7 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
             <KpiTile label="Вовлечённость (ER)" value={pct.format(er)} hint="реакции / просмотры" />
             <KpiTile label="Репосты" value={formatCompact(report.shares)} />
             <KpiTile label="Сохранения" value={formatCompact(report.saves)} />
-            <KpiTile label="Прирост подписчиков" value={`+${formatNumber(report.followersDelta)}`} />
+            <KpiTile label="Прирост подписчиков" value={`${report.followersDelta >= 0 ? "+" : "−"}${formatNumber(Math.abs(report.followersDelta))}`} />
             <KpiTile label="На 1000 просмотров" value={views ? `${((report.followersDelta / views) * 1000).toFixed(1)}` : "—"} hint="новых подписчиков" />
           </section>
 
@@ -162,6 +185,7 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
 
           <Card className="min-w-0">
             <h2 className="section-title mb-4">Что заходит — лучшие публикации</h2>
+            {report.top.length === 0 && <p className="text-sm text-muted-foreground">За этот период публикаций нет.</p>}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
               {report.top.map((post, i) => (
                 <article key={post.id} className="flex min-w-0 flex-col gap-2">
@@ -169,12 +193,24 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
                     className="relative aspect-[9/14] overflow-hidden rounded-[18px]"
                     style={{ background: `linear-gradient(160deg, hsl(${post.hue} 45% 35%), hsl(${(post.hue + 40) % 360} 40% 12%))` }}
                   >
+                    {post.thumbnailUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element -- the network's own short-lived preview address
+                      <img src={post.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 size-full object-cover" />
+                    )}
                     <span className="absolute top-2 left-2 rounded-full bg-cta px-2 py-0.5 text-[10px] font-bold text-cta-foreground">
                       №{i + 1}
                     </span>
                     <span className="absolute bottom-2 left-2 text-sm font-semibold text-white tabular-nums">▶ {formatNumber(post.views)}</span>
                   </div>
-                  <p className="line-clamp-2 text-[13px] font-medium">{post.title}</p>
+                  <p className="line-clamp-2 text-[13px] font-medium">
+                    {post.permalink ? (
+                      <a href={post.permalink} target="_blank" rel="noreferrer" className="hover:underline">
+                        {post.title}
+                      </a>
+                    ) : (
+                      post.title
+                    )}
+                  </p>
                   <p className="text-xs text-muted-foreground tabular-nums">
                     {post.kind} · {formatShortDate(post.date)} · ♥ {formatNumber(post.likes)} · 💬 {formatNumber(post.comments)}
                   </p>
