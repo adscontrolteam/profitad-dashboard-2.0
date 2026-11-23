@@ -304,13 +304,20 @@ async function pullFacebook(id: string, token: string, days: number): Promise<Pu
   let list: Post[] = [];
   // Comment and reaction counters need rights the token may not have: fall back to what Meta does give.
   const attempts = [`${base},${reactions},${comments}`, `${base},${reactions}`, base];
+  // What Meta said to the fullest request it refused: the warning carries it, so the missing right is visible on the page.
+  let refusal: string | null = null;
   for (let i = 0; i < attempts.length; i++) {
     try {
       list = (await graph<{ data?: Post[] }>(token, `${id}/published_posts`, { fields: attempts[i], limit: "100", since })).data ?? [];
-      if (i > 0) warnings.push(i === 1 ? "комментарии под постами недоступны этому ключу" : "реакции и комментарии под постами недоступны этому ключу");
+      if (i > 0)
+        warnings.push(
+          `${i === 1 ? "комментарии под постами недоступны этому ключу" : "реакции и комментарии под постами недоступны этому ключу"}${refusal ? ` (ответ Meta: ${refusal})` : ""}`,
+        );
       break;
     } catch (error) {
-      if (i === attempts.length - 1) warnings.push(`публикации: ${(error as Error).message}`);
+      const e = error as GraphError;
+      refusal ??= `${e.code ? `#${e.code} ` : ""}${e.message}`;
+      if (i === attempts.length - 1) warnings.push(`публикации: ${e.message}`);
     }
   }
 
