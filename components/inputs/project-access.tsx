@@ -40,11 +40,25 @@ export function ProjectAccess({ projectId, items }: { projectId: string; items: 
   const [pending, start] = useTransition();
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const current = items.filter((i) => !["revoked", "revoke_task"].includes(i.status) || i.error);
+  const count = (statuses: string[]) => current.filter((i) => statuses.includes(i.status)).length;
+  const failed = current.filter((i) => i.status === "failed" || i.error).length;
+  const tasks = count(["task", "revoke_task"]);
+  // The list is long: it opens by a button, and by itself only when something went wrong.
+  const [open, setOpen] = useState(failed > 0);
 
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-border p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-muted-foreground">Доступы специалистов</span>
+        <span className="flex min-w-0 flex-col">
+          <span className="text-[13px] font-semibold text-foreground">Доступы специалистов</span>
+          {current.length > 0 && (
+            <span className="text-xs text-muted-foreground">
+              всего {current.length}
+              {tasks > 0 && ` · задач на выдачу: ${tasks}`}
+              {failed > 0 && <span className="text-negative"> · с ошибкой: {failed}</span>}
+            </span>
+          )}
+        </span>
         <button
           type="button"
           className="btn-ghost border border-border px-3 py-1 text-xs"
@@ -62,6 +76,10 @@ export function ProjectAccess({ projectId, items }: { projectId: string; items: 
       </div>
       {current.length === 0 ? (
         <span className="text-xs text-muted-foreground">Пока ничего не выдано: назначьте ответственных и сохраните проект.</span>
+      ) : !open ? (
+        <button type="button" className="self-start text-xs text-foreground underline decoration-dotted underline-offset-4" onClick={() => setOpen(true)}>
+          Показать список ({current.length})
+        </button>
       ) : (
         <ul className="flex flex-col gap-1.5 text-xs">
           {current.map((i) => (

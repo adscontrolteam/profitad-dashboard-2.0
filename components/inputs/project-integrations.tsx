@@ -45,10 +45,9 @@ export function ProjectIntegrations({
   const byKind = new Map(integrations.map((i) => [i.kind, i]));
 
   return (
-    <fieldset className="flex flex-col gap-3">
-      <legend className="section-kicker mb-2">Подключения</legend>
+    <div className="flex flex-col gap-3">
       {serviceAccountEmail ? (
-        <p className="-mt-1 text-xs leading-5 text-muted-foreground">
+        <p className="text-xs leading-5 text-muted-foreground">
           Таблицы и папки в вашем Google Workspace доступны автоматически. Для чужих таблиц откройте доступ «Редактор» для{" "}
           <button
             type="button"
@@ -60,7 +59,7 @@ export function ProjectIntegrations({
           </button>
         </p>
       ) : (
-        <p className="-mt-1 text-xs leading-5 text-warning">
+        <p className="text-xs leading-5 text-warning">
           Сервис-аккаунт Google ещё не настроен — Таблицы и Drive заработают после этого (Настройки → Подключения).
         </p>
       )}
@@ -68,7 +67,7 @@ export function ProjectIntegrations({
       <LeadsSheetCard projectId={projectId} current={byKind.get("sheets_leads") as IntegrationView<"sheets_leads"> | undefined} />
       <ReportCard projectId={projectId} current={byKind.get("sheets_report") as IntegrationView<"sheets_report"> | undefined} />
       <DriveCard projectId={projectId} current={byKind.get("drive") as IntegrationView<"drive"> | undefined} />
-    </fieldset>
+    </div>
   );
 }
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { InfoHint } from "@/components/ui/info-hint";
 import Link from "next/link";
 import { analyzeBriefAction } from "@/app/(dashboard)/inputs/actions";
 import { briefTextAction } from "@/app/(dashboard)/inputs/brief-actions";
@@ -133,9 +132,7 @@ export function BriefConductor({
   const p = analysis?.passport;
 
   return (
-    <fieldset className="flex flex-col gap-3 rounded-2xl border border-border p-4">
-      <legend className="section-kicker px-1">Бриф целиком · Дирижёр <InfoHint className="ml-1">Вставьте бриф как есть: переписку с клиентом, заметки со звонка, анкету. Дирижёр разложит его по полям проекта и спросит то, чего не хватает для
-        запуска. В форму ничего не попадёт, пока вы не нажмёте «Применить».</InfoHint></legend>
+    <div className="flex flex-col gap-3">
       {!projectId && (
         <div className="flex flex-col gap-2 rounded-[16px] border border-border bg-background/60 px-3 py-3">
           <p className="text-sm font-semibold">Бриф клиента</p>
@@ -269,7 +266,7 @@ export function BriefConductor({
           </div>
         </div>
       )}
-    </fieldset>
+    </div>
   );
 }
 

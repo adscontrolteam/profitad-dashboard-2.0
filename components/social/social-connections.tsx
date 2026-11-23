@@ -19,6 +19,7 @@ export function SocialConnections({
   accounts: initial,
   ready,
   canManage,
+  embedded = false,
 }: {
   projectId: string;
   origin: string;
@@ -28,6 +29,8 @@ export function SocialConnections({
   accounts: SocialAccountView[];
   ready: { meta: boolean; threads: boolean; business: boolean };
   canManage: boolean;
+  /** Inside the project editor: the block around it already has the title, so no card and no heading of its own. */
+  embedded?: boolean;
 }) {
   const [link, setLink] = useState(token ? `${origin}/connect/${token}` : null);
   const [accounts, setAccounts] = useState(initial);
@@ -50,18 +53,22 @@ export function SocialConnections({
       } else setPickerError(res.error ?? "Не удалось получить список страниц.");
     });
   const fmt = (iso: string) => new Date(iso).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  /** In the editor «Сохранить» is the one loud button. */
+  const main = embedded ? "btn-ghost border border-border px-3.5 py-2 text-sm text-foreground" : "btn-primary";
   const missing = [!ready.meta && "Facebook и Instagram", !ready.threads && "Threads"].filter(Boolean).join(", ");
 
   return (
-    <section className="flex flex-col gap-4 rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="section-title">Соцсети проекта</h2>
-        <InfoHint>
-          Клиент открывает ссылку без регистрации, входит в Facebook и Threads на их сайтах и разрешает доступ. Пароли к нам не попадают:
-          мы храним только зашифрованный ключ доступа. Ключ Threads живёт 60 дней и продлевается автоматически.
-        </InfoHint>
-        {link && <span className="text-xs text-muted-foreground">{seenAt ? `клиент открывал ${fmt(seenAt)}` : "клиент ещё не открывал"}</span>}
-      </div>
+    <section className={embedded ? "flex flex-col gap-3" : "flex flex-col gap-4 rounded-[var(--radius)] border border-border bg-card p-4 shadow-[var(--shadow)] sm:p-6"}>
+      {!embedded && (
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="section-title">Соцсети проекта</h2>
+          <InfoHint>
+            Клиент открывает ссылку без регистрации, входит в Facebook и Threads на их сайтах и разрешает доступ. Пароли к нам не попадают:
+            мы храним только зашифрованный ключ доступа. Ключ Threads живёт 60 дней и продлевается автоматически.
+          </InfoHint>
+          {link && <span className="text-xs text-muted-foreground">{seenAt ? `клиент открывал ${fmt(seenAt)}` : "клиент ещё не открывал"}</span>}
+        </div>
+      )}
 
       {accounts.length > 0 ? (
         <ul className="flex flex-col gap-2">
@@ -108,7 +115,7 @@ export function SocialConnections({
         <div className="flex flex-col gap-3">
           {pages === null ? (
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className="btn-primary" disabled={pending} onClick={openPicker}>
+              <button type="button" className={main} disabled={pending} onClick={openPicker}>
                 {pending ? "Загружаем…" : "Выбрать из Business Manager"}
               </button>
               <InfoHint>
@@ -170,12 +177,17 @@ export function SocialConnections({
         </div>
       )}
 
+      {link && embedded && (
+        <p className="-mb-1 text-[13px] font-semibold text-foreground">
+          Ссылка для клиента <span className="ml-1 text-xs font-normal text-muted-foreground">{seenAt ? `открывал ${fmt(seenAt)}` : "ещё не открывал"}</span>
+        </p>
+      )}
       {link && (
         <div className="flex flex-wrap gap-2">
-          <input readOnly className="field min-w-0 flex-1 text-sm" value={link} onFocus={(e) => e.target.select()} aria-label="Ссылка для клиента" />
+          <input readOnly className={embedded ? "field basis-full text-sm" : "field min-w-0 flex-1 text-sm"} value={link} onFocus={(e) => e.target.select()} aria-label="Ссылка для клиента" />
           <button
             type="button"
-            className="btn-primary"
+            className={main}
             onClick={async () => {
               await navigator.clipboard.writeText(link);
               setCopied(true);
@@ -184,12 +196,12 @@ export function SocialConnections({
           >
             {copied ? "Скопировано ✓" : "Скопировать"}
           </button>
-          <a href={link} target="_blank" rel="noreferrer" className="btn-ghost border border-border px-3 py-1.5">
+          <a href={link} target="_blank" rel="noreferrer" className={embedded ? "btn-ghost border border-border px-3.5 py-2 text-sm" : "btn-ghost border border-border px-3 py-1.5"}>
             Как видит клиент
           </a>
           <button
             type="button"
-            className="btn-ghost border border-border px-3 py-1.5 text-xs"
+            className={embedded ? "btn-ghost border border-border px-3.5 py-2 text-sm" : "btn-ghost border border-border px-3 py-1.5 text-xs"}
             disabled={pending}
             onClick={() => {
               if (!confirm("Выдать новую ссылку? Старая перестанет работать, подключённые аккаунты останутся.")) return;

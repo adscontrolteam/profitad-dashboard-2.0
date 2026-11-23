@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { manychatHookAction } from "@/app/(dashboard)/inputs/manychat-actions";
-import { InfoHint } from "@/components/ui/info-hint";
 
 const body = (step: "start" | "lead") =>
   `{
@@ -44,16 +43,9 @@ export function ManychatConnect({ projectId }: { projectId: string }) {
     });
 
   return (
-    <fieldset className="flex flex-col gap-3">
-      <legend className="section-kicker mb-2">
-        ManyChat: воронки в сообщениях{" "}
-        <InfoHint className="ml-1">
-          В каждую автоматизацию ManyChat добавляются два действия «Make External Request»: одно сразу после триггера (запуск воронки), второе
-          рядом с передачей лида в CRM. Они сообщают дашборду шаг и кодовое слово — из этого строится вкладка «Сообщения» в SMM.
-        </InfoHint>
-      </legend>
+    <div className="flex flex-col gap-3">
       {!info ? (
-        <button type="button" className="btn-ghost self-start border border-border px-3 py-1.5 text-xs" disabled={pending} onClick={() => load()}>
+        <button type="button" className="btn-ghost self-start border border-border px-3.5 py-2 text-sm text-foreground" disabled={pending} onClick={() => load()}>
           {pending ? "Загружаем…" : "Показать адрес и инструкцию"}
         </button>
       ) : (
@@ -90,6 +82,6 @@ export function ManychatConnect({ projectId }: { projectId: string }) {
           </div>
         </div>
       )}
-    </fieldset>
+    </div>
   );
 }
