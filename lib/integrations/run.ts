@@ -3,7 +3,7 @@ import { revalidateTag } from "next/cache";
 import { TAGS } from "@/lib/data/tags";
 import { pullBitrix, pullKommo } from "./crm";
 import { readLeadsSheet, writeReport } from "./sheets";
-import { dropOtherSales, listIntegrations, markIntegration, patchIntegrationConfig, readSecret, replaceLeads, replaceSales, upsertLeads, type IntegrationRecord } from "./store";
+import { crmLeadKeys, dropOtherSales, listIntegrations, markIntegration, patchIntegrationConfig, readSecret, replaceLeads, replaceSales, upsertLeads, type IntegrationRecord } from "./store";
 import type { CrmConfig, SheetsLeadsConfig, SheetsReportConfig } from "./types";
 
 const DAY = 86_400_000;
@@ -41,7 +41,16 @@ async function run(rec: IntegrationRecord): Promise<string> {
     case "sheets_leads": {
       const cfg = rec.config as SheetsLeadsConfig;
       let { leads, sales, summary, firstAt } = await readLeadsSheet(cfg);
-      const n = await replaceLeads(rec.projectId, "sheet", leads);
+      // CRM first: a person the CRM already has is counted from the CRM, with its status; the sheet row is dropped.
+      const inCrm = await crmLeadKeys(rec.projectId);
+      const fromSheet = inCrm.size
+        ? leads.filter((l) => {
+            const digits = l.phone.replace(/\D/g, "");
+            return !((digits.length >= 7 && inCrm.has(digits.slice(-9))) || (l.email.trim() && inCrm.has(l.email.trim().toLowerCase())));
+          })
+        : leads;
+      const crmNote = leads.length - fromSheet.length ? ` · уже есть в CRM: ${leads.length - fromSheet.length}` : "";
+      const n = await replaceLeads(rec.projectId, "sheet", fromSheet);
       // The dashboard keeps the sales tab itself: write the owned periods, then read the tab back with them.
       let filled = "";
       if (cfg.salesAutofill && cfg.salesTab) {
@@ -54,7 +63,7 @@ async function run(rec: IntegrationRecord): Promise<string> {
       const salesSource = cfg.salesTab ? `sheet:${cfg.spreadsheetId}:${cfg.salesTab}` : null;
       await dropOtherSales(rec.projectId, salesSource);
       const s = sales && salesSource ? await replaceSales(rec.projectId, salesSource, sales) : null;
-      return `Лидов: ${n} (${summary})${s !== null ? ` · продаж за периоды: ${s}` : ""}${filled}`;
+      return `Лидов: ${n} (${summary})${s !== null ? ` · продаж за периоды: ${s}` : ""}${filled}${crmNote}`;
     }
     case "sheets_report": {
       const cells = await writeReport(rec.projectId, rec.config as SheetsReportConfig, 3);

@@ -185,6 +185,24 @@ export async function replaceSales(projectId: string, source: string, items: Nor
   return items.length;
 }
 
+/**
+ * Phones (last 9 digits) and emails of the project's CRM leads. A project with a CRM takes leads and their statuses
+ * from it; the lead sheet then only adds people the CRM does not have.
+ */
+export async function crmLeadKeys(projectId: string) {
+  const rows = await getDb()
+    .select({ phone: leads.phone, email: leads.email })
+    .from(leads)
+    .where(and(eq(leads.projectId, projectId), sql`${leads.source} <> 'sheet'`));
+  const keys = new Set<string>();
+  for (const r of rows) {
+    const digits = r.phone.replace(/\D/g, "");
+    if (digits.length >= 7) keys.add(digits.slice(-9));
+    if (r.email.trim()) keys.add(r.email.trim().toLowerCase());
+  }
+  return keys;
+}
+
 /** Sales sources other than this one (a re-configured sheet must not leave old rows behind). */
 export async function dropOtherSales(projectId: string, keep: string | null) {
   const db = getDb();
