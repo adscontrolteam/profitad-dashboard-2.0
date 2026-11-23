@@ -16,7 +16,6 @@ import type { OwnerCandidates, OwnerOption } from "@/lib/projects/owners";
 import type { IntegrationView } from "@/lib/integrations/types";
 import { ProjectIntegrations } from "./project-integrations";
 import { SocialConnections } from "@/components/social/social-connections";
-import { ManychatConnect } from "./manychat-connect";
 import type { SocialAccountView } from "@/lib/social/store";
 import { ProjectAccess, type AccessView } from "./project-access";
 import { META_LEAD_OPTIONS, META_SUBSCRIBER_OPTIONS, metaActionLabel } from "@/lib/meta/results";
@@ -579,8 +578,6 @@ export function ProjectEditor({
             dailyReport={agentDailyReport}
             setDailyReport={setAgentDailyReport}
           />
-
-          {social && project && <ManychatConnect key={`mc-${project.id}`} projectId={project.id} />}
 
           {social &&
             (project ? (

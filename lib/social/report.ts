@@ -2,7 +2,6 @@ import "server-only";
 import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { getDb } from "@/db";
 import { socialConnections, socialMetricsDaily, socialPosts, type SocialAudience } from "@/db/schema";
-import { manychatEventsIn, manychatStatus } from "@/lib/manychat/store";
 import { datesIn, type SmmPost, type SmmReport } from "@/lib/workspace/demo";
 import { shiftIso } from "@/lib/workspace/params";
 
@@ -37,17 +36,6 @@ export interface SmmAnalyticsData {
   profileViews: number | null;
   audience: SocialAudience | null;
   dailyViews: boolean;
-  /** Funnel steps reported by ManyChat automations in the period; `connected` is false until the first one ever arrives. */
-  messages: {
-    connected: boolean;
-    funnels: { keyword: string; start: number; contact: number; lead: number }[];
-    /** Funnel starts by weekday (Mon first) and three-hour slot, Warsaw time. */
-    heat: number[][];
-    /** Publications by the funnel starts within 48 hours after them. */
-    posts: { id: string; title: string; kind: SmmPost["kind"]; date: string; count: number }[];
-    /** What people wrote when it was not the code word itself. */
-    texts: { text: string; count: number }[];
-  };
 }
 
 export interface LiveSmmReport extends SmmReport {
@@ -180,51 +168,6 @@ export async function liveSmmReport(projectId: string, network: LiveNetwork, win
     for (const d of windowDaily) for (const [k, v] of Object.entries(pick(d) ?? {})) out[k] = (out[k] ?? 0) + v;
     return Object.keys(out).length ? out : null;
   };
-  // ManyChat: what the automations reported in the period.
-  const [mcStatus, events] = await Promise.all([
-    manychatStatus(projectId),
-    manychatEventsIn(projectId, new Date(`${window.from}T00:00:00Z`), new Date(`${window.to}T23:59:59Z`)),
-  ]);
-  const funnelMap = new Map<string, { keyword: string; start: number; contact: number; lead: number }>();
-  const heat = Array.from({ length: 7 }, () => Array<number>(8).fill(0));
-  const postCounts = new Map<string, number>();
-  const textCounts = new Map<string, number>();
-  const warsaw = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Warsaw", weekday: "short", hour: "2-digit", hour12: false });
-  const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  for (const e of events) {
-    const f = funnelMap.get(e.keyword) ?? { keyword: e.keyword, start: 0, contact: 0, lead: 0 };
-    f[e.step] += 1;
-    funnelMap.set(e.keyword, f);
-    if (e.step !== "start") continue;
-    const parts = warsaw.formatToParts(e.receivedAt);
-    const weekday = WEEKDAYS.indexOf(parts.find((x) => x.type === "weekday")?.value ?? "");
-    const hour = Number(parts.find((x) => x.type === "hour")?.value ?? 0) % 24;
-    if (weekday >= 0) heat[weekday][Math.floor(hour / 3)] += 1;
-    // The publication that most likely caused it: the latest one of the two days before, the one naming the word first.
-    const at = e.receivedAt.getTime();
-    const near = posts.filter((p) => p.publishedAt.getTime() <= at && at - p.publishedAt.getTime() <= 48 * 3600_000).sort((x, y) => y.publishedAt.getTime() - x.publishedAt.getTime());
-    const cause = near.find((p) => p.title.toUpperCase().includes(e.keyword)) ?? near[0];
-    if (cause) postCounts.set(cause.postId, (postCounts.get(cause.postId) ?? 0) + 1);
-    const said = e.lastInput.trim().toLowerCase().slice(0, 80);
-    if (said && said.toUpperCase() !== e.keyword) textCounts.set(said, (textCounts.get(said) ?? 0) + 1);
-  }
-  const messages: SmmAnalyticsData["messages"] = {
-    connected: mcStatus.count > 0,
-    funnels: [...funnelMap.values()].sort((x, y) => y.start - x.start || y.lead - x.lead),
-    heat,
-    posts: [...postCounts.entries()]
-      .sort((x, y) => y[1] - x[1])
-      .slice(0, 5)
-      .flatMap(([id, count]) => {
-        const p = posts.find((x) => x.postId === id);
-        return p ? [{ id, title: p.title || "Без подписи", kind: KIND[p.kind] ?? ("Пост" as const), date: day(p.publishedAt), count }] : [];
-      }),
-    texts: [...textCounts.entries()]
-      .sort((x, y) => y[1] - x[1])
-      .slice(0, 6)
-      .map(([text, count]) => ({ text, count })),
-  };
-
   const analytics: SmmAnalyticsData = {
     network,
     handle: account.name,
@@ -248,7 +191,6 @@ export async function liveSmmReport(projectId: string, network: LiveNetwork, win
     profileViews: total(windowDaily, (d) => d.extra?.profileViews),
     audience: account.audience ?? null,
     dailyViews,
-    messages,
   };
 
   return {

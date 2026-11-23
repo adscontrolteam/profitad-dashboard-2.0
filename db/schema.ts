@@ -730,6 +730,36 @@ export const socialPosts = pgTable(
   (t) => [primaryKey({ columns: [t.projectId, t.network, t.postId] }), index("social_posts_project_idx").on(t.projectId, t.network, t.publishedAt)],
 );
 
+/** Secret of a project's ManyChat address: automations post their funnel steps to /api/hooks/manychat/<token>. */
+export const manychatHooks = pgTable(
+  "manychat_hooks",
+  {
+    projectId: text("project_id").primaryKey(),
+    token: text("token").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("manychat_hooks_token_idx").on(t.token)],
+);
+
+/** One funnel step reported by a ManyChat automation («Make External Request»). The time is when we received it. */
+export const manychatEvents = pgTable(
+  "manychat_events",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    /** start = the automation was triggered, contact = the person left a contact, lead = handed over to the CRM. */
+    step: text("step").$type<"start" | "contact" | "lead">().notNull(),
+    /** The code word of the funnel, as typed into the automation's request. */
+    keyword: text("keyword").notNull(),
+    subscriberId: text("subscriber_id").notNull().default(""),
+    igUsername: text("ig_username").notNull().default(""),
+    /** What the person wrote last before the step. */
+    lastInput: text("last_input").notNull().default(""),
+    receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("manychat_events_project_idx").on(t.projectId, t.receivedAt)],
+);
+
 /** Secret of a project's public «connect your social accounts» link; a new token revokes the old link. */
 export const socialConnectLinks = pgTable(
   "social_connect_links",
