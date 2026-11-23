@@ -34,10 +34,13 @@ function Copy({ text, label }: { text: string; label: string }) {
 export function ManychatConnect({ projectId }: { projectId: string }) {
   const [info, setInfo] = useState<{ url: string; count: number; lastAt: string | null } | null>(null);
   const [pending, start] = useTransition();
-  const load = () =>
+  /** When «Обновить» last asked the server, so a press that finds nothing new still visibly did something. */
+  const [checked, setChecked] = useState<{ at: string; ok: boolean } | null>(null);
+  const load = (manual = false) =>
     start(async () => {
-      const res = await manychatHookAction(projectId);
+      const res = await manychatHookAction(projectId).catch(() => ({ ok: false }) as Awaited<ReturnType<typeof manychatHookAction>>);
       if (res.ok && res.url) setInfo({ url: res.url, count: res.count ?? 0, lastAt: res.lastAt ?? null });
+      if (manual) setChecked({ at: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" }), ok: res.ok });
     });
 
   return (
@@ -50,7 +53,7 @@ export function ManychatConnect({ projectId }: { projectId: string }) {
         </InfoHint>
       </legend>
       {!info ? (
-        <button type="button" className="btn-ghost self-start border border-border px-3 py-1.5 text-xs" disabled={pending} onClick={load}>
+        <button type="button" className="btn-ghost self-start border border-border px-3 py-1.5 text-xs" disabled={pending} onClick={() => load()}>
           {pending ? "Загружаем…" : "Показать адрес и инструкцию"}
         </button>
       ) : (
@@ -63,9 +66,16 @@ export function ManychatConnect({ projectId }: { projectId: string }) {
             {info.count
               ? `Событий получено: ${info.count}. Последнее — ${new Date(info.lastAt!).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}.`
               : "Событий пока не было. После настройки нажмите в ManyChat «Test Request» и обновите здесь."}{" "}
-            <button type="button" className="underline decoration-dotted underline-offset-4" disabled={pending} onClick={load}>
-              Обновить
+            <button type="button" className="underline decoration-dotted underline-offset-4 disabled:opacity-60" disabled={pending} onClick={() => load(true)}>
+              {pending ? "Проверяем…" : "Обновить"}
             </button>
+            {checked && !pending && (
+              <span className={checked.ok ? "ml-2" : "ml-2 text-negative"}>
+                {checked.ok
+                  ? `Проверено в ${checked.at}: ${info.count ? `событий ${info.count}` : "от ManyChat пока ничего не приходило — адрес работает, запрос не отправлен из автоматизации"}.`
+                  : "Не удалось проверить — обновите страницу и попробуйте ещё раз."}
+              </span>
+            )}
           </p>
           <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-xs leading-5 text-muted-foreground">
             <li>В автоматизации ManyChat: «+» → Action → Make External Request.</li>
