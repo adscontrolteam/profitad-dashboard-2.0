@@ -63,6 +63,28 @@ export function parseSheetDate(v: string): Date | null {
   return null;
 }
 
+/**
+ * Payment date as people type it: full («19.11.2026») or just day and month («19.11», «19/11»).
+ * Without a year it is the first such day on or after the lead's date — a payment cannot precede its lead.
+ */
+export function paymentDate(v: string, leadAt: Date): string {
+  const full = parseSheetDate(v);
+  if (full) return full.toISOString().slice(0, 10);
+  const m = (v ?? "").trim().match(/^(\d{1,2})[./-](\d{1,2})\.?$/);
+  if (!m) return "";
+  const day = Number(m[1]), month = Number(m[2]);
+  if (day < 1 || day > 31 || month < 1 || month > 12) return "";
+  const leadDay = leadAt.toISOString().slice(0, 10);
+  for (const year of [leadAt.getUTCFullYear(), leadAt.getUTCFullYear() + 1]) {
+    const d = new Date(Date.UTC(year, month - 1, day));
+    if (d.getUTCMonth() !== month - 1) continue; // 31.02
+    const iso = d.toISOString().slice(0, 10);
+    // One day of slack: the lead's time is UTC, the manager's date is local.
+    if (iso >= new Date(Date.parse(leadDay) - 86_400_000).toISOString().slice(0, 10)) return iso;
+  }
+  return "";
+}
+
 /** «glick: Cj0…;\nutm_source: google;…» → keys normalized (their template has typos: glick, utm_meduim, utm_compaign, refferer). */
 export function parseAttribution(text: string): Record<string, string> {
   const fix: Record<string, string> = { glick: "gclid", utm_meduim: "utm_medium", utm_compaign: "utm_campaign", refferer: "referrer" };
@@ -94,6 +116,8 @@ export interface ParsedTab {
   skipped: number;
   /** Earliest dated row of the tab, test rows included: the day the table came alive. */
   firstAt: Date | null;
+  /** Currency named in the payment column header («Сума ГРН» → UAH); "" when the header does not say. */
+  paymentCurrency: string;
 }
 
 /** One lead per row. `tab` goes into raw so a lead can be traced back. */
@@ -136,7 +160,7 @@ export function parseLeadRows(tab: string, values: string[][]): ParsedTab {
     }
     const status = statusIsOutcome ? cell(row, "status") : "";
     const payments = payCols
-      .map((c) => ({ date: c.date >= 0 ? (parseSheetDate(row[c.date] ?? "")?.toISOString().slice(0, 10) ?? "") : "", amount: c.amount >= 0 ? parseMoney(row[c.amount] ?? "") : 0 }))
+      .map((c) => ({ date: c.date >= 0 ? paymentDate(row[c.date] ?? "", leadAt) : "", amount: c.amount >= 0 ? parseMoney(row[c.amount] ?? "") : 0 }))
       .filter((p) => p.date || p.amount > 0);
     const value = payments.reduce((a, p) => a + p.amount, 0);
     const utm: Record<string, string> = Object.fromEntries(
@@ -179,13 +203,18 @@ export function parseLeadRows(tab: string, values: string[][]): ParsedTab {
       raw: { tab, message: cell(row, "message").slice(0, 500), payments },
     });
   }
-  return { leads, columns: (Object.keys(idx) as Field[]).filter((f) => idx[f] >= 0), skipped, firstAt };
+  const sumHead = payCols.length && payCols[0].amount >= 0 ? norm(header[payCols[0].amount]) : "";
+  const paymentCurrency = /грн|uah|₴/.test(sumHead) ? "UAH" : /eur|€/.test(sumHead) ? "EUR" : /usd|\$/.test(sumHead) ? "USD" : /pln|zł/.test(sumHead) ? "PLN" : "";
+  return { leads, columns: (Object.keys(idx) as Field[]).filter((f) => idx[f] >= 0), skipped, firstAt, paymentCurrency };
 }
 
 export interface Payment {
   /** YYYY-MM-DD, may be empty when only the amount is filled. */
   date: string;
   amount: number;
+  /** Set when `amount` was converted: what the sheet says and in which currency. */
+  original?: number;
+  currency?: string;
 }
 
 /**

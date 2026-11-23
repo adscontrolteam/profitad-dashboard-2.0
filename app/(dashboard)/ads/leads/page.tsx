@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ProjectLeads } from "@/components/projects/project-leads";
+import { AutoRefresh } from "@/components/projects/auto-refresh";
 import { Card } from "@/components/ui/card";
 import { WorkspaceHeader } from "@/components/workspace/header";
 import { EmptyProjects } from "@/components/workspace/toolbar";
@@ -19,6 +20,7 @@ export default async function AdsLeadsPage({ searchParams }: PageProps<"/ads/lea
   return (
     <div className="flex flex-col gap-5">
       {header}
+      <AutoRefresh projectId={ws.project.id} />
       {(await ProjectLeads({ projectId: ws.project.id, limit: 300 })) ?? (
         <Card>
           <p className="text-sm text-muted-foreground">Лидов пока нет: подключите таблицу лидов или CRM во «Вводных» → проект → «Подключения».</p>

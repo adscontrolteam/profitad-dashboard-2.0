@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MetricsGrid } from "@/components/projects/metrics-grid";
 import { ProjectFunnel } from "@/components/projects/project-funnel";
+import { AutoRefresh } from "@/components/projects/auto-refresh";
 import { LogFocus } from "@/components/log/log-focus";
 import { ProjectAsk } from "@/components/projects/project-ask";
 import { askConfigured, chatUsage, listChat } from "@/lib/ai/ask";
@@ -150,6 +151,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
 
       <MetricsGrid metrics={project.metrics} currency={project.agent.currency} />
 
+      <AutoRefresh projectId={project.id} />
       <ProjectFunnel
         projectId={project.id}
         currency={project.agent.currency}

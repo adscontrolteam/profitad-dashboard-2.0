@@ -38,6 +38,11 @@ export interface SheetsLeadsConfig extends SheetConfig {
   tabs?: string[];
   /** Optional tab with sales per period: «Період», «Кількість», «Сума». */
   salesTab?: string | null;
+  /**
+   * Payments typed in another currency («Сума ГРН») are converted to the project's ad-account currency at today's
+   * NBU rate on every sync, so revenue, ROAS and prices are in one currency. Off unless turned on for the project.
+   */
+  convertToProjectCurrency?: boolean;
   /** The dashboard fills new periods of the sales tab itself (ad leads, target / non-target, payments). */
   salesAutofill?: boolean;
   /** First period start (YYYY-MM-DD) the dashboard owns; rows before it were kept by hand and are never touched. */

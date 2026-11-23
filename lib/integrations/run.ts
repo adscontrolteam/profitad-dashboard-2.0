@@ -40,7 +40,12 @@ async function run(rec: IntegrationRecord): Promise<string> {
     }
     case "sheets_leads": {
       const cfg = rec.config as SheetsLeadsConfig;
-      let { leads, sales, summary, firstAt } = await readLeadsSheet(cfg);
+      const { getDb } = await import("@/db");
+      const { projects } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      const [proj] = await getDb().select({ currency: projects.currency }).from(projects).where(eq(projects.id, rec.projectId)).limit(1);
+      const currency = proj?.currency ?? null;
+      let { leads, sales, summary, firstAt } = await readLeadsSheet(cfg, new Date(), currency);
       // CRM first: a person the CRM already has is counted from the CRM, with its status; the sheet row is dropped.
       const inCrm = await crmLeadKeys(rec.projectId);
       const fromSheet = inCrm.size
@@ -57,7 +62,7 @@ async function run(rec: IntegrationRecord): Promise<string> {
         const { fillSalesTab } = await import("./sales-autofill");
         const r = await fillSalesTab(rec.projectId, cfg, firstAt);
         if (r.from && r.from !== cfg.salesAutofillFrom) await patchIntegrationConfig(rec.projectId, "sheets_leads", { salesAutofillFrom: r.from });
-        if (r.cells) ({ leads, sales, summary, firstAt } = await readLeadsSheet(cfg));
+        if (r.cells) ({ leads, sales, summary, firstAt } = await readLeadsSheet(cfg, new Date(), currency));
         filled = r.message ? ` · ${r.message}` : "";
       }
       const salesSource = cfg.salesTab ? `sheet:${cfg.spreadsheetId}:${cfg.salesTab}` : null;

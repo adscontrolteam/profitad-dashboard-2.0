@@ -200,13 +200,27 @@ export async function resetReportCopy(spreadsheetId: string, tabs: ReportTab[]) 
  * Reads every lead tab (one lead per row) and the optional sales tab of a client's sheet.
  * Test rows are skipped, the same person on the same day is one lead.
  */
-export async function readLeadsSheet(cfg: SheetsLeadsConfig, today = new Date()) {
+export async function readLeadsSheet(cfg: SheetsLeadsConfig, today = new Date(), projectCurrency: string | null = null) {
   const all: NormalizedLead[] = [];
+  let fxNote = "";
   const notes: string[] = [];
   let firstAt: Date | null = null;
   for (const tab of leadTabsOf(cfg)) {
     const parsed = parseLeadRows(tab, await readRange(cfg.spreadsheetId, tab, "A1:Z5000"));
     if (!parsed.columns.includes("date")) throw new Error(`На листе «${tab}» в первой строке нет колонки «Дата»/«Date».`);
+    // Payments in another currency → the ad account's currency at today's rate (only where turned on).
+    if (cfg.convertToProjectCurrency && projectCurrency && parsed.paymentCurrency && parsed.paymentCurrency !== projectCurrency) {
+      const { fxRate } = await import("@/lib/fx");
+      const { rate, date } = await fxRate(parsed.paymentCurrency, projectCurrency);
+      for (const lead of parsed.leads) {
+        const raw = lead.raw as { payments?: { date: string; amount: number; original?: number; currency?: string }[] };
+        if (!raw.payments?.length) continue;
+        raw.payments = raw.payments.map((p) => ({ ...p, original: p.amount, currency: parsed.paymentCurrency, amount: Math.round(p.amount * rate * 100) / 100 }));
+        const sum = raw.payments.reduce((a, p) => a + p.amount, 0);
+        lead.value = sum > 0 ? Math.round(sum * 100) / 100 : null;
+      }
+      fxNote = ` · ${parsed.paymentCurrency} → ${projectCurrency} по курсу НБУ${date ? ` на ${date}` : ""}: ${(1 / rate).toFixed(2)}`;
+    }
     all.push(...parsed.leads);
     if (parsed.firstAt && (!firstAt || parsed.firstAt < firstAt)) firstAt = parsed.firstAt;
     notes.push(`${tab}: ${parsed.leads.length}${parsed.skipped ? ` (тестовых/без даты: ${parsed.skipped})` : ""}`);
@@ -218,5 +232,5 @@ export async function readLeadsSheet(cfg: SheetsLeadsConfig, today = new Date())
     if (parsed.problem) throw new Error(parsed.problem);
     sales = parsed.sales;
   }
-  return { leads, sales, firstAt, summary: `${notes.join(" · ")}${merged ? ` · дублей склеено: ${merged}` : ""}` };
+  return { leads, sales, firstAt, summary: `${notes.join(" · ")}${merged ? ` · дублей склеено: ${merged}` : ""}${fxNote}` };
 }

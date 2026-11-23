@@ -48,6 +48,8 @@ interface Columns {
   meta: { total: number; target: number; junk: number } | null;
   /** Currency named in the sum header («Сума ГРН» → грн). */
   currency: string;
+  /** A second sum column in dollars («Сума $»): the same payments in the ad account's currency. */
+  salesSumUsd: number;
 }
 
 /** Finds «Google ADS → Всього / Цільові / Нецільові» and «Продажі → Кількість / Сума» in the two header rows. */
@@ -76,6 +78,7 @@ function findColumns(head: string[][]): Columns | null {
     note,
     meta: metaCols && metaCols.total >= 0 && metaCols.target >= 0 && metaCols.junk >= 0 ? metaCols : null,
     currency: /грн|uah|₴/.test(sumHead) ? "грн" : /usd|\$/.test(sumHead) ? "$" : /pln|zł/.test(sumHead) ? "zł" : "€",
+    salesSumUsd: sub.findIndex((c, i) => i > salesSum && i <= salesSum + 2 && /сум|amount/.test(n(c)) && /\$|usd/.test(n(c))),
   };
   return cols.total >= 0 && cols.target >= 0 && cols.junk >= 0 && cols.salesSum >= 0 ? cols : null;
 }
@@ -136,12 +139,13 @@ export async function fillSalesTab(projectId: string, cfg: SheetsLeadsConfig, fi
     .groupBy(sql`1, 2`);
   const pays = (
     await db.execute(sql`
-      select d.day, (p->>'amount')::float8 as amount, ${leads.id} as id, ${leads.name} as name
+      select d.day, (p->>'amount')::float8 as amount, coalesce((p->>'original')::float8, (p->>'amount')::float8) as original,
+             ${leads.id} as id, ${leads.name} as name
       from ${leads}, jsonb_array_elements(coalesce(${leads.raw}->'payments', '[]'::jsonb)) p,
            -- A payment without a date counts on the day the lead came.
            lateral (select coalesce(nullif(p->>'date', ''), to_char(${leads.leadAt} at time zone ${TZ}, 'YYYY-MM-DD')) as day) d
       where ${leads.projectId} = ${projectId} and d.day >= ${from} and (p->>'amount')::float8 > 0`)
-  ).rows as { day: string; amount: number; id: string; name: string }[];
+  ).rows as { day: string; amount: number; original: number; id: string; name: string }[];
 
   // The «Інстаграм» block is ours only in projects that really have Meta leads; elsewhere it stays as kept by hand.
   const useMeta = Boolean(cols.meta) && leadRows.some((l) => l.meta);
@@ -188,7 +192,10 @@ export async function fillSalesTab(projectId: string, cfg: SheetsLeadsConfig, fi
       );
     }
     const ps = pays.filter((p) => inB(p.day));
-    const sum = Math.round(ps.reduce((a, p) => a + Number(p.amount), 0) * 100) / 100;
+    // The sheet's own currency goes into the main sum column; the converted amount into «Сума $» when the tab has it.
+    const sum = Math.round(ps.reduce((a, p) => a + Number(p.original), 0) * 100) / 100;
+    const converted = Math.round(ps.reduce((a, p) => a + Number(p.amount), 0) * 100) / 100;
+    if (cols.salesSumUsd >= 0) cells.push({ tab: cfg.salesTab, cell: `${letter(cols.salesSumUsd)}${rowNo}`, value: converted && converted !== sum ? converted : "" });
     const payers = new Set(ps.map((p) => p.id)).size;
 
     cells.push(
@@ -200,7 +207,7 @@ export async function fillSalesTab(projectId: string, cfg: SheetsLeadsConfig, fi
     if (cols.salesCount >= 0) cells.push({ tab: cfg.salesTab, cell: `${letter(cols.salesCount)}${rowNo}`, value: payers || "" });
     const note = String(target!.cells[cols.note] ?? "").trim();
     if (cols.note >= 0 && (!note || note.startsWith(AUTO))) {
-      const who = ps.map((p) => `${p.name || "без имени"} ${Math.round(Number(p.amount))} ${cols.currency}`).join(", ");
+      const who = ps.map((p) => `${p.name || "без имени"} ${Math.round(Number(p.original))} ${cols.currency}`).join(", ");
       cells.push({ tab: cfg.salesTab, cell: `${letter(cols.note)}${rowNo}`, value: who ? `${AUTO} ${who}` : "" });
     }
   }
