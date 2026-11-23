@@ -133,7 +133,8 @@ async function pullInstagram(id: string, token: string, days: number): Promise<P
           if (part === "byType" || part === "byFollower") {
             const b = await graph<{ data?: { total_value?: { breakdowns?: { results?: Split[] }[] } }[] }>(token, `${id}/insights`, {
               metric: "views",
-              breakdown: part === "byType" ? "media_product_type" : "follower_type",
+              // Meta's metric table spells it `follower_type` for views, but the API takes only `follow_type` (error #100 otherwise).
+              breakdown: part === "byType" ? "media_product_type" : "follow_type",
               ...window,
             });
             const out: Record<string, number> = {};

@@ -4,8 +4,11 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { refreshSocialStatsAction } from "@/app/(dashboard)/smm/connect-actions";
 
-/** Pulls the project's Facebook and Instagram numbers now and shows the fresh page. */
-export function StatsRefresh({ projectId }: { projectId: string }) {
+/**
+ * Pulls the project's Facebook and Instagram numbers now and shows the fresh page.
+ * `shown` is the problem the page already prints for the open account: the same text is not repeated next to the button.
+ */
+export function StatsRefresh({ projectId, shown }: { projectId: string; shown?: string | null }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [note, setNote] = useState<string | null>(null);
@@ -25,7 +28,7 @@ export function StatsRefresh({ projectId }: { projectId: string }) {
       >
         {pending ? "Обновляем…" : "Обновить"}
       </button>
-      {note && <span className="text-negative">{note}</span>}
+      {note && !(shown && note.endsWith(shown)) && <span className="text-negative">{note}</span>}
     </>
   );
 }

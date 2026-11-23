@@ -85,7 +85,7 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
               : "Первая загрузка статистики идёт в фоне — нажмите «Обновить» через минуту."}
             {!liveReport.dailyViews && liveReport.syncedAt ? " · просмотры показаны по дате публикации" : ""}
           </span>
-          <StatsRefresh projectId={ws.project.id} />
+          <StatsRefresh projectId={ws.project.id} shown={liveReport.error} />
           {liveReport.error && <span className="basis-full text-negative">{liveReport.error}</span>}
         </p>
       ) : (
