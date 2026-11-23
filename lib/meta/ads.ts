@@ -94,3 +94,8 @@ export async function metaAdAccounts() {
   );
   return (await allPages(first)).map((a) => ({ id: a.account_id, name: a.name, currency: a.currency, active: a.account_status === 1 }));
 }
+
+/** Every row of a list edge, as the System User (follows paging). */
+export async function metaList<R>(path: string, params: Record<string, string>) {
+  return allPages<R>(await metaGet<{ data?: R[]; paging?: { next?: string } }>(path, params));
+}

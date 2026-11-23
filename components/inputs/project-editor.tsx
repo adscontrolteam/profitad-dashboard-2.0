@@ -15,6 +15,8 @@ import { METRICS, PLATFORM_LABELS } from "@/lib/domain/metrics";
 import type { OwnerCandidates, OwnerOption } from "@/lib/projects/owners";
 import type { IntegrationView } from "@/lib/integrations/types";
 import { ProjectIntegrations } from "./project-integrations";
+import { SocialConnections } from "@/components/social/social-connections";
+import type { SocialAccountView } from "@/lib/social/store";
 import { ProjectAccess, type AccessView } from "./project-access";
 import { metaActionLabel } from "@/lib/meta/results";
 import { BriefConductor } from "./brief-conductor";
@@ -33,6 +35,13 @@ import {
 } from "@/lib/domain/types";
 
 export type EditableProject = Omit<Project, "metrics">;
+
+/** Social accounts of every project, for the «Соцсети проекта» block of the editor. */
+export interface SocialInputs {
+  origin: string;
+  ready: { meta: boolean; threads: boolean; business: boolean };
+  byProject: Record<string, { accounts: SocialAccountView[]; token: string; seenAt: string | null }>;
+}
 
 export interface AdsAccountOption {
   id: string;
@@ -113,6 +122,7 @@ export function ProjectEditor({
   owners,
   integrations,
   access,
+  social,
   serviceAccountEmail,
   adsAccounts,
   canDelete,
@@ -122,6 +132,7 @@ export function ProjectEditor({
   owners: OwnerCandidates;
   integrations: IntegrationView[];
   access: AccessView[];
+  social: SocialInputs | null;
   serviceAccountEmail: string | null;
   adsAccounts: AdsAccountOption[] | null;
   canDelete: boolean;
@@ -541,6 +552,26 @@ export function ProjectEditor({
             dailyReport={agentDailyReport}
             setDailyReport={setAgentDailyReport}
           />
+
+          {social &&
+            (project ? (
+              <SocialConnections
+                projectId={project.id}
+                origin={social.origin}
+                token={social.byProject[project.id]?.token ?? null}
+                seenAt={social.byProject[project.id]?.seenAt ?? null}
+                accounts={social.byProject[project.id]?.accounts ?? []}
+                ready={social.ready}
+                canManage
+              />
+            ) : (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="section-kicker mb-2">Соцсети проекта</legend>
+                <p className="text-sm text-muted-foreground">
+                  Сохраните проект — после этого здесь появятся выбор страниц Facebook и Instagram из Business Manager и ссылка для клиента.
+                </p>
+              </fieldset>
+            ))}
 
           {project ? (
             <ProjectIntegrations projectId={project.id} integrations={integrations} serviceAccountEmail={serviceAccountEmail} />

@@ -159,3 +159,13 @@ export async function deleteAccountEverywhere(network: ConnectedNetwork, externa
     .where(and(eq(socialConnections.network, network), eq(socialConnections.externalId, externalId)))
     .returning({ projectId: socialConnections.projectId, name: socialConnections.name });
 }
+
+/** For «Вводные»: every project's accounts and client link in one go (the link is created when missing). */
+export async function socialByProject(projectIds: string[]) {
+  const out: Record<string, { accounts: SocialAccountView[]; token: string; seenAt: string | null }> = {};
+  for (const id of projectIds) {
+    const [accounts, link] = await Promise.all([listSocialAccounts(id), ensureConnectLink(id)]);
+    out[id] = { accounts, token: link.token, seenAt: link.seenAt?.toISOString() ?? null };
+  }
+  return out;
+}

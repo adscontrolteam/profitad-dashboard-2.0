@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { ProjectsInputs } from "@/components/inputs/projects-inputs";
 import { requireSection } from "@/lib/access/viewer";
 import { getVisibleProjects } from "@/lib/data";
@@ -8,6 +9,9 @@ import { serviceAccountEmail } from "@/lib/google/auth";
 import { listIntegrations, toView } from "@/lib/integrations/store";
 import { listProjectAccess } from "@/lib/access-sync/sync";
 import type { IntegrationView } from "@/lib/integrations/types";
+import { businessPagesConfigured } from "@/lib/social/business";
+import { providerConfigured } from "@/lib/social/oauth";
+import { socialByProject } from "@/lib/social/store";
 import type { AccessView } from "@/components/inputs/project-access";
 
 export const metadata: Metadata = { title: "Вводные" };
@@ -24,6 +28,14 @@ export default async function InputsPage() {
   const accessByProject: Record<string, AccessView[]> = {};
   for (const r of accessRows)
     (accessByProject[r.projectId] ??= []).push({ service: r.service, email: r.email, status: r.status, error: r.error, role: r.role, target: r.target });
+  const h = await headers();
+  const social = permissions.canEditInputs
+    ? {
+        origin: `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`,
+        ready: { meta: providerConfigured("meta"), threads: providerConfigured("threads"), business: businessPagesConfigured() },
+        byProject: await socialByProject(projects.map((p) => p.id)),
+      }
+    : null;
   const integrationsByProject: Record<string, IntegrationView[]> = {};
   for (const rec of integrations) (integrationsByProject[rec.projectId] ??= []).push(toView(rec));
 
@@ -38,6 +50,7 @@ export default async function InputsPage() {
         owners={owners}
         integrations={integrationsByProject}
         access={accessByProject}
+        social={social}
         serviceAccountEmail={serviceAccountEmail()}
         adsAccounts={adsAccounts}
         projects={projects.map(({ metrics: _m, stats: _s, ...project }) => project)}

@@ -45,7 +45,23 @@
 `instagram_content_publish`, `instagram_manage_insights`, `business_management`; для Threads — `threads_basic`,
 `threads_content_publish`, `threads_manage_insights`.
 
-## 5. Как это хранится
+## 5. Facebook и Instagram без входа — из Business Manager
+
+Основной способ для Facebook и Instagram: кнопка «Выбрать из Business Manager» в блоке «Соцсети проекта». Дашборд читает страницы
+как системный пользователь нашего БМ (`META_SYSTEM_USER_TOKEN`), в проекте отмечаются нужные галочками. Никто никуда не входит,
+доступ не зависит от личного профиля.
+
+1. Клиент даёт нашему БМ партнёрский доступ к странице Facebook (Instagram должен быть привязан к ней и быть бизнес-аккаунтом
+   или аккаунтом автора).
+2. В БМ: Системные пользователи → наш пользователь → «Назначить объекты» → Страницы → отметить страницы клиентов (контент и
+   статистика).
+3. Токен системного пользователя должен быть выпущен с правами `ads_read`, `read_insights`, `pages_show_list`,
+   `pages_read_engagement`, `instagram_basic`, `instagram_manage_insights`. Если токен выпускали только под рекламу —
+   сгенерировать новый и заменить `META_SYSTEM_USER_TOKEN` в Vercel, затем Redeploy.
+
+Ссылка для клиента остаётся для Threads (у него нет доступа через БМ) и на случай, когда клиент не может дать партнёрский доступ.
+
+## 6. Как это хранится
 
 Таблица `social_connections`: одна строка на страницу Facebook, аккаунт Instagram или аккаунт Threads. Ключи страниц Facebook
 (ими же читается Instagram) не истекают; ключ Threads живёт 60 дней и продлевается ежедневным кроном. Если продление не удалось,

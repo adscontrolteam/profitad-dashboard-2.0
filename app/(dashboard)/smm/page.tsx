@@ -12,6 +12,7 @@ import { LogFocus } from "@/components/log/log-focus";
 import { listLog } from "@/lib/log/store";
 import { toLogItems } from "@/lib/log/view";
 import { formatNumber } from "@/lib/format";
+import { businessPagesConfigured } from "@/lib/social/business";
 import { providerConfigured } from "@/lib/social/oauth";
 import { ensureConnectLink, listSocialAccounts } from "@/lib/social/store";
 import { resolveWorkspace } from "@/lib/workspace/context";
@@ -79,7 +80,7 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
         token={connectLink?.token ?? null}
         seenAt={connectLink?.seenAt?.toISOString() ?? null}
         accounts={accounts}
-        ready={{ meta: providerConfigured("meta"), threads: providerConfigured("threads") }}
+        ready={{ meta: providerConfigured("meta"), threads: providerConfigured("threads"), business: businessPagesConfigured() }}
         canManage={canManage}
       />
 

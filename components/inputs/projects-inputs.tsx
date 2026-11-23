@@ -15,13 +15,14 @@ import type { IntegrationView } from "@/lib/integrations/types";
 import type { AccessView } from "./project-access";
 import { cn } from "@/lib/cn";
 import type { AdsAccountOption } from "./project-editor";
-import { ProjectEditor, type EditableProject } from "./project-editor";
+import { ProjectEditor, type EditableProject, type SocialInputs } from "./project-editor";
 
 export function ProjectsInputs({
   projects,
   owners,
   integrations,
   access,
+  social,
   serviceAccountEmail,
   adsAccounts,
   canEdit,
@@ -32,6 +33,8 @@ export function ProjectsInputs({
   owners: OwnerCandidates;
   integrations: Record<string, IntegrationView[]>;
   access: Record<string, AccessView[]>;
+  /** Null for viewers who cannot edit the inputs. */
+  social: SocialInputs | null;
   serviceAccountEmail: string | null;
   /** Google Ads accounts under the MCC; null when the API is not configured. */
   adsAccounts: AdsAccountOption[] | null;
@@ -126,6 +129,7 @@ export function ProjectsInputs({
           owners={owners}
           integrations={editing === "new" ? [] : (integrations[editing.id] ?? [])}
           access={editing === "new" ? [] : (access[editing.id] ?? [])}
+          social={social}
           serviceAccountEmail={serviceAccountEmail}
           adsAccounts={adsAccounts}
           canDelete={canDelete}
