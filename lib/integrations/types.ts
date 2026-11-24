@@ -23,6 +23,10 @@ export interface CrmConfig {
   type: CrmType;
   /** Kommo/amoCRM account domain, e.g. agency.kommo.com */
   domain?: string;
+  /** HubSpot: which contacts are leads. «ads» = paid source, click id or the mark below; unset = all (first version). */
+  hubspotFilter?: "all" | "ads";
+  /** HubSpot: internal name of a checkbox property the client ticks on ad leads entered by hand, e.g. profitad_lead. */
+  hubspotMark?: string;
 }
 
 export interface SheetConfig {

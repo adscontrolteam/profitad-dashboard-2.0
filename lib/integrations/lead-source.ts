@@ -33,6 +33,8 @@ export function leadSource(utm: Record<string, string> | null | undefined): Lead
   // A click id (gclid and the like) or a paid UTM medium: the lead came from ads.
   if (u.ad === "google") return { label: "Google Ads", tone: "ads", hint: u.gclid ? "есть gclid" : "платная UTM-метка" };
   if (u.ad === "meta") return { label: "Meta Ads", tone: "ads", hint: u.fbclid ? "есть fbclid" : "платная UTM-метка" };
+  if (u.ad === "manual") return { label: "Реклама", tone: "ads", hint: "отмечен в CRM как лид с рекламы" };
+  if (u.ad) return { label: "Реклама", tone: "ads", hint: "платная UTM-метка" };
   for (const [re, label] of AI) if (re.test(source) || re.test(u.referrer ?? "")) return { label, tone: "ai", hint: `utm_source: ${source || u.referrer}` };
   if (source) {
     const known = NAMES.find(([re]) => re.test(source))?.[1];

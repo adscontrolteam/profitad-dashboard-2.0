@@ -98,7 +98,7 @@ Google Workspace.
 | **Вебхук** (любая CRM, Tilda, формы, Zapier/Make) | Ничего: нажать «Создать вебхук» и передать адрес в CRM. Поля: `name`, `phone`, `email`, `status`, `value`, `utm_*`, `created_at`, `id` |
 | **Kommo / amoCRM** | Домен (`agency.kommo.com`) и долгосрочный токен: Настройки → Интеграции → Создать интеграцию → Ключи и доступы |
 | **Bitrix24** | Ссылку входящего вебхука с правами CRM и «Пользователи»: Разработчикам → Другое → Входящий вебхук |
-| **HubSpot** | Service Key с правом чтения контактов (`crm.objects.contacts.read`): Settings → Integrations → Service Keys |
+| **HubSpot** | Service Key с правами `crm.objects.contacts.read` и `crm.schemas.contacts.read`: Settings → Integrations → Service Keys |
 
 Kommo, Bitrix24 и HubSpot опрашиваются раз в день и по кнопке «Синхр.»: история за 90 дней при первом подключении,
 дальше только изменения. Вебхук принимает лиды сразу. Токены хранятся зашифрованными, в браузер не отдаются.
@@ -107,8 +107,16 @@ Kommo, Bitrix24 и HubSpot опрашиваются раз в день и по �
 (Unqualified → нецелевой, Attempted to contact → не дозвонились, Connected / In progress / Open deal → целевой,
 Bad timing → отказ) и Lifecycle stage (MQL, SQL, Opportunity → целевой, Customer → оплата); свои названия статусов
 читаются по смыслу. Сумма — «Total revenue» контакта, то есть выручка его выигранных сделок. Источник и кампания —
-из UTM-свойств контакта, если они есть, иначе из «Original source» HubSpot. Забираются все контакты аккаунта,
-изменённые за период, отдельного фильтра «только из рекламы» нет.
+из UTM-свойств контакта, если они есть, иначе из «Original source» HubSpot. При подключении выбирается, кого
+считать лидом:
+
+- **Только лиды с рекламы** (по умолчанию) — контакт, у которого Original или Latest source = Paid social / Paid search,
+  есть клик-метка Facebook или Google либо платная UTM-метка (`utm_medium` = cpc, ppc, paid). Лидов, заведённых руками,
+  клиент отмечает галочкой в своём свойстве контакта (например `profitad_lead`) — его внутреннее имя вписывается в
+  поле «Свойство-отметка».
+- **Все контакты аккаунта** — без отбора.
+
+Чтобы статусы приходили с названиями, а не внутренними кодами, ключу нужно ещё право `crm.schemas.contacts.read`.
 
 ## 7. Meta
 

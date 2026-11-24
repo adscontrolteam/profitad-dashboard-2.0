@@ -269,7 +269,7 @@ const HS_PROPS = [
   "lifecyclestage", "hs_lead_status",
   // Money of the closed-won deals linked to the contact — HubSpot keeps these itself.
   "total_revenue", "recent_deal_amount", "num_associated_deals",
-  "hs_analytics_source", "hs_analytics_source_data_1", "hs_analytics_source_data_2",
+  "hs_analytics_source", "hs_analytics_source_data_1", "hs_analytics_source_data_2", "hs_latest_source",
   "hs_google_click_id", "hs_facebook_click_id",
   // Custom UTM properties many accounts add to their forms.
   "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
@@ -329,7 +329,7 @@ const HS_SOURCE: Record<string, string> = {
 };
 
 /** One HubSpot contact → a lead. Exported for the fixture check. */
-export function normalizeHubspotContact(c: HsContact, labels?: { stage?: Map<string, string>; lead?: Map<string, string> }): NormalizedLead {
+export function normalizeHubspotContact(c: HsContact, labels?: { stage?: Map<string, string>; lead?: Map<string, string> }, mark?: string): NormalizedLead {
   const p = c.properties ?? {};
   const stage = str(p.lifecyclestage);
   const leadStatus = str(p.hs_lead_status);
@@ -361,8 +361,14 @@ export function normalizeHubspotContact(c: HsContact, labels?: { stage?: Map<str
   const d2 = str(p.hs_analytics_source_data_2);
   if (str(p.hs_google_click_id)) utm.gclid = str(p.hs_google_click_id);
   if (str(p.hs_facebook_click_id)) utm.fbclid = str(p.hs_facebook_click_id);
-  if (utm.gclid || source === "PAID_SEARCH") utm.ad = "google";
-  else if (utm.fbclid || source === "PAID_SOCIAL") utm.ad = "meta";
+  // Paid by the first touch, by the latest one (a known contact who came back through an ad), or by a paid UTM medium.
+  const latest = str(p.hs_latest_source).toUpperCase();
+  const paidUtm = /(^|[^a-z])(cpc|ppc|paid|paidsocial)([^a-z]|$)/i.test(utm.utm_medium ?? "");
+  if (utm.gclid || source === "PAID_SEARCH" || (latest === "PAID_SEARCH" && source !== "PAID_SOCIAL")) utm.ad = "google";
+  else if (utm.fbclid || source === "PAID_SOCIAL" || latest === "PAID_SOCIAL") utm.ad = "meta";
+  else if (paidUtm) utm.ad = /google|bing|search/i.test(utm.utm_source ?? "") ? "google" : /facebook|instagram|meta|\bfb\b|\big\b/i.test(utm.utm_source ?? "") ? "meta" : "paid";
+  // The client's own tick on a lead entered by hand: an ad lead HubSpot could not trace.
+  else if (mark && hubspotMarked(p[mark])) utm.ad = "manual";
   if (source) utm.hs_source = source;
   if (!utm.utm_source) {
     if (source === "PAID_SOCIAL" && d1) utm.utm_source = d1;
@@ -387,11 +393,26 @@ export function normalizeHubspotContact(c: HsContact, labels?: { stage?: Map<str
   } satisfies NormalizedLead;
 }
 
+const hubspotMarked = (v: unknown) => {
+  const s = str(v).toLowerCase();
+  return s !== "" && !["false", "no", "0", "нет"].includes(s);
+};
+
+/** true / false when HubSpot answers; null when the key may not read property definitions (then the name is trusted). */
+export async function hubspotHasProperty(token: string, name: string): Promise<boolean | null> {
+  const res = await fetch(`${HUBSPOT}/crm/v3/properties/contacts/${encodeURIComponent(name)}`, { headers: { authorization: `Bearer ${token.trim()}` }, cache: "no-store" });
+  if (res.ok) return true;
+  if (res.status === 404) return false;
+  return null;
+}
+
 /**
  * Contacts changed since the last sync. A contact is a lead; its lead status and lifecycle stage give the outcome,
- * the revenue of its closed-won deals gives the value.
+ * the revenue of its closed-won deals gives the value. With the «ads» filter only contacts HubSpot traced to paid
+ * traffic, or ticked by the client, are kept — the account also holds people who never saw our ads.
  */
-export async function pullHubspot(token: string, since: Date): Promise<NormalizedLead[]> {
+export async function pullHubspot(token: string, since: Date, opts: { filter?: "all" | "ads"; mark?: string } = {}): Promise<{ leads: NormalizedLead[]; scanned: number }> {
+  const mark = opts.mark?.trim() || undefined;
   const [stage, lead] = await Promise.all([hubspotLabels(token, "lifecyclestage"), hubspotLabels(token, "hs_lead_status")]);
   const seen = new Map<string, HsContact>();
   let from = since.getTime();
@@ -404,7 +425,7 @@ export async function pullHubspot(token: string, since: Date): Promise<Normalize
       const data: HsSearch = await hubspotCall<HsSearch>(token, HUBSPOT_SEARCH, {
         filterGroups: [{ filters: [{ propertyName: "lastmodifieddate", operator: "GTE", value: String(from) }] }],
         sorts: [{ propertyName: "lastmodifieddate", direction: "ASCENDING" }],
-        properties: HS_PROPS,
+        properties: mark ? [...HS_PROPS, mark] : HS_PROPS,
         limit: 200,
         ...(after ? { after } : {}),
       });
@@ -421,7 +442,8 @@ export async function pullHubspot(token: string, since: Date): Promise<Normalize
     if (rows < 10_000 || last <= from) break;
     from = last;
   }
-  return [...seen.values()].map((c) => normalizeHubspotContact(c, { stage, lead }));
+  const all = [...seen.values()].map((c) => normalizeHubspotContact(c, { stage, lead }, mark));
+  return { leads: opts.filter === "ads" ? all.filter((l) => l.utm.ad) : all, scanned: all.length };
 }
 
 export { toDate };

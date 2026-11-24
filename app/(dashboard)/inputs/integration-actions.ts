@@ -8,7 +8,7 @@ import { randomToken } from "@/lib/crypto";
 import { GoogleApiError, GoogleNotConfigured } from "@/lib/google/auth";
 import { folderInfo, parseFolderId } from "@/lib/google/drive";
 import { parseSpreadsheetId, spreadsheetInfo } from "@/lib/google/sheets";
-import { testBitrix, testHubspot, testKommo } from "@/lib/integrations/crm";
+import { hubspotHasProperty, testBitrix, testHubspot, testKommo } from "@/lib/integrations/crm";
 import { isCrmType, isIntegrationKind, type CrmType, type IntegrationKind } from "@/lib/integrations/kinds";
 import { syncIntegration } from "@/lib/integrations/run";
 import { detectReport } from "@/lib/integrations/sheets";
@@ -67,7 +67,10 @@ async function done(viewer: Viewer, action: string, projectId: string, result: I
 
 /* ---------- CRM ---------- */
 
-export async function saveCrmAction(projectId: string, input: { type: CrmType; domain?: string; secret?: string }): Promise<IntegrationResult> {
+export async function saveCrmAction(
+  projectId: string,
+  input: { type: CrmType; domain?: string; secret?: string; hubspotFilter?: "all" | "ads"; hubspotMark?: string },
+): Promise<IntegrationResult> {
   const viewer = await admin();
   if (!isCrmType(input.type)) return { ok: false, message: "Выберите тип CRM." };
   const secret = (input.secret ?? "").trim();
@@ -101,8 +104,14 @@ export async function saveCrmAction(projectId: string, input: { type: CrmType; d
       const existing = await getIntegration(projectId, "crm");
       const token = secret || (existing?.config.type === "hubspot" ? readSecret(existing) : null);
       if (!token) return { ok: false, message: "Вставьте Service Key из HubSpot." };
+      const filter = input.hubspotFilter === "all" ? "all" : "ads";
+      const mark = filter === "ads" ? (input.hubspotMark ?? "").trim().toLowerCase() : "";
+      if (mark && !/^[a-z][a-z0-9_]{0,99}$/.test(mark)) return { ok: false, message: "Внутреннее имя свойства — латиницей, без пробелов: например profitad_lead." };
       const info = await testHubspot(token);
-      await saveIntegration(projectId, "crm", { type: "hubspot" }, secret || undefined, viewer.email);
+      if (mark && (await hubspotHasProperty(token, mark)) === false) {
+        return { ok: false, message: `В HubSpot нет свойства контакта с внутренним именем «${mark}». Проверьте имя в Settings → Properties.` };
+      }
+      await saveIntegration(projectId, "crm", { type: "hubspot", hubspotFilter: filter, ...(mark ? { hubspotMark: mark } : {}) }, secret || undefined, viewer.email);
       const sync = await trySync(projectId, "crm");
       return done(viewer, "integration.crm.hubspot", projectId, { ok: true, message: `HubSpot подключён (${info}). ${sync}` });
     }

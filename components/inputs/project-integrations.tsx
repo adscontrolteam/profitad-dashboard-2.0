@@ -156,10 +156,12 @@ function CrmCard({ projectId, current }: { projectId: string; current?: Integrat
   const [type, setType] = useState<CrmType>(cfg?.type ?? "webhook");
   const [domain, setDomain] = useState(cfg?.domain ?? "");
   const [secret, setSecret] = useState("");
+  const [hsFilter, setHsFilter] = useState<"all" | "ads">(cfg?.type === "hubspot" ? (cfg.hubspotFilter ?? "all") : "ads");
+  const [hsMark, setHsMark] = useState(cfg?.hubspotMark ?? "");
   const [url, setUrl] = useState<string | null>(null);
   const { pending, result, run } = useRunner();
 
-  const save = () => run(() => saveCrmAction(projectId, { type, domain, secret }), (r) => {
+  const save = () => run(() => saveCrmAction(projectId, { type, domain, secret, hubspotFilter: hsFilter, hubspotMark: hsMark }), (r) => {
     if (r.webhookUrl) setUrl(r.webhookUrl);
     if (r.ok) setSecret("");
   });
@@ -249,9 +251,22 @@ function CrmCard({ projectId, current }: { projectId: string; current?: Integrat
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
           />
+          <select className="field" value={hsFilter} onChange={(e) => setHsFilter(e.target.value as "all" | "ads")} aria-label="Какие контакты считать лидами">
+            <option value="ads">Только лиды с рекламы</option>
+            <option value="all">Все контакты аккаунта</option>
+          </select>
+          {hsFilter === "ads" && (
+            <>
+              <input className="field" placeholder="Свойство-отметка, например profitad_lead (необязательно)" value={hsMark} onChange={(e) => setHsMark(e.target.value)} />
+              <InfoHint caption="Кто считается лидом с рекламы">
+                Контакт, у которого HubSpot сам определил платный источник (Original или Latest source — Paid social / Paid search), есть клик-метка Facebook или Google, либо платная UTM-метка. Лидов, заведённых вручную,
+                клиент отмечает галочкой в своём свойстве — впишите сюда его внутреннее имя.
+              </InfoHint>
+            </>
+          )}
           <InfoHint caption="Где взять ключ">
-            HubSpot → Settings → Integrations → Service Keys → создать ключ с правом чтения контактов (crm.objects.contacts.read). Лидом считается контакт: статус берётся из Lead status и Lifecycle stage, сумма — из
-            выручки по его сделкам.
+            HubSpot → Settings → Integrations → Service Keys → создать ключ с правом чтения контактов (crm.objects.contacts.read) и, чтобы статусы шли с названиями, свойств контактов (crm.schemas.contacts.read). Лидом
+            считается контакт: статус берётся из Lead status и Lifecycle stage, сумма — из выручки по его сделкам.
           </InfoHint>
           <SaveButton pending={pending} onClick={save} />
         </>
