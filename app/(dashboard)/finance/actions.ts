@@ -19,6 +19,7 @@ import {
   saveInvoice,
   saveMethod,
   savePlan,
+  saveSmmRate,
   saveStaff,
   saveTerms,
   setInvoiceStatus,
@@ -305,7 +306,9 @@ export async function saveBuyerRateAction(_prev: FinState, f: FormData): Promise
   const rate = num(f, "rate");
   if (!projectId) return { ok: false, message: "Нет проекта." };
   if (rate === "bad" || (rate !== null && rate < 0)) return { ok: false, message: "Ставка должна быть числом." };
-  await saveBuyerRate(projectId, rate);
+  // The same form sets the SMM rate of the project.
+  if (text(f, "kind", 20) === "smm") await saveSmmRate(projectId, rate);
+  else await saveBuyerRate(projectId, rate);
   refresh();
   return { ok: true, message: "Ставка сохранена." };
 }

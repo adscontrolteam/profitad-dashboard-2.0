@@ -9,9 +9,11 @@ import {
   finPaymentMethods,
   finPayouts,
   finPlans,
+  finSmmRates,
   finStaff,
   finTerms,
   finTermsMonthly,
+  socialConnections,
   type FinExpenseRow,
   type FinInvoiceRow,
   type FinPaymentMethodRow,
@@ -254,6 +256,31 @@ export async function saveBuyerRate(projectId: string, rate: number | null) {
   }
   const values = { projectId, rate, updatedAt: new Date() };
   await db.insert(finBuyerRates).values(values).onConflictDoUpdate({ target: finBuyerRates.projectId, set: values });
+}
+
+/* ---------- SMM rates ---------- */
+
+export async function listSmmRates(): Promise<Map<string, number>> {
+  const rows = await getDb().select().from(finSmmRates);
+  return new Map(rows.map((r) => [r.projectId, r.rate]));
+}
+
+export async function saveSmmRate(projectId: string, rate: number | null) {
+  const db = getDb();
+  if (rate === null) {
+    await db.delete(finSmmRates).where(eq(finSmmRates.projectId, projectId));
+    return;
+  }
+  const values = { projectId, rate, updatedAt: new Date() };
+  await db.insert(finSmmRates).values(values).onConflictDoUpdate({ target: finSmmRates.projectId, set: values });
+}
+
+/** How many different social networks are connected to each project (Facebook, Instagram, Threads). */
+export async function listSocialNetworks(): Promise<Map<string, number>> {
+  const rows = await getDb().selectDistinct({ projectId: socialConnections.projectId, network: socialConnections.network }).from(socialConnections);
+  const out = new Map<string, number>();
+  for (const r of rows) out.set(r.projectId, (out.get(r.projectId) ?? 0) + 1);
+  return out;
 }
 
 /** Amount of an invoice in another currency: through the agreed rate when the invoice has one, else by market rates. */

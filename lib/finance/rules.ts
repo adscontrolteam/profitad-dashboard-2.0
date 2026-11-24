@@ -61,6 +61,26 @@ export interface PayLine {
   forecast: boolean;
 }
 
+/* ---------------- SMM pay ---------------- */
+
+/** Monthly rate for running a project's social networks, USD: one network, two, three and more. */
+export const SMM_RATES = { one: 120, two: 150, many: 200 } as const;
+/** Setting up the social networks before running them: a one-off task of 2–3 weeks, set by hand as the rate. */
+export const SMM_SETUP_RATE = 100;
+
+/** Rate by the number of social networks run for the project; none connected → not known, set by hand. */
+export function defaultSmmRate(networks: number) {
+  if (networks <= 0) return null;
+  return networks === 1 ? SMM_RATES.one : networks === 2 ? SMM_RATES.two : SMM_RATES.many;
+}
+
+/**
+ * SMM pay by month. The rule is the media buyer's one on another rate: KPI missed → 50%; KPI met → 100%;
+ * from the 3rd month in a row with KPI met (the client stays with us) → 150% while it lasts.
+ */
+export const smmPay = (states: { month: string; state: KpiState }[], rate: number | null, currentMonth: string) =>
+  buyerPay(states, rate, currentMonth, "Ставка не задана: соцсети проекта не подключены");
+
 /** A month is taken as this many working days: the project rate is split into day rates by it. */
 export const WORKDAYS_PER_MONTH = 21;
 
@@ -110,7 +130,12 @@ export function defaultBuyerRate(sourcesCount: number) {
  * KPI missed → 50% of the rate. KPI met → 100%; from the 3rd month in a row with KPI met → 150%, every month
  * while KPI keeps being met. A miss resets the count. The current month is forecast as met (full rate).
  */
-export function buyerPay(states: { month: string; state: KpiState }[], rate: number | null, currentMonth: string): PayLine[] {
+export function buyerPay(
+  states: { month: string; state: KpiState }[],
+  rate: number | null,
+  currentMonth: string,
+  noRate = "Ставка не задана (2+ источника трафика)",
+): PayLine[] {
   let streak = 0;
   return states.map(({ month, state }) => {
     const forecast = month === currentMonth;
@@ -118,7 +143,7 @@ export function buyerPay(states: { month: string; state: KpiState }[], rate: num
     streak = effective === "met" ? streak + 1 : 0;
     let amount: number | null = null;
     let rule = "";
-    if (rate === null) rule = "Ставка не задана (2+ источника трафика)";
+    if (rate === null) rule = noRate;
     else if (effective === "missed") {
       amount = rate * 0.5;
       rule = "KPI не выполнен: −50%";

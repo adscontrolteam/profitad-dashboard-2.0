@@ -6,7 +6,7 @@ import { computeStats } from "@/lib/domain/stats";
 import type { ResultMetric } from "@/lib/domain/types";
 import { addMonths, currentMonth, monthEnd, monthOf, monthStart, monthsBetween } from "@/lib/projects/plans";
 import { BASE_CURRENCY, convert, getRates, toBase, type Rates } from "./fx";
-import { accrue, buyerPay, defaultBuyerRate, PAY_CURRENCY, prorateEntry, type Accrual, type KpiState, type PayLine, type Terms } from "./rules";
+import { accrue, buyerPay, defaultBuyerRate, defaultSmmRate, PAY_CURRENCY, prorateEntry, smmPay, type Accrual, type KpiState, type PayLine, type Terms } from "./rules";
 import {
   invoiceIn,
   listAssignments,
@@ -16,6 +16,8 @@ import {
   listMonthTerms,
   listPayouts,
   listPlans,
+  listSmmRates,
+  listSocialNetworks,
   listStaff,
   listTerms,
   type AgencyPlan,
@@ -94,6 +96,9 @@ export interface ProjectFin {
   smmEmail: string | null;
   /** Media buyer's rate for the project, USD; null = not set yet (2+ traffic sources). */
   buyerRate: number | null;
+  /** Social networks connected to the project and the SMM rate that follows (USD; null = not known yet). */
+  networksCount: number;
+  smmRate: number | null;
   startMonth: string;
   terms: Terms | null;
   /** Months whose terms differ from the usual ones. */
@@ -104,6 +109,8 @@ export interface ProjectFin {
 export interface PayRow extends PayLine {
   /** Working days paid in the month the person joined the project; null = a full month. */
   days: number | null;
+  /** What the line is paid for: running the ads or the social networks of the project. */
+  role: "media_buyer" | "smm";
   projectId: string;
   projectName: string;
   amountBase: number;
@@ -176,7 +183,7 @@ export const expenseActive = (e: Expense, month: string) =>
 
 export async function buildFinanceReport(): Promise<FinanceReport> {
   const now = currentMonth();
-  const [allProjects, terms, invoices, expenses, staff, payouts, plans, rates, buyerRates, monthTerms, assignments] = await Promise.all([
+  const [allProjects, terms, invoices, expenses, staff, payouts, plans, rates, buyerRates, monthTerms, assignments, smmRates, networks] = await Promise.all([
     getProjects(),
     listTerms(),
     listInvoices(),
@@ -188,6 +195,8 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     listBuyerRates(),
     listMonthTerms(),
     listAssignments(),
+    listSmmRates(),
+    listSocialNetworks(),
   ]);
   const inBase = (x: Invoice) => invoiceIn(x, BASE_CURRENCY, (a, f, t) => convert(a, f, t, rates));
   const termsBy = new Map(terms.map((t) => [t.projectId, t]));
@@ -247,6 +256,8 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
         mediaBuyerEmail: p.owners.mediaBuyer,
         smmEmail: p.owners.smm,
         buyerRate: buyerRates.get(p.id) ?? t?.buyerRate ?? defaultBuyerRate(p.sources.length),
+        networksCount: networks.get(p.id) ?? 0,
+        smmRate: smmRates.get(p.id) ?? defaultSmmRate(networks.get(p.id) ?? 0),
         startMonth,
         terms: t,
         overrides,
@@ -269,17 +280,24 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
   };
   for (const s of staff) if (s.active) person(s.email, s.role);
   for (const fp of finProjects) {
-    if (!fp.mediaBuyerEmail || fp.status === "archived") continue;
-    const who = person(fp.mediaBuyerEmail, "media_buyer");
-    if (who.staff?.active === false) continue;
-    const since = who.staff?.sinceMonth ?? now;
-    const rate = fp.buyerRate;
-    // Joined the project in the middle of a month → that month is paid by working days, later ones in full.
-    const joined = assignments.find((a) => a.projectId === fp.id && a.email === fp.mediaBuyerEmail!.toLowerCase() && a.role === "media_buyer");
-    const pay = prorateEntry(buyerPay(fp.months.map((m) => ({ month: m.month, state: m.kpi })), rate, now), joined?.startDate ?? null);
-    for (const line of pay) {
-      if (line.month < since || line.month < fp.startMonth) continue;
-      who.lines.push({ ...line, projectId: fp.id, projectName: fp.name, amountBase: line.amount === null ? 0 : toBase(line.amount, PAY_CURRENCY, rates) });
+    if (fp.status === "archived") continue;
+    const states = fp.months.map((m) => ({ month: m.month, state: m.kpi }));
+    // The same project pays its media buyer and its SMM specialist, each by their own rate.
+    const jobs = [
+      { role: "media_buyer" as const, email: fp.mediaBuyerEmail, pay: () => buyerPay(states, fp.buyerRate, now) },
+      { role: "smm" as const, email: fp.smmEmail, pay: () => smmPay(states, fp.smmRate, now) },
+    ];
+    for (const job of jobs) {
+      if (!job.email) continue;
+      const who = person(job.email, job.role);
+      if (who.staff?.active === false) continue;
+      const since = who.staff?.sinceMonth ?? now;
+      // Joined the project in the middle of a month → that month is paid by working days, later ones in full.
+      const joined = assignments.find((a) => a.projectId === fp.id && a.email === job.email!.toLowerCase() && a.role === job.role);
+      for (const line of prorateEntry(job.pay(), joined?.startDate ?? null)) {
+        if (line.month < since || line.month < fp.startMonth) continue;
+        who.lines.push({ ...line, role: job.role, projectId: fp.id, projectName: fp.name, amountBase: line.amount === null ? 0 : toBase(line.amount, PAY_CURRENCY, rates) });
+      }
     }
   }
   const people = [...peopleBy.values()];

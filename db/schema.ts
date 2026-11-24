@@ -609,6 +609,13 @@ export const finBuyerRates = pgTable("fin_buyer_rates", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+/** SMM specialist's rate for a project (USD) when it differs from the one by the number of social networks. */
+export const finSmmRates = pgTable("fin_smm_rates", {
+  projectId: text("project_id").primaryKey(),
+  rate: doublePrecision("rate").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 /**
  * The day a person started working on a project, per role. Pay for that first month is counted by working days
  * from this date; every later month is a full one. No row = on the project from its start (full months).
