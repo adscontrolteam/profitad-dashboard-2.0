@@ -6,9 +6,10 @@ import { computeStats } from "@/lib/domain/stats";
 import type { ResultMetric } from "@/lib/domain/types";
 import { addMonths, currentMonth, monthEnd, monthOf, monthStart, monthsBetween } from "@/lib/projects/plans";
 import { BASE_CURRENCY, convert, getRates, toBase, type Rates } from "./fx";
-import { accrue, buyerPay, defaultBuyerRate, PAY_CURRENCY, type Accrual, type KpiState, type PayLine, type Terms } from "./rules";
+import { accrue, buyerPay, defaultBuyerRate, PAY_CURRENCY, prorateEntry, type Accrual, type KpiState, type PayLine, type Terms } from "./rules";
 import {
   invoiceIn,
+  listAssignments,
   listBuyerRates,
   listExpenses,
   listInvoices,
@@ -18,6 +19,7 @@ import {
   listStaff,
   listTerms,
   type AgencyPlan,
+  type Assignment,
   type Expense,
   type Invoice,
   type MonthTerms,
@@ -89,6 +91,7 @@ export interface ProjectFin {
   currency: string | null;
   sourcesCount: number;
   mediaBuyerEmail: string | null;
+  smmEmail: string | null;
   /** Media buyer's rate for the project, USD; null = not set yet (2+ traffic sources). */
   buyerRate: number | null;
   startMonth: string;
@@ -99,6 +102,8 @@ export interface ProjectFin {
 }
 
 export interface PayRow extends PayLine {
+  /** Working days paid in the month the person joined the project; null = a full month. */
+  days: number | null;
   projectId: string;
   projectName: string;
   amountBase: number;
@@ -147,6 +152,8 @@ export interface FinanceReport {
   rates: Rates;
   projects: ProjectFin[];
   people: PersonPay[];
+  /** The day each person started on a project (only where it was set). */
+  assignments: Assignment[];
   expenses: Expense[];
   invoices: Invoice[];
   plans: AgencyPlan[];
@@ -169,7 +176,7 @@ export const expenseActive = (e: Expense, month: string) =>
 
 export async function buildFinanceReport(): Promise<FinanceReport> {
   const now = currentMonth();
-  const [allProjects, terms, invoices, expenses, staff, payouts, plans, rates, buyerRates, monthTerms] = await Promise.all([
+  const [allProjects, terms, invoices, expenses, staff, payouts, plans, rates, buyerRates, monthTerms, assignments] = await Promise.all([
     getProjects(),
     listTerms(),
     listInvoices(),
@@ -180,6 +187,7 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     getRates(),
     listBuyerRates(),
     listMonthTerms(),
+    listAssignments(),
   ]);
   const inBase = (x: Invoice) => invoiceIn(x, BASE_CURRENCY, (a, f, t) => convert(a, f, t, rates));
   const termsBy = new Map(terms.map((t) => [t.projectId, t]));
@@ -237,6 +245,7 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
         currency: p.agent.currency,
         sourcesCount: p.sources.length,
         mediaBuyerEmail: p.owners.mediaBuyer,
+        smmEmail: p.owners.smm,
         buyerRate: buyerRates.get(p.id) ?? t?.buyerRate ?? defaultBuyerRate(p.sources.length),
         startMonth,
         terms: t,
@@ -265,7 +274,9 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     if (who.staff?.active === false) continue;
     const since = who.staff?.sinceMonth ?? now;
     const rate = fp.buyerRate;
-    const pay = buyerPay(fp.months.map((m) => ({ month: m.month, state: m.kpi })), rate, now);
+    // Joined the project in the middle of a month → that month is paid by working days, later ones in full.
+    const joined = assignments.find((a) => a.projectId === fp.id && a.email === fp.mediaBuyerEmail!.toLowerCase() && a.role === "media_buyer");
+    const pay = prorateEntry(buyerPay(fp.months.map((m) => ({ month: m.month, state: m.kpi })), rate, now), joined?.startDate ?? null);
     for (const line of pay) {
       if (line.month < since || line.month < fp.startMonth) continue;
       who.lines.push({ ...line, projectId: fp.id, projectName: fp.name, amountBase: line.amount === null ? 0 : toBase(line.amount, PAY_CURRENCY, rates) });
@@ -313,7 +324,7 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     })
     .filter((d) => d.amount > 0 || d.lines.length);
 
-  return { now, months, rates, projects: finProjects, people, expenses, invoices, plans, pnl, payoutsDue, expensesFor, payrollFor };
+  return { now, months, rates, projects: finProjects, people, assignments, expenses, invoices, plans, pnl, payoutsDue, expensesFor, payrollFor };
 }
 
 export { BASE_CURRENCY };

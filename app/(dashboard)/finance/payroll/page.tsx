@@ -1,19 +1,51 @@
 import type { Metadata } from "next";
-import { PayoutButton, StaffButton } from "@/components/finance/payroll-ui";
+import { PayoutButton, StaffButton, type StaffOption, type StaffProject } from "@/components/finance/payroll-ui";
 import { RateButton } from "@/components/finance/rate-button";
 import { CardHead, dateLabel, Empty, KpiTile, monthLabel, monthShort, Pill, Table } from "@/components/finance/ui";
 import { Card } from "@/components/ui/card";
+import { listGrants } from "@/lib/access/store";
 import { requireSection } from "@/lib/access/viewer";
 import { money } from "@/lib/finance/fx";
 import { KPI_LABEL, KPI_TONE, roleLabel } from "@/lib/finance/labels";
-import { buildFinanceReport } from "@/lib/finance/report";
-import { BUYER_RATE_ONE_SOURCE } from "@/lib/finance/rules";
+import { buildFinanceReport, nameFromEmail } from "@/lib/finance/report";
+import { BUYER_RATE_ONE_SOURCE, WORKDAYS_PER_MONTH } from "@/lib/finance/rules";
 
 export const metadata: Metadata = { title: "Financial · Зарплаты" };
 
 export default async function FinancePayrollPage() {
   await requireSection("finance");
-  const r = await buildFinanceReport();
+  const [r, grants] = await Promise.all([buildFinanceReport(), listGrants()]);
+
+  // Projects each person is responsible for, with the day they started there.
+  const staffProjects: StaffProject[] = r.projects
+    .filter((p) => p.status !== "archived")
+    .flatMap((p) =>
+      (
+        [
+          ["media_buyer", p.mediaBuyerEmail],
+          ["smm", p.smmEmail],
+        ] as const
+      ).flatMap(([role, email]) =>
+        email
+          ? [
+              {
+                email: email.toLowerCase(),
+                projectId: p.id,
+                projectName: p.name,
+                role,
+                startDate: r.assignments.find((a) => a.projectId === p.id && a.email === email.toLowerCase() && a.role === role)?.startDate ?? null,
+                projectStart: p.startMonth,
+              },
+            ]
+          : [],
+      ),
+    );
+  // Everyone who can be picked by email: the team, project owners, people with access to the dashboard.
+  const known = new Map<string, StaffOption>();
+  for (const g of grants) known.set(g.email.toLowerCase(), { email: g.email.toLowerCase(), name: nameFromEmail(g.email), role: "other" });
+  for (const sp of staffProjects) known.set(sp.email, { email: sp.email, name: nameFromEmail(sp.email), role: sp.role });
+  for (const p of r.people) known.set(p.email.toLowerCase(), { email: p.email.toLowerCase(), name: p.name, role: p.role });
+  const staffOptions = [...known.values()].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   const prevMonth = r.payoutsDue[0]?.month;
   const dueTotal = r.payoutsDue.filter((p) => !p.paid).reduce((a, p) => a + p.amount, 0);
   const forecast = r.people.flatMap((p) => p.lines.filter((l) => l.month === r.now).map((l) => ({ ...l, person: p.name })));
@@ -125,6 +157,10 @@ export default async function FinancePayrollPage() {
             <li>KPI клиента не выполнен за месяц — <b>−50%</b> ставки.</li>
             <li>KPI выполняется <b>3+ месяца подряд</b> — с 3-го месяца <b>+50%</b>, и так каждый следующий месяц, пока KPI выполняется.</li>
             <li>Невыполнение сбрасывает счёт — снова нужно 3 месяца подряд.</li>
+            <li>
+              Вошёл на проект не с начала месяца — этот месяц считается по рабочим дням: ставка <b>÷ {WORKDAYS_PER_MONTH}</b> × отработанные дни (при
+              невыполненном KPI — от половины ставки). Со следующего месяца — ровно по месяцам. Дата входа ставится в карточке сотрудника.
+            </li>
             <li>KPI = главный KPI проекта из «Вводных» (план месяца), факт — из «Реальных результатов».</li>
             <li>Прогноз текущего месяца считает полную ставку.</li>
           </ul>
@@ -170,6 +206,8 @@ export default async function FinancePayrollPage() {
                     staff={p.staff}
                     label={p.staff ? "Изменить" : "Добавить в команду"}
                     defaults={{ email: p.email, name: p.name, role: p.role, sinceMonth: r.now }}
+                    options={staffOptions}
+                    projects={staffProjects}
                   />
                 </td>
               </tr>
@@ -177,7 +215,7 @@ export default async function FinancePayrollPage() {
           </tbody>
         </Table>
         <div className="mt-4">
-          <StaffButton staff={null} label="+ Сотрудник" defaults={{ email: "", name: "", role: "smm", sinceMonth: r.now }} />
+          <StaffButton staff={null} label="+ Сотрудник" defaults={{ email: "", name: "", role: "smm", sinceMonth: r.now }} options={staffOptions} projects={staffProjects} />
         </div>
       </Card>
     </div>

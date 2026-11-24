@@ -14,6 +14,7 @@ import {
   deleteExpense,
   deleteInvoice,
   markPayout,
+  saveAssignment,
   saveExpense,
   saveInvoice,
   saveMethod,
@@ -244,6 +245,17 @@ export async function saveStaffAction(_prev: FinState, f: FormData): Promise<Fin
   if (base === "bad") return { ok: false, message: "Оклад должен быть числом." };
   if (!currency) return { ok: false, message: "Выберите валюту." };
   if (!MONTH.test(since)) return { ok: false, message: "Укажите, с какого месяца считать зарплату." };
+  // «start|role|projectId» → the day the person started on that project; empty = from the project's start.
+  const starts: { projectId: string; role: string; startDate: string | null }[] = [];
+  for (const [key, value] of f.entries()) {
+    if (!key.startsWith("start|")) continue;
+    const [, role, projectId] = key.split("|");
+    const day = String(value).trim();
+    if (!projectId || (role !== "media_buyer" && role !== "smm")) continue;
+    if (day && !DATE.test(day)) return { ok: false, message: "Дата начала работы на проекте указана неверно." };
+    starts.push({ projectId, role, startDate: day || null });
+  }
+  for (const s of starts) await saveAssignment({ ...s, email });
   await saveStaff({
     email,
     name,

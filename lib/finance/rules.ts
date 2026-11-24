@@ -61,6 +61,46 @@ export interface PayLine {
   forecast: boolean;
 }
 
+/** A month is taken as this many working days: the project rate is split into day rates by it. */
+export const WORKDAYS_PER_MONTH = 21;
+
+/** Working days (Mon–Fri) from a date to the end of its month, both included. */
+export function workdaysFrom(startDate: string) {
+  const [y, m, d] = startDate.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  let n = 0;
+  for (let day = d; day <= last; day++) {
+    const wd = new Date(Date.UTC(y, m - 1, day)).getUTCDay();
+    if (wd !== 0 && wd !== 6) n++;
+  }
+  return n;
+}
+
+/**
+ * Pay lines of a person who joined the project on `startDate`.
+ * Months before the start are dropped. The month of the start is paid by working days: amount ÷ 21 × days worked
+ * (never more than the full amount). Every later month is a full one. The KPI rule (−50% / +50%) is applied first,
+ * so a missed month gives 75 ÷ 21 × days for a 150 rate.
+ */
+export function prorateEntry<T extends PayLine>(lines: T[], startDate: string | null): (T & { days: number | null })[] {
+  if (!startDate) return lines.map((l) => ({ ...l, days: null }));
+  const startMonth = startDate.slice(0, 7);
+  return lines
+    .filter((l) => l.month >= startMonth)
+    .map((l) => {
+      if (l.month !== startMonth) return { ...l, days: null };
+      const days = workdaysFrom(startDate);
+      if (days >= WORKDAYS_PER_MONTH) return { ...l, days: null };
+      const from = startDate.slice(8, 10) + "." + startDate.slice(5, 7);
+      return {
+        ...l,
+        days,
+        amount: l.amount === null ? null : Math.round(((l.amount * days) / WORKDAYS_PER_MONTH) * 100) / 100,
+        rule: `${l.rule} · на проекте с ${from}: ${days} раб. дн. из ${WORKDAYS_PER_MONTH}`,
+      };
+    });
+}
+
 export function defaultBuyerRate(sourcesCount: number) {
   return sourcesCount <= 1 ? BUYER_RATE_ONE_SOURCE : null;
 }

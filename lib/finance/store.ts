@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, max } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
+  finAssignments,
   finBuyerRates,
   finClients,
   finExpenses,
@@ -207,6 +208,35 @@ export async function listPlans(): Promise<AgencyPlan[]> {
 export async function savePlan(p: AgencyPlan) {
   const values = { ...p, updatedAt: new Date() };
   await getDb().insert(finPlans).values(values).onConflictDoUpdate({ target: finPlans.month, set: values });
+}
+
+/* ---------- the day a person started on a project ---------- */
+
+export interface Assignment {
+  projectId: string;
+  email: string;
+  role: string;
+  startDate: string;
+}
+
+export async function listAssignments(): Promise<Assignment[]> {
+  const rows = await getDb().select().from(finAssignments);
+  return rows.map((r) => ({ projectId: r.projectId, email: r.email, role: r.role, startDate: r.startDate }));
+}
+
+/** null = forget the date: the person counts as on the project from its start. */
+export async function saveAssignment(a: Omit<Assignment, "startDate"> & { startDate: string | null }) {
+  const db = getDb();
+  const key = and(eq(finAssignments.projectId, a.projectId), eq(finAssignments.email, a.email), eq(finAssignments.role, a.role));
+  if (a.startDate === null) {
+    await db.delete(finAssignments).where(key);
+    return;
+  }
+  const values = { projectId: a.projectId, email: a.email, role: a.role, startDate: a.startDate, updatedAt: new Date() };
+  await db
+    .insert(finAssignments)
+    .values(values)
+    .onConflictDoUpdate({ target: [finAssignments.projectId, finAssignments.email, finAssignments.role], set: values });
 }
 
 /* ---------- media buyer rates ---------- */

@@ -609,6 +609,23 @@ export const finBuyerRates = pgTable("fin_buyer_rates", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+/**
+ * The day a person started working on a project, per role. Pay for that first month is counted by working days
+ * from this date; every later month is a full one. No row = on the project from its start (full months).
+ */
+export const finAssignments = pgTable(
+  "fin_assignments",
+  {
+    projectId: text("project_id").notNull(),
+    email: text("email").notNull(),
+    /** media_buyer | smm */
+    role: text("role").notNull(),
+    startDate: date("start_date").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.email, t.role] })],
+);
+
 /** Terms of one month that differ from the project's usual ones (a discount, a raised fix, another %). null = as usual. */
 export const finTermsMonthly = pgTable(
   "fin_terms_monthly",
