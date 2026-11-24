@@ -678,6 +678,7 @@ export interface SocialAudience {
   age?: Record<string, number>;
   gender?: Record<string, number>;
   city?: Record<string, number>;
+  country?: Record<string, number>;
 }
 
 /**
@@ -725,6 +726,8 @@ export const socialPosts = pgTable(
     comments: integer("comments").notNull().default(0),
     shares: integer("shares").notNull().default(0),
     saves: integer("saves").notNull().default(0),
+    /** Threads: the topic tag of the publication (or its first hashtag); null when it has none. */
+    topic: text("topic"),
     syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [primaryKey({ columns: [t.projectId, t.network, t.postId] }), index("social_posts_project_idx").on(t.projectId, t.network, t.publishedAt)],

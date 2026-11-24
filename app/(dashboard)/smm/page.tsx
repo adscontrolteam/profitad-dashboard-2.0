@@ -45,8 +45,8 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
   const showConnections = (net === "instagram" || net === "facebook" || net === "threads") && !live.has(net);
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
-  // A connected Facebook Page or Instagram account shows its own numbers; nothing else is drawn — no made-up data.
-  const liveReport = net === "facebook" || net === "instagram" ? await liveSmmReport(ws.project.id, net, { from: ws.range.from, to: ws.range.to }) : null;
+  // A connected Facebook Page, Instagram or Threads account shows its own numbers; nothing else is drawn — no made-up data.
+  const liveReport = net === "facebook" || net === "instagram" || net === "threads" ? await liveSmmReport(ws.project.id, net, { from: ws.range.from, to: ws.range.to }) : null;
   // Numbers older than an hour are pulled again once the page is sent (the nightly run is only daily).
   const projectId = ws.project.id;
   if (liveReport) after(() => refreshSocialStats(projectId).then(() => undefined, (e) => console.error("social stats", projectId, (e as Error).message)));
@@ -81,7 +81,7 @@ export default async function SmmAnalyticsPage({ searchParams }: PageProps<"/smm
           <span className={`size-1.5 shrink-0 rounded-full ${liveReport.error ? "bg-negative" : "bg-positive"}`} aria-hidden />
           <span>
             {liveReport.syncedAt
-              ? `Данные из ${net === "facebook" ? "Facebook" : "Instagram"} ${liveReport.handle} · обновлено ${new Date(liveReport.syncedAt).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Warsaw" })}`
+              ? `Данные из ${netLabel} ${liveReport.handle} · обновлено ${new Date(liveReport.syncedAt).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Warsaw" })}`
               : "Первая загрузка статистики идёт в фоне — нажмите «Обновить» через минуту."}
             {!liveReport.dailyViews && liveReport.syncedAt ? " · просмотры показаны по дате публикации" : ""}
           </span>

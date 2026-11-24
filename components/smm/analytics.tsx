@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
 import type { SmmAnalyticsData } from "@/lib/social/report";
@@ -442,12 +442,36 @@ function Content({ data }: { data: SmmAnalyticsData }) {
 
   const byType = Object.entries(data.byType ?? {}).sort((a, b) => b[1] - a[1]);
   const typeTotal = sumOf(byType, (t) => t[1]);
+  const isThreads = data.network === "threads";
   const inter = [
     { label: "Лайки", value: sumOf(posts, (p) => p.likes) },
-    { label: "Сохранения", value: sumOf(posts, (p) => p.saves) },
-    { label: "Репосты", value: sumOf(posts, (p) => p.shares) },
-    { label: "Комментарии", value: sumOf(posts, (p) => p.comments) },
+    // Threads has no saves.
+    ...(isThreads ? [] : [{ label: "Сохранения", value: sumOf(posts, (p) => p.saves) }]),
+    { label: isThreads ? "Репосты и цитаты" : "Репосты", value: sumOf(posts, (p) => p.shares) },
+    { label: isThreads ? "Ответы" : "Комментарии", value: sumOf(posts, (p) => p.comments) },
   ].sort((a, b) => b.value - a.value);
+
+  // Topics: the tag the publication went out with. Compared by what one publication brings, not by the sum.
+  const overall = sumOf(posts, (p) => p.views) / posts.length;
+  const topics = [...new Set(posts.map((p) => p.topic).filter((t): t is string => Boolean(t)))]
+    .map((topic) => {
+      const list = posts.filter((p) => p.topic === topic);
+      const views = sumOf(list, (p) => p.views);
+      return { topic, count: list.length, views: views / list.length, er: views ? (sumOf(list, interactions) / views) * 100 : 0 };
+    })
+    .sort((a, b) => b.views - a.views);
+  const untagged = posts.filter((p) => !p.topic);
+  const topicMax = Math.max(...topics.map((t) => t.views), 1);
+
+  // When to publish: average views of a publication by weekday and three-hour slot.
+  const cells = Array.from({ length: 7 }, () => Array.from({ length: 8 }, () => ({ n: 0, views: 0 })));
+  for (const p of posts) {
+    cells[p.weekday][p.slot].n += 1;
+    cells[p.weekday][p.slot].views += p.views;
+  }
+  const flat = cells.flatMap((row, d) => row.map((c, h) => ({ d, h, n: c.n, avg: c.n ? c.views / c.n : 0 })));
+  const slotMax = Math.max(...flat.map((c) => c.avg), 1);
+  const bestSlots = flat.filter((c) => c.n > 0).sort((a, b) => b.avg - a.avg).slice(0, 3);
 
   const sort = SORTS.find((s) => s.id === sortId) ?? SORTS[0];
   const average = sumOf(posts, sort.value) / posts.length;
@@ -480,6 +504,72 @@ function Content({ data }: { data: SmmAnalyticsData }) {
           ))}
         </div>
       </Card>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card className="min-w-0">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 className="section-title">Темы</h2>
+            <span className="text-xs text-muted-foreground">просмотров на одну публикацию</span>
+          </div>
+          {topics.length ? (
+            <div className="mt-4 flex flex-col gap-3">
+              {topics.slice(0, 8).map((t) => (
+                <Line
+                  key={t.topic}
+                  label={
+                    <>
+                      {t.topic} <span className="text-xs text-muted-foreground">· {t.count} публ. · вовл. {pf(t.er)}</span>
+                    </>
+                  }
+                  value={`${nf(t.views)} · ×${(overall ? t.views / overall : 0).toFixed(1).replace(".", ",")}`}
+                  share={(t.views / topicMax) * 100}
+                />
+              ))}
+              {untagged.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Без темы: {untagged.length} публ., в среднем {nf(sumOf(untagged, (p) => p.views) / untagged.length)} просмотров. Множитель — к средней публикации периода ({nf(overall)}).
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {isThreads
+                ? "У публикаций периода нет темы. Добавляйте тему при публикации в Threads (поле «Добавить тему») — здесь появится, какие темы набирают больше просмотров."
+                : "Тема берётся из первого хэштега публикации — в этом периоде их нет."}
+            </p>
+          )}
+        </Card>
+        <Card className="min-w-0">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 className="section-title">Когда публиковать</h2>
+            <span className="text-xs text-muted-foreground">средние просмотры публикации, время Варшавы</span>
+          </div>
+          <div className="mt-4 grid grid-cols-[28px_repeat(8,minmax(0,1fr))] items-center gap-1 text-[11px] text-muted-foreground">
+            <span />
+            {HOURS.map((h) => (
+              <span key={h} className="text-center">{h}</span>
+            ))}
+            {cells.map((row, d) => (
+              <Fragment key={d}>
+                <span>{WEEK[d]}</span>
+                {row.map((c, h) => (
+                  <i
+                    key={h}
+                    title={c.n ? `${WEEK[d]}, ${HOURS[h]}:00–${Number(HOURS[h]) + 3}:00 — ${nf(c.views / c.n)} просм. в среднем, ${c.n} публ.` : `${WEEK[d]}, ${HOURS[h]}:00 — публикаций не было`}
+                    className="block h-[22px] rounded-md bg-accent"
+                    style={{ opacity: c.n ? 0.15 + (c.views / c.n / slotMax) * 0.75 : 0.06 }}
+                  />
+                ))}
+              </Fragment>
+            ))}
+          </div>
+          {bestSlots.length > 0 && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Лучше всего заходило: {bestSlots.map((c) => `${WEEK[c.d]} ${HOURS[c.h]}:00–${Number(HOURS[c.h]) + 3}:00 (${nf(c.avg)})`).join(", ")}. Пустые клетки — в это время не публиковали.
+            </p>
+          )}
+        </Card>
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
         {byType.length > 0 && (
@@ -583,8 +673,16 @@ function Audience({ data }: { data: SmmAnalyticsData }) {
   age.rows.sort((a, b) => a[0].localeCompare(b[0]));
   const gender = share(data.audience?.gender);
   const city = share(data.audience?.city);
+  const country = share(data.audience?.country);
+  const countryName = (code: string) => {
+    try {
+      return new Intl.DisplayNames(["ru"], { type: "region" }).of(code.toUpperCase()) ?? code;
+    } catch {
+      return code;
+    }
+  };
   const GENDER: Record<string, string> = { F: "Женщины", M: "Мужчины", U: "Не указан" };
-  const empty = !(mine + others) && !age.total && !gender.total && !city.total;
+  const empty = !(mine + others) && !age.total && !gender.total && !city.total && !country.total;
 
   if (empty)
     return (
@@ -596,6 +694,19 @@ function Audience({ data }: { data: SmmAnalyticsData }) {
         </p>
       </Card>
     );
+  const countries = country.total > 0 && (
+    <Card className="min-w-0">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 className="section-title">Страны</h2>
+        <span className="text-xs text-muted-foreground">доля от подписчиков</span>
+      </div>
+      <div className="mt-4 flex flex-col gap-3">
+        {country.rows.slice(0, 6).map(([key, value]) => (
+          <Line key={key} label={countryName(key)} value={`${Math.round((value / country.total) * 100)} %`} share={(value / country.max) * 100} />
+        ))}
+      </div>
+    </Card>
+  );
 
   return (
     <>
@@ -649,6 +760,7 @@ function Audience({ data }: { data: SmmAnalyticsData }) {
           </Card>
         )}
       </div>
+      {countries}
     </>
   );
 }

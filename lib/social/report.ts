@@ -27,6 +27,11 @@ export interface SmmAnalyticsData {
     saves: number;
     thumbnailUrl: string | null;
     permalink: string | null;
+    /** Threads: topic tag or first hashtag; null when the publication has none. */
+    topic: string | null;
+    /** When it went out, Warsaw time: weekday (Mon = 0) and three-hour slot (0–7). */
+    weekday: number;
+    slot: number;
   }[];
   /** The same numbers of the period right before; null where we hold no data for it. */
   prev: { views: number | null; reach: number | null; interactions: number | null; postViews: number | null; saves: number | null; shares: number | null };
@@ -158,7 +163,17 @@ export async function liveSmmReport(projectId: string, network: LiveNetwork, win
       permalink: p.permalink,
     }));
 
+  const clock = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Warsaw", weekday: "short", hour: "2-digit", hour12: false });
+  const when = (d: Date) => {
+    const parts = clock.formatToParts(d);
+    return {
+      weekday: Math.max(0, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(parts.find((x) => x.type === "weekday")?.value ?? "")),
+      slot: Math.floor((Number(parts.find((x) => x.type === "hour")?.value ?? 0) % 24) / 3),
+    };
+  };
   const toPost = (p: (typeof posts)[number]) => ({
+    topic: p.topic ?? null,
+    ...when(p.publishedAt),
     id: p.postId,
     title: p.title || "Без подписи",
     date: day(p.publishedAt),

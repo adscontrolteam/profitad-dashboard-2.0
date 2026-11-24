@@ -13,7 +13,8 @@ import { decrypt } from "@/lib/crypto";
  *  - Facebook: /insights gives days in one call (`page_media_view`, `page_total_media_view_unique`,
  *    `page_daily_follows_unique`, `page_daily_unfollows_unique`); publications come from /published_posts, their views from `post_media_view`.
  * The old `impressions` / `page_impressions` / `page_fans` metrics were removed by Meta in 2025 — do not bring them back.
- * Threads is not read here yet.
+ *  - Threads (its own host and token): /threads_insights gives `views` by day and the follower total; reach, new followers and
+ *    unfollows do not exist there. Publications come from /threads, their numbers from /{id}/insights.
  */
 const GRAPH = () => `https://graph.facebook.com/${process.env.META_API_VERSION || "v24.0"}`;
 const DAY = 86_400_000;
@@ -22,6 +23,8 @@ const FIRST_DAYS = 30;
 const NEXT_DAYS = 3;
 /** Publications older than this are not refreshed any more. */
 const POSTS_DAYS = 90;
+/** Threads, first load: the account's past year (views by day and publications). */
+const THREADS_HISTORY_DAYS = 365;
 
 class GraphError extends Error {
   constructor(
@@ -72,6 +75,7 @@ interface PostRow {
   comments: number;
   shares: number;
   saves: number;
+  topic?: string | null;
 }
 interface Pulled {
   followers: number | null;
@@ -349,6 +353,127 @@ async function pullFacebook(id: string, token: string, days: number): Promise<Pu
   return { followers: me.followers_count ?? null, days: [...byDate.values()], posts, warnings };
 }
 
+/* ---------- Threads ---------- */
+
+const THREADS = () => `${(process.env.THREADS_GRAPH_URL || "https://graph.threads.com").replace(/\/$/, "")}/v1.0`;
+
+async function threads<T>(token: string, path: string, params: Record<string, string> = {}): Promise<T> {
+  const url = path.startsWith("http") ? path : `${THREADS()}/${path}?${new URLSearchParams({ ...params, access_token: token })}`;
+  const res = await fetch(url, { cache: "no-store" });
+  const data = (await res.json().catch(() => ({}))) as T & { error?: { message?: string; code?: number } };
+  if (!res.ok || data.error) throw new GraphError(data.error?.message ?? `HTTP ${res.status}`, data.error?.code);
+  return data;
+}
+
+async function pullThreads(id: string, token: string, days: number, history = false): Promise<Pulled> {
+  const warnings: string[] = [];
+  type Metric = { name: string; values?: { value?: number; end_time?: string }[]; total_value?: { value?: number; breakdowns?: { results?: { dimension_values?: string[]; value?: number }[] }[] } };
+
+  let followers: number | null = null;
+  try {
+    const r = await threads<{ data?: Metric[] }>(token, `${id}/threads_insights`, { metric: "followers_count" });
+    followers = r.data?.[0]?.total_value?.value ?? null;
+  } catch (error) {
+    warnings.push(`подписчики: ${(error as Error).message}`);
+  }
+
+  // Views by day. The past year is asked for a month at a time, newest first; the first refusal ends it.
+  const dayRows: DayRow[] = [];
+  const now = Math.floor(Date.now() / 1000);
+  const span = history ? THREADS_HISTORY_DAYS : days + 1;
+  for (let back = 0; back < span; back += 30) {
+    const until = now - back * 86_400;
+    const since = Math.max(now - span * 86_400, until - 30 * 86_400);
+    try {
+      const r = await threads<{ data?: Metric[] }>(token, `${id}/threads_insights`, { metric: "views", since: String(since), until: String(until) });
+      for (const v of r.data?.find((m) => m.name === "views")?.values ?? []) {
+        if (!v.end_time) continue;
+        // `end_time` closes the day it reports.
+        const date = iso(Date.parse(v.end_time) - DAY);
+        // Today is not final yet.
+        if (date < iso(Date.now()) && !dayRows.some((d) => d.date === date)) dayRows.push({ date, views: v.value ?? 0, reach: null, follows: null, unfollows: null });
+      }
+    } catch (error) {
+      // An old month Threads holds nothing for is not a failure of the load.
+      if (back === 0) warnings.push(`просмотры по дням: ${(error as Error).message}`);
+      break;
+    }
+  }
+
+  // Who the followers are. Threads gives it only to accounts with 100+ followers: a refusal is expected and not a warning.
+  const audience: SocialAudience = {};
+  for (const group of ["age", "gender", "city", "country"] as const) {
+    try {
+      const a = await threads<{ data?: Metric[] }>(token, `${id}/threads_insights`, { metric: "follower_demographics", breakdown: group });
+      const out: Record<string, number> = {};
+      for (const x of a.data?.[0]?.total_value?.breakdowns?.[0]?.results ?? []) if (x.dimension_values?.[0]) out[x.dimension_values[0]] = x.value ?? 0;
+      if (Object.keys(out).length) audience[group] = out;
+    } catch {
+      break;
+    }
+  }
+
+  interface Thread {
+    id: string;
+    text?: string;
+    media_type?: string;
+    permalink?: string;
+    timestamp: string;
+    thumbnail_url?: string;
+    media_url?: string;
+    topic_tag?: string;
+  }
+  const list: Thread[] = [];
+  const oldest = Date.now() - (history ? THREADS_HISTORY_DAYS : POSTS_DAYS) * DAY;
+  const fields = "id,text,media_type,permalink,timestamp,thumbnail_url,media_url";
+  try {
+    let next: string | undefined;
+    for (let page = 0; page < (history ? 20 : 6); page++) {
+      const first = (f: string) => threads<{ data?: Thread[]; paging?: { next?: string } }>(token, `${id}/threads`, { fields: f, limit: "50" });
+      const r: { data?: Thread[]; paging?: { next?: string } } = next
+        ? await threads(token, next)
+        : // The topic tag is a newer field: without it the list is still worth having.
+          await first(`${fields},topic_tag`).catch(() => first(fields));
+      const batch = r.data ?? [];
+      // Reposts of other people's threads are not the account's own publications.
+      list.push(...batch.filter((m) => Date.parse(m.timestamp) >= oldest && m.media_type !== "REPOST_FACADE"));
+      next = r.paging?.next;
+      if (!next || batch.some((m) => Date.parse(m.timestamp) < oldest)) break;
+    }
+  } catch (error) {
+    warnings.push(`публикации: ${(error as Error).message}`);
+  }
+
+  let insightFailure: string | null = null;
+  const posts = await pool(list, 5, async (m): Promise<PostRow> => {
+    const n = { views: 0, likes: 0, replies: 0, reposts: 0, quotes: 0, shares: 0 };
+    try {
+      const r = await threads<{ data?: Metric[] }>(token, `${m.id}/insights`, { metric: Object.keys(n).join(",") });
+      for (const x of r.data ?? []) if (x.name in n) n[x.name as keyof typeof n] = x.values?.[0]?.value ?? x.total_value?.value ?? 0;
+    } catch (error) {
+      insightFailure = (error as Error).message;
+    }
+    return {
+      postId: m.id,
+      publishedAt: new Date(m.timestamp),
+      kind: m.media_type === "VIDEO" ? "video" : m.media_type === "CAROUSEL_ALBUM" ? "carousel" : m.media_type === "IMAGE" ? "post" : "thread",
+      title: (m.text ?? "").split("\n")[0].slice(0, 140),
+      topic: (m.topic_tag?.trim() || (m.text ?? "").match(/#([\p{L}\p{N}_]{2,40})/u)?.[1] || null)?.toLowerCase() ?? null,
+      permalink: m.permalink ?? null,
+      thumbnailUrl: m.thumbnail_url ?? (m.media_type === "IMAGE" ? (m.media_url ?? null) : null),
+      views: n.views,
+      likes: n.likes,
+      comments: n.replies,
+      // Reposts and quotes carry the thread further the same way a share does.
+      shares: n.shares + n.reposts + n.quotes,
+      saves: 0,
+    };
+  });
+  if (insightFailure) warnings.push(`цифры публикаций: ${insightFailure}`);
+
+  return { followers, days: dayRows, posts, audience: Object.keys(audience).length ? audience : null, warnings };
+}
+
 /* ---------- Store ---------- */
 
 async function store(row: SocialConnectionRow, pulled: Pulled) {
@@ -378,14 +503,21 @@ const mine = (row: Pick<SocialConnectionRow, "projectId" | "network" | "external
 
 /** Pulls one account and records how it went on the connection. First run takes a month of days, later ones the last few. */
 export async function syncSocialAccount(row: SocialConnectionRow, firstRun: boolean): Promise<{ ok: boolean; message: string }> {
-  if (row.network === "threads") return { ok: true, message: "Статистика Threads пока не загружается." };
   const db = getDb();
   try {
     const token = decrypt(row.token);
     const days = firstRun ? FIRST_DAYS : NEXT_DAYS;
-    const pulled = row.network === "instagram" ? await pullInstagram(row.externalId, token, days) : await pullFacebook(row.externalId, token, days);
+    let pulled: Pulled;
+    if (row.network === "threads") {
+      // The year of history is loaded until it is really there: a first run that failed half-way must not leave the account without it.
+      const [held] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(socialMetricsDaily)
+        .where(and(eq(socialMetricsDaily.projectId, row.projectId), eq(socialMetricsDaily.network, "threads"), eq(socialMetricsDaily.accountId, row.externalId), sql`${socialMetricsDaily.views} is not null`));
+      pulled = await pullThreads(row.externalId, token, days, firstRun || (held?.n ?? 0) < 5);
+    } else pulled = row.network === "instagram" ? await pullInstagram(row.externalId, token, days) : await pullFacebook(row.externalId, token, days);
     await store(row, pulled);
-    const note = pulled.warnings.length ? `Часть данных Meta не отдала — ${pulled.warnings.join("; ")}` : null;
+    const note = pulled.warnings.length ? `Часть данных ${row.network === "threads" ? "Threads не отдал" : "Meta не отдала"} — ${pulled.warnings.join("; ")}` : null;
     await db
       .update(socialConnections)
       .set({ statsSyncedAt: new Date(), statsError: note, ...(pulled.audience ? { audience: pulled.audience } : {}) })
@@ -399,7 +531,7 @@ export async function syncSocialAccount(row: SocialConnectionRow, firstRun: bool
 }
 
 /**
- * Pulls the project's Facebook and Instagram accounts whose numbers are older than `maxAgeMs` (or were never pulled).
+ * Pulls the project's accounts whose numbers are older than `maxAgeMs` (or were never pulled).
  * The claim on `stats_synced_at` lets only one of several open tabs do the work. `force` skips the age check.
  */
 export async function refreshSocialStats(projectId: string, { maxAgeMs = 3600_000, force = false } = {}) {
@@ -407,7 +539,6 @@ export async function refreshSocialStats(projectId: string, { maxAgeMs = 3600_00
   const rows = await db.select().from(socialConnections).where(and(eq(socialConnections.projectId, projectId), eq(socialConnections.status, "ok")));
   const results: { network: string; name: string; ok: boolean; message: string }[] = [];
   for (const row of rows) {
-    if (row.network === "threads") continue;
     const stale = new Date(Date.now() - maxAgeMs);
     const claimed = await db
       .update(socialConnections)
