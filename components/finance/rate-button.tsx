@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { InfoHint } from "@/components/ui/info-hint";
 import { saveBuyerRateAction, type FinState } from "@/app/(dashboard)/finance/actions";
-import { BUYER_RATE_ONE_SOURCE, SMM_RATES, SMM_SETUP_RATE } from "@/lib/finance/rules";
+import { BUYER_RATE_ONE_SOURCE, BUYER_RATE_TWO_SOURCES, SMM_RATES, SMM_SETUP_RATE } from "@/lib/finance/rules";
 import { Drawer, Field, FormError } from "./drawer";
 
 const IDLE: FinState = { ok: false, message: null };
@@ -52,7 +52,9 @@ export function RateButton({
                   ? smmHint
                   : sourcesCount <= 1
                     ? `Пусто = $${BUYER_RATE_ONE_SOURCE} (один источник трафика)`
-                    : `У проекта ${sourcesCount} источника трафика — ставка задаётся вручную`
+                    : sourcesCount === 2
+                      ? `Пусто = $${BUYER_RATE_TWO_SOURCES} (два источника трафика)`
+                      : `У проекта ${sourcesCount} источника трафика — ставка задаётся вручную`
               }
             >
               <input name="rate" inputMode="decimal" defaultValue={rate ?? ""} className="field tabular-nums" autoFocus />

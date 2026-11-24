@@ -43,8 +43,9 @@ export function accrue(terms: Terms, revenue: number | null, spend: number | nul
 
 /* ---------------- Media buyer pay ---------------- */
 
-/** Rate per project for one traffic source, USD. Two and more sources — a different rate (set per project). */
+/** Rate per project by the number of traffic sources, USD. Three and more sources — set per project by hand. */
 export const BUYER_RATE_ONE_SOURCE = 150;
+export const BUYER_RATE_TWO_SOURCES = 225;
 export const PAY_CURRENCY = "USD";
 
 export type KpiState = "met" | "missed" | "unknown";
@@ -152,7 +153,8 @@ export function prorateEntry<T extends PayLine>(lines: T[], startDate: string | 
 }
 
 export function defaultBuyerRate(sourcesCount: number) {
-  return sourcesCount <= 1 ? BUYER_RATE_ONE_SOURCE : null;
+  if (sourcesCount <= 1) return BUYER_RATE_ONE_SOURCE;
+  return sourcesCount === 2 ? BUYER_RATE_TWO_SOURCES : null;
 }
 
 /**
@@ -164,7 +166,7 @@ export function buyerPay(
   states: { month: string; state: KpiState }[],
   rate: number | null,
   currentMonth: string,
-  noRate = "Ставка не задана (2+ источника трафика)",
+  noRate = "Ставка не задана (3+ источника трафика)",
 ): PayLine[] {
   let streak = 0;
   return states.map(({ month, state }) => {
