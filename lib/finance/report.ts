@@ -7,12 +7,27 @@ import type { ResultMetric } from "@/lib/domain/types";
 import { addMonths, currentMonth, monthEnd, monthOf, monthStart, monthsBetween } from "@/lib/projects/plans";
 import { BASE_CURRENCY, convert, getRates, toBase, type Rates } from "./fx";
 import {
+  billableStart,
+  coveredDays,
+  daysIn,
+  debtOn,
+  firstOf,
+  invoiceDay,
+  lastOf,
+  LEDGER_START,
+  nextPeriod,
+  paidThrough,
+  prepaidOn,
+  resolvePeriods,
+  serviceDays,
+  type Period,
+} from "./periods";
+import {
   accrue,
   buyerPay,
   defaultBuyerRate,
   defaultSmmRate,
   flatPay,
-  nextMonthAmount,
   PAY_CURRENCY,
   prorateEntry,
   SMM_SETUP_RATE,
@@ -95,11 +110,31 @@ export interface ProjectFinMonth {
   /** By the terms, in terms currency; null = no terms for that month. */
   accrual: Accrual | null;
   accrualBase: number;
-  /** Paid invoices for this month, base currency. */
+  /** Money that came in this month (by the day of payment, whatever period it is for), base currency. */
   receivedBase: number;
   /** Issued and not yet paid, base currency. */
   issuedBase: number;
+  /** Days of the month the client is in service, and how many of them payments cover. */
+  serviceDays: number;
+  coveredDays: number;
   forecast: boolean;
+}
+
+/** Where a client stands with payments today. Amounts are in the terms currency and in the base one. */
+export interface PayState {
+  /** The day the client started to be billed. */
+  from: string;
+  /** The last day covered by payments; null = nothing paid yet. */
+  paidThrough: string | null;
+  /** Days in service up to today that no payment covers, at the monthly fee. */
+  debt: number;
+  debtBase: number;
+  /** Covered days after today, at the monthly fee: money received for work not done yet. */
+  prepaid: number;
+  prepaidBase: number;
+  currency: string;
+  /** The next period to invoice and the day its invoice appears. */
+  next: { start: string; end: string; invoiceOn: string };
 }
 
 export interface ProjectFin {
@@ -112,6 +147,12 @@ export interface ProjectFin {
   smmEmail: string | null;
   /** Media buyer's rate for the project, USD; null = not set yet (2+ traffic sources). */
   buyerRate: number | null;
+  /** The day the work started (from «Вводные»). */
+  startDate: string;
+  /** The days each invoice and payment covers, oldest first. */
+  periods: Period[];
+  /** Payments against the service; null = no terms yet. */
+  pay: PayState | null;
   /** Social networks connected to the project and the SMM rate that follows (USD; null = not known yet). */
   networksCount: number;
   smmRate: number | null;
@@ -144,8 +185,12 @@ export interface PersonPay {
   baseSalary: number;
   currency: string;
   lines: PayRow[];
+  /** The month after the current one: a full month on the same projects with every KPI met. */
+  nextLines: PayRow[];
   /** What the person can earn next month if every project stays and every KPI is met, base currency. */
   nextPotential: number;
+  /** Months already paid out: month → the amount paid, base currency. They are never recounted. */
+  paid: Record<string, number>;
 }
 
 export interface ExpenseLine {
@@ -168,7 +213,10 @@ export interface PayoutDue {
   email: string;
   name: string;
   month: string;
+  /** What was paid when the month is marked as paid, else what the rules give. */
   amount: number;
+  /** What the rules give today (differs from `amount` when the rules changed after the payout). */
+  counted: number;
   currency: string;
   lines: PayRow[];
   baseSalary: number;
@@ -189,6 +237,14 @@ export interface PayrollFund {
   nextProjects: string[];
 }
 
+/** The service period of an invoice or payment as shown in the lists. */
+export interface InvoicePeriod {
+  start: string;
+  end: string;
+  /** Worked out from the dates, not typed. */
+  auto: boolean;
+}
+
 export interface FinanceReport {
   now: string;
   months: string[];
@@ -199,6 +255,10 @@ export interface FinanceReport {
   assignments: Assignment[];
   expenses: Expense[];
   invoices: Invoice[];
+  /** Service period of every invoice and payment, by invoice id. */
+  periodOf: Record<string, InvoicePeriod>;
+  /** Today, YYYY-MM-DD: the day debts and prepayments are counted on. */
+  today: string;
   plans: AgencyPlan[];
   pnl: PnlMonth[];
   payoutsDue: PayoutDue[];
@@ -208,6 +268,8 @@ export interface FinanceReport {
   nextPotential: number;
   expensesFor: (month: string) => ExpenseLine[];
   payrollFor: (month: string) => number;
+  /** A person's pay for a month, base currency: the amount paid out when it was, else what the rules give. */
+  payOf: (person: PersonPay, month: string) => number;
 }
 
 export const nameFromEmail = (email: string) =>
@@ -239,6 +301,10 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     listSocialNetworks(),
   ]);
   const inBase = (x: Invoice) => invoiceIn(x, BASE_CURRENCY, (a, f, t) => convert(a, f, t, rates));
+  const today = new Date().toISOString().slice(0, 10);
+  const ledgerMonth = LEDGER_START.slice(0, 7);
+  /** The month money came in: by the day of payment, not by the month typed on the invoice. */
+  const cashMonth = (x: Invoice) => (x.paidDate ?? x.issueDate).slice(0, 7);
   const termsBy = new Map(terms.map((t) => [t.projectId, t]));
   const projects = allProjects.filter((p) => p.status !== "archived" || termsBy.has(p.id));
 
@@ -260,11 +326,32 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
       const data = await Promise.all(hist.map((m) => loadProjectMonth(p.id, m)));
       const t = termsBy.get(p.id) ?? null;
       const overrides = monthTerms.filter((x) => x.projectId === p.id);
+      // What the client's payments cover, by days: everything about «paid / owes» follows from these periods.
+      const feeFor = (month: string) => (t ? (overrides.find((o) => o.month === month)?.fixAmount ?? t.fixAmount) : 0);
+      const live = invoices.filter((x) => x.projectId === p.id && x.status !== "cancelled");
+      const periods = t
+        ? resolvePeriods(
+            live.map((x) => ({
+              id: x.id,
+              date: x.status === "paid" ? (x.paidDate ?? x.issueDate) : x.issueDate,
+              paid: x.status === "paid",
+              amount: invoiceIn(x, t.currency, (a, f, to) => convert(a, f, to, rates)),
+              periodStart: x.periodStart,
+              periodEnd: x.periodEnd,
+            })),
+            feeFor,
+            p.startDate,
+          )
+        : [];
+      const billFrom = t ? billableStart(periods, p.startDate, firstOf(t.startMonth)) : null;
       const rows: ProjectFinMonth[] = hist.map((month, i) => {
         const d = data[i];
         const forecast = month === now;
         let accrual: Accrual | null = null;
-        if (t && month >= t.startMonth && month >= startMonth) {
+        // From the ledger on, a month is earned by the days the client is in service; a project that starts or is
+        // first paid in the middle of a month earns that share of the fee. Earlier months stay whole, as agreed.
+        const inService = billFrom && month >= ledgerMonth ? serviceDays(month, billFrom) : daysIn(month);
+        if (t && month >= t.startMonth && month >= startMonth && inService > 0) {
           const cur = d?.currency ?? t.currency;
           // The share is counted on what has actually happened: the client's revenue comes in rare payments, so
           // stretching a month-to-date figure to the whole month would promise money that may never come.
@@ -273,17 +360,20 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
           // A month can have its own fix / % (set in «Условия по месяцам»).
           const o = overrides.find((x) => x.month === month);
           const pct = o?.sharePct ?? t.sharePct;
-          accrual = accrue({ ...t, fixAmount: o?.fixAmount ?? t.fixAmount, sharePct: pct, shareBase: t.shareBase ?? (pct ? "client_profit" : null) }, rev, spend);
+          accrual = accrue({ ...t, fixAmount: ((o?.fixAmount ?? t.fixAmount) * inService) / daysIn(month), sharePct: pct, shareBase: t.shareBase ?? (pct ? "client_profit" : null) }, rev, spend);
         }
-        const inv = invoices.filter((x) => x.projectId === p.id && x.month === month && x.status !== "cancelled");
+        const inv = live.filter((x) => x.month === month);
+        const got = live.filter((x) => x.status === "paid" && cashMonth(x) === month);
         return {
           month,
           data: d,
           kpi: kpiState(d, forecast),
           accrual,
           accrualBase: accrual ? toBase(accrual.total, accrual.currency, rates) : 0,
-          receivedBase: inv.filter((x) => x.status === "paid").reduce((a, x) => a + inBase(x), 0),
+          receivedBase: got.reduce((a, x) => a + inBase(x), 0),
           issuedBase: inv.filter((x) => x.status === "issued").reduce((a, x) => a + inBase(x), 0),
+          serviceDays: billFrom && month >= ledgerMonth ? inService : 0,
+          coveredDays: billFrom && month >= ledgerMonth ? coveredDays(periods, firstOf(month) > billFrom ? firstOf(month) : billFrom, lastOf(month)) : 0,
           forecast,
         };
       });
@@ -296,6 +386,31 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
         mediaBuyerEmail: p.owners.mediaBuyer,
         smmEmail: p.owners.smm,
         buyerRate: buyerRates.get(p.id) ?? t?.buyerRate ?? defaultBuyerRate(p.sources.length),
+        startDate: p.startDate,
+        periods,
+        pay:
+          t && billFrom
+            ? (() => {
+                // A client pays in advance, always. So the days before the first payment on record were paid for
+                // before the payments were kept here — they are earned, but they are not a debt. A client with no
+                // payment on record at all owes from the first day in service.
+                const firstPaid = periods.reduce<string | null>((a, x) => (!a || x.start < a ? x.start : a), null);
+                const owedFrom = firstPaid && firstPaid > billFrom ? firstPaid : billFrom;
+                const debt = p.status === "active" ? debtOn(today, periods, owedFrom, feeFor) : 0;
+                const prepaid = prepaidOn(today, periods, feeFor);
+                const next = nextPeriod(periods, billFrom);
+                return {
+                  from: billFrom,
+                  paidThrough: paidThrough(periods),
+                  debt,
+                  debtBase: toBase(debt, t.currency, rates),
+                  prepaid,
+                  prepaidBase: toBase(prepaid, t.currency, rates),
+                  currency: t.currency,
+                  next: { ...next, invoiceOn: invoiceDay(next.start) },
+                };
+              })()
+            : null,
         networksCount: networks.get(p.id) ?? 0,
         smmRate: smmRates.get(p.id) ?? defaultSmmRate(networks.get(p.id) ?? 0),
         startMonth,
@@ -307,13 +422,25 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
   );
 
   /* ---- payroll ---- */
+  const next = addMonths(now, 1);
   const staffBy = new Map(staff.map((s) => [s.email, s]));
   const peopleBy = new Map<string, PersonPay>();
   const person = (email: string, role: string): PersonPay => {
     let p = peopleBy.get(email);
     if (!p) {
       const s = staffBy.get(email) ?? null;
-      p = { email, name: s?.name || nameFromEmail(email), role: s?.role ?? role, staff: s, baseSalary: s?.active === false ? 0 : (s?.baseSalary ?? 0), currency: s?.currency ?? PAY_CURRENCY, lines: [], nextPotential: 0 };
+      p = {
+        email,
+        name: s?.name || nameFromEmail(email),
+        role: s?.role ?? role,
+        staff: s,
+        baseSalary: s?.active === false ? 0 : (s?.baseSalary ?? 0),
+        currency: s?.currency ?? PAY_CURRENCY,
+        lines: [],
+        nextLines: [],
+        nextPotential: 0,
+        paid: Object.fromEntries(payouts.filter((x) => x.email === email).map((x) => [x.month, toBase(x.amount, x.currency, rates)])),
+      };
       peopleBy.set(email, p);
     }
     return p;
@@ -321,7 +448,9 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
   for (const s of staff) if (s.active) person(s.email, s.role);
   for (const fp of finProjects) {
     if (fp.status === "archived") continue;
-    const states = fp.months.map((m) => ({ month: m.month, state: m.kpi }));
+    // The month after the current one is counted too, with its KPI taken as met: it gives the potential pay and
+    // the part of the payroll fund the clients have already paid for.
+    const states = [...fp.months.map((m) => ({ month: m.month, state: m.kpi })), { month: next, state: "met" as KpiState }];
     // The same project pays its media buyer and its SMM specialist, each by their own rate. Who works on it:
     // the owners from «Вводные» and everyone put on the project in the payroll card.
     const jobs: { role: "media_buyer" | "smm"; email: string }[] = [];
@@ -351,20 +480,22 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
       // Joined the project in the middle of a month → that month is paid by working days, later ones in full.
       for (const line of prorateEntry(pay, a?.startDate ?? null)) {
         if (line.month < since || line.month < fp.startMonth) continue;
-        who.lines.push({ ...line, role: job.role, task, sources, projectId: fp.id, projectName: fp.name, amountBase: line.amount === null ? 0 : toBase(line.amount, PAY_CURRENCY, rates) });
-        if (line.month === now) who.nextPotential += toBase(nextMonthAmount(line, task !== "run"), PAY_CURRENCY, rates);
+        const row: PayRow = { ...line, role: job.role, task, sources, projectId: fp.id, projectName: fp.name, amountBase: line.amount === null ? 0 : toBase(line.amount, PAY_CURRENCY, rates) };
+        if (line.month === next) who.nextLines.push(row);
+        else who.lines.push(row);
       }
     }
   }
   const people = [...peopleBy.values()];
-  for (const p of people) p.nextPotential += toBase(p.baseSalary, p.currency, rates);
   const baseSalaryFor = (p: PersonPay, month: string) =>
     p.baseSalary > 0 && (!p.staff || p.staff.sinceMonth <= month) ? p.baseSalary : 0;
-  const payrollFor = (month: string) =>
-    people.reduce(
-      (a, p) => a + p.lines.filter((l) => l.month === month).reduce((s, l) => s + l.amountBase, 0) + toBase(baseSalaryFor(p, month), p.currency, rates),
-      0,
-    );
+  for (const p of people) p.nextPotential = p.nextLines.reduce((a, l) => a + l.amountBase, 0) + toBase(baseSalaryFor(p, next), p.currency, rates);
+  /** What a person's month is by the rules as they are now, base currency. */
+  const countedFor = (p: PersonPay, month: string) =>
+    p.lines.filter((l) => l.month === month).reduce((s, l) => s + l.amountBase, 0) + toBase(baseSalaryFor(p, month), p.currency, rates);
+  // A month already paid out stays what was paid: later rules and later edits do not rewrite the past.
+  const payOf = (p: PersonPay, month: string) => p.paid[month] ?? countedFor(p, month);
+  const payrollFor = (month: string) => people.reduce((a, p) => a + payOf(p, month), 0);
 
   const expensesFor = (month: string): ExpenseLine[] =>
     expenses.filter((e) => expenseActive(e, month)).map((e) => ({ expense: e, amountBase: toBase(e.amount, e.currency, rates) }));
@@ -373,7 +504,8 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
   const plansBy = new Map(plans.map((p) => [p.month, p]));
   const pnl: PnlMonth[] = months.map((month) => {
     const revenue = finProjects.reduce((a, p) => a + (p.months.find((m) => m.month === month)?.accrualBase ?? 0), 0);
-    const received = finProjects.reduce((a, p) => a + (p.months.find((m) => m.month === month)?.receivedBase ?? 0), 0);
+    // Every payment of the month, with the ones not tied to a project.
+    const received = invoices.filter((x) => x.status === "paid" && cashMonth(x) === month).reduce((a, x) => a + inBase(x), 0);
     const payroll = payrollFor(month);
     const other = expensesFor(month).reduce((a, e) => a + e.amountBase, 0);
     return { month, revenue, received, payroll, other, profit: revenue - payroll - other, plan: plansBy.get(month) ?? null, forecast: month === now };
@@ -385,34 +517,28 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     .map((p) => {
       const lines = p.lines.filter((l) => l.month === prev);
       const baseSalary = baseSalaryFor(p, prev);
-      const amount = lines.reduce((a, l) => a + (l.amount ?? 0), 0) + baseSalary;
+      const counted = lines.reduce((a, l) => a + (l.amount ?? 0), 0) + baseSalary;
+      const paid = payouts.find((x) => x.email === p.email && x.month === prev) ?? null;
       return {
         email: p.email,
         name: p.name,
         month: prev,
-        amount,
+        amount: paid ? paid.amount : counted,
+        counted,
         currency: PAY_CURRENCY,
         lines,
         baseSalary,
-        paid: payouts.find((x) => x.email === p.email && x.month === prev) ?? null,
+        paid,
       };
     })
     .filter((d) => d.amount > 0 || d.lines.length);
 
   /* ---- payroll fund: what is already owed + what the clients have paid ahead for ---- */
-  const next = addMonths(now, 1);
-  const paidAhead = new Set(
-    invoices.filter((x) => x.projectId && x.month === next && x.status === "paid").map((x) => x.projectId as string),
+  // The share of the next month each client has paid for, by days: a client paid until the 16th covers 16 days of it.
+  const nextCover = new Map(
+    finProjects.map((p) => [p.id, p.pay ? coveredDays(p.periods, firstOf(next) > p.pay.from ? firstOf(next) : p.pay.from, lastOf(next)) / daysIn(next) : 0]),
   );
-  const nextPayroll = people.reduce(
-    (a, p) =>
-      a +
-      p.lines
-        .filter((l) => l.month === now && paidAhead.has(l.projectId))
-        // A full month at the rate; the third month in a row with KPI met is already +50%.
-        .reduce((s, l) => s + toBase(nextMonthAmount(l, l.task !== "run"), PAY_CURRENCY, rates), 0),
-    0,
-  );
+  const nextPayroll = people.reduce((a, p) => a + p.nextLines.reduce((s, l) => s + l.amountBase * (nextCover.get(l.projectId) ?? 0), 0), 0);
   const unpaidPayroll = payoutsDue.filter((d) => !d.paid).reduce((a, d) => a + toBase(d.amount, d.currency, rates), 0);
   const currentPayroll = payrollFor(now);
   const payrollFund: PayrollFund = {
@@ -421,10 +547,35 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     current: currentPayroll,
     next: nextPayroll,
     nextMonth: next,
-    nextProjects: finProjects.filter((p) => paidAhead.has(p.id) && people.some((x) => x.lines.some((l) => l.month === now && l.projectId === p.id))).map((p) => p.name),
+    nextProjects: finProjects
+      .filter((p) => (nextCover.get(p.id) ?? 0) > 0)
+      .map((p) => ((nextCover.get(p.id) ?? 0) >= 1 ? p.name : `${p.name} по ${p.pay!.paidThrough!.slice(8, 10)}.${p.pay!.paidThrough!.slice(5, 7)}`)),
   };
 
-  return { now, months, rates, projects: finProjects, people, assignments, expenses, invoices, plans, pnl, payoutsDue, payrollFund, nextMonth: next, nextPotential: people.reduce((a, p) => a + p.nextPotential, 0), expensesFor, payrollFor };
+  const periodOf: Record<string, InvoicePeriod> = {};
+  for (const p of finProjects) for (const x of p.periods) periodOf[x.id] = { start: x.start, end: x.end, auto: x.auto };
+
+  return {
+    now,
+    months,
+    rates,
+    projects: finProjects,
+    people,
+    assignments,
+    expenses,
+    invoices,
+    periodOf,
+    today,
+    plans,
+    pnl,
+    payoutsDue,
+    payrollFund,
+    nextMonth: next,
+    nextPotential: people.reduce((a, p) => a + p.nextPotential, 0),
+    expensesFor,
+    payrollFor,
+    payOf,
+  };
 }
 
 export { BASE_CURRENCY };

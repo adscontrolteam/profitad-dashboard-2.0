@@ -5,7 +5,7 @@ import { CardHead, monthShort, Pill, Table } from "@/components/finance/ui";
 import { Card } from "@/components/ui/card";
 import { requireSection } from "@/lib/access/viewer";
 import { money } from "@/lib/finance/fx";
-import { KPI_LABEL, KPI_TONE, termsSummary } from "@/lib/finance/labels";
+import { KPI_LABEL, KPI_TONE, termsSummary, payStatus } from "@/lib/finance/labels";
 import { buildFinanceReport } from "@/lib/finance/report";
 
 export const metadata: Metadata = { title: "Financial · Клиенты" };
@@ -41,7 +41,7 @@ export default async function FinanceClientsPage() {
               <th>С месяца</th>
               <th>KPI в этом месяце</th>
               <th className="!text-right">Доход месяца</th>
-              <th className="!text-right">Получено</th>
+              <th>Оплата</th>
               <th></th>
             </tr>
           </thead>
@@ -58,7 +58,17 @@ export default async function FinanceClientsPage() {
                     <Pill tone={KPI_TONE[m?.kpi ?? "unknown"]}>{pace != null ? `темп ${Math.round(pace * 100)}%` : KPI_LABEL[m?.kpi ?? "unknown"]}</Pill>
                   </td>
                   <td className="text-right font-semibold tabular-nums">{m?.accrual ? money(m.accrual.total, m.accrual.currency) : "—"}</td>
-                  <td className="text-right tabular-nums text-muted-foreground">{m?.receivedBase ? money(m.receivedBase) : "—"}</td>
+                  <td>
+                    {(() => {
+                      const st = payStatus(p.pay, r.today, r.invoices.some((x) => x.projectId === p.id && x.status === "issued"));
+                      return (
+                        <>
+                          <Pill tone={st.tone}>{st.label}</Pill>
+                          {st.hint && <span className="block text-xs text-negative">{st.hint}</span>}
+                        </>
+                      );
+                    })()}
+                  </td>
                   <td className="text-right">
                     <TermsButton label="Изменить" target={{ id: p.id, name: p.name, startMonth: p.startMonth, currency: p.currency, terms: p.terms }} />
                     <span className="ml-1 text-muted-foreground" aria-hidden>

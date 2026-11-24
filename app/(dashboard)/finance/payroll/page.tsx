@@ -175,6 +175,13 @@ export default async function FinancePayrollPage() {
                     {money(p.amount)}
                   </span>
                 </div>
+                {p.paid && Math.abs(p.amount - p.counted) >= 1 && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Выплачено {money(p.amount)}. По нынешним правилам вышло бы{" "}
+                    {money(p.counted)} — строки ниже показывают этот расчёт,
+                    выплаченный месяц не пересчитывается.
+                  </p>
+                )}
                 <div className="mt-3 flex flex-col gap-2 text-sm">
                   {p.lines.map((l) => (
                     <div
@@ -405,11 +412,8 @@ export default async function FinancePayrollPage() {
                 <td className="text-muted-foreground">{roleLabel(p.role)}</td>
                 {last.map((m) => {
                   const lines = p.lines.filter((l) => l.month === m);
-                  const total =
-                    lines.reduce((a, l) => a + (l.amount ?? 0), 0) +
-                    (p.baseSalary && (!p.staff || p.staff.sinceMonth <= m)
-                      ? p.baseSalary
-                      : 0);
+                  // A month already paid out shows what was paid, not what today's rules would give.
+                  const total = r.payOf(p, m);
                   return (
                     <td key={m} className="text-right tabular-nums">
                       {total ? (

@@ -113,6 +113,9 @@ export interface InvoiceInput {
   status: "issued" | "paid" | "cancelled";
   paidDate: string | null;
   note: string;
+  /** The days the payment covers; left out or null = worked out from the dates. */
+  periodStart?: string | null;
+  periodEnd?: string | null;
 }
 
 export async function saveInvoice(input: InvoiceInput & { id?: string }, actor: string) {
@@ -130,6 +133,12 @@ export async function saveInvoice(input: InvoiceInput & { id?: string }, actor: 
 
 export async function setInvoiceStatus(id: string, status: "issued" | "paid" | "cancelled", paidDate: string | null) {
   await getDb().update(finInvoices).set({ status, paidDate, updatedAt: new Date() }).where(eq(finInvoices.id, id));
+}
+
+/** The days an invoice or payment covers; both null = work them out from the dates again. */
+export async function setInvoicePeriod(id: string, periodStart: string | null, periodEnd: string | null) {
+  const set = { periodStart, periodEnd, updatedAt: new Date(), ...(periodStart ? { month: periodStart.slice(0, 7) } : {}) };
+  await getDb().update(finInvoices).set(set).where(eq(finInvoices.id, id));
 }
 
 /** Replaces the lines of an invoice (the monthly recount of an automatically issued one). */

@@ -39,10 +39,12 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
 
   const closed = months.filter((m) => !m.forecast);
   const accruedAll = months.reduce((a, m) => a + m.accrualBase, 0);
-  const accruedClosed = closed.reduce((a, m) => a + m.accrualBase, 0);
   const receivedAll = months.reduce((a, m) => a + m.receivedBase, 0);
   const costAll = months.reduce((a, m) => a + costOf(m.month), 0);
-  const debt = Math.max(0, accruedClosed - closed.reduce((a, m) => a + m.receivedBase, 0));
+  // Owed and paid ahead are counted by days: what the payments cover against the days in service.
+  const debt = p.pay?.debtBase ?? 0;
+  const through = p.pay?.paidThrough ?? null;
+  const dm = (day: string) => day.slice(0, 10).split("-").reverse().join(".");
   const judged = closed.filter((m) => m.kpi !== "unknown");
   const metCount = judged.filter((m) => m.kpi === "met").length;
   const metric = months.find((m) => m.data?.kpi)?.data?.kpi?.metric;
@@ -71,10 +73,12 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
           <span>начислено по условиям, {months.length} мес.</span>
         </KpiTile>
         <KpiTile label="Получено" value={money(receivedAll)}>
-          <span>оплаченные счета</span>
+          <span>{through ? `оплачено по ${dm(through)}` : "оплат пока нет"}</span>
+          {p.pay && p.pay.prepaidBase >= 1 ? <span className="w-full">из них вперёд {money(p.pay.prepaidBase)}</span> : null}
         </KpiTile>
-        <KpiTile label="Не оплачено" value={money(debt)} tone={debt > 0 ? "negative" : undefined}>
-          <span>за закрытые месяцы</span>
+        <KpiTile label="Не оплачено" value={money(debt)} tone={debt >= 1 ? "negative" : undefined}>
+          <span>{p.pay ? `дни в работе с ${dm(p.pay.from)} без оплаты` : "условия не заполнены"}</span>
+          {p.pay ? <span className="w-full">следующий счёт: {dm(p.pay.next.start)} — {dm(p.pay.next.end)}</span> : null}
         </KpiTile>
         <KpiTile label="Маржа" value={money(accruedAll - costAll)} highlight>
           <Pill tone="lime">{accruedAll ? `${Math.round(((accruedAll - costAll) / accruedAll) * 100)}%` : "—"}</Pill>

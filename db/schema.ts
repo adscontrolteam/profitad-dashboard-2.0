@@ -516,8 +516,11 @@ export const finInvoices = pgTable(
     id: text("id").primaryKey(),
     number: integer("number").notNull(),
     projectId: text("project_id"),
-    /** YYYY-MM the payment is for. */
+    /** YYYY-MM the payment is for (the month its period starts in). */
     month: text("month").notNull(),
+    /** The days the payment covers, when typed by hand; null = worked out from the dates (lib/finance/periods.ts). */
+    periodStart: date("period_start"),
+    periodEnd: date("period_end"),
     issueDate: date("issue_date").notNull(),
     methodId: text("method_id"),
     /** Snapshot of the payment details at issue time, so later edits of the account do not change old invoices. */

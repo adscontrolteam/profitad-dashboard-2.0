@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { deleteInvoiceAction, saveInvoiceAction, setInvoiceStatusAction } from "@/app/(dashboard)/finance/actions";
+import { deleteInvoiceAction, saveInvoiceAction, setInvoicePeriodAction, setInvoiceStatusAction } from "@/app/(dashboard)/finance/actions";
 import { CURRENCIES } from "@/lib/finance/currency";
 import type { PaymentMethod } from "@/lib/finance/store";
 import { Drawer, Field, FormError } from "./drawer";
@@ -62,15 +62,60 @@ export function InvoiceRowActions({ id, status, document }: { id: string; status
   );
 }
 
+const dm = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}`;
+
+/** The days an invoice or payment covers; a click opens the two dates to correct them. */
+export function PeriodButton({ id, start, end, auto }: { id: string; start: string; end: string; auto: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [from, setFrom] = useState(start);
+  const [to, setTo] = useState(end);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, run] = useTransition();
+  const save = (a: string, b: string) =>
+    run(async () => {
+      const res = await setInvoicePeriodAction(id, a, b);
+      if (!res.ok) return setError(res.message);
+      setError(null);
+      setOpen(false);
+    });
+  if (!open)
+    return (
+      <button type="button" className="text-left tabular-nums hover:underline" onClick={() => setOpen(true)} title="Изменить период">
+        {dm(start)} — {dm(end)}
+        <span className="block text-[11px] text-muted-foreground">{auto ? "посчитан по датам" : "задан вручную"}</span>
+      </button>
+    );
+  return (
+    <span className="flex flex-col gap-1">
+      <span className="flex items-center gap-1">
+        <input type="date" className="field w-[140px] py-1" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Период с" />
+        <input type="date" className="field w-[140px] py-1" value={to} onChange={(e) => setTo(e.target.value)} aria-label="Период по" />
+      </span>
+      <span className="flex items-center gap-1">
+        <button type="button" className="btn-primary px-3 py-1" disabled={busy} onClick={() => save(from, to)}>
+          OK
+        </button>
+        {!auto && (
+          <button type="button" className="btn-ghost px-3 py-1" disabled={busy} onClick={() => save("", "")}>
+            Авто
+          </button>
+        )}
+        <button type="button" className="btn-ghost px-3 py-1" onClick={() => setOpen(false)}>
+          Отмена
+        </button>
+      </span>
+      {error && <span className="text-xs text-negative">{error}</span>}
+    </span>
+  );
+}
+
 /** A payment received without an invoice from the dashboard (e.g. a direct transfer). */
 export function RecordPaymentButton({
   projects,
   methods,
-  month,
 }: {
   projects: { id: string; name: string; currency: string | null }[];
   methods: PaymentMethod[];
-  month: string;
 }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,9 +128,14 @@ export function RecordPaymentButton({
     const fxRate = Number(String(f.get("fxRate") ?? "").replace(/\s/g, "").replace(",", "."));
     const withRate = contract && contract !== f.get("currency") && fxRate > 0;
     start(async () => {
+      const periodStart = String(f.get("periodStart") || "");
+      const periodEnd = String(f.get("periodEnd") || "");
       const res = await saveInvoiceAction({
         projectId: String(f.get("projectId") || "") || null,
-        month: String(f.get("month")),
+        // The month is the one the period starts in; with no period typed it is worked out from the day of payment.
+        month: (periodStart || String(f.get("paidDate"))).slice(0, 7),
+        periodStart: periodStart || null,
+        periodEnd: periodEnd || null,
         issueDate: String(f.get("paidDate")),
         methodId: method?.id ?? null,
         recipient: method ? { kind: method.kind, label: method.label, details: method.details } : null,
@@ -133,13 +183,22 @@ export function RecordPaymentButton({
                   ))}
                 </select>
               </Field>
-              <Field label="За месяц">
-                <input name="month" type="month" defaultValue={month} className="field" />
-              </Field>
               <Field label="Дата оплаты">
                 <input name="paidDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} className="field" />
               </Field>
             </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Оплачено с">
+                <input name="periodStart" type="date" className="field" />
+              </Field>
+              <Field label="по">
+                <input name="periodEnd" type="date" className="field" />
+              </Field>
+            </div>
+            <p className="-mt-2 text-xs text-muted-foreground">
+              Период можно не заполнять — посчитается по дате оплаты и сумме: в начале месяца — за этот месяц, в конце — за следующий, в середине — с дня
+              оплаты; часть суммы — до конца месяца. Поправить можно потом в списке.
+            </p>
             <Field label="Курс к валюте договора" hint="Если оплата в другой валюте: сколько её единиц за 1 единицу валюты договора. Пусто — по курсу НБУ">
               <input name="fxRate" inputMode="decimal" className="field tabular-nums" placeholder="например 50,2" />
             </Field>

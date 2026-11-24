@@ -22,6 +22,7 @@ import {
   saveSmmRate,
   saveStaff,
   saveTerms,
+  setInvoicePeriod,
   setInvoiceStatus,
   unmarkPayout,
 } from "@/lib/finance/store";
@@ -141,6 +142,9 @@ export interface InvoicePayload {
   status: "issued" | "paid";
   paidDate: string | null;
   note: string;
+  /** The days the payment covers; empty = worked out from the dates. */
+  periodStart?: string | null;
+  periodEnd?: string | null;
 }
 
 export async function saveInvoiceAction(p: InvoicePayload): Promise<FinState> {
@@ -153,6 +157,9 @@ export async function saveInvoiceAction(p: InvoicePayload): Promise<FinState> {
     .filter((i) => i.name && Number.isFinite(i.amount) && i.amount > 0);
   if (!items.length) return { ok: false, message: "Добавьте услугу и сумму." };
   if (p.status === "paid" && (!p.paidDate || !DATE.test(p.paidDate))) return { ok: false, message: "Укажите дату оплаты." };
+  const periodStart = p.periodStart && DATE.test(p.periodStart) ? p.periodStart : null;
+  const periodEnd = p.periodEnd && DATE.test(p.periodEnd) ? p.periodEnd : null;
+  if (periodStart && periodEnd && periodEnd < periodStart) return { ok: false, message: "Период: дата «по» раньше даты «с»." };
   // The agreed rate is kept only when the invoice is in another currency than the client's terms.
   const fx =
     p.contractCurrency && p.contractCurrency !== p.currency && (CURRENCIES as readonly string[]).includes(p.contractCurrency) && p.fxRate && Number.isFinite(p.fxRate) && p.fxRate > 0;
@@ -175,6 +182,8 @@ export async function saveInvoiceAction(p: InvoicePayload): Promise<FinState> {
       status: p.status,
       paidDate: p.status === "paid" ? p.paidDate : null,
       note: p.note.slice(0, 2000),
+      // Left out by a form that does not show the period — the saved one is kept then.
+      ...(p.periodStart !== undefined || p.periodEnd !== undefined ? { periodStart, periodEnd } : {}),
     },
     viewer.email,
   );
@@ -188,6 +197,17 @@ export async function setInvoiceStatusAction(id: string, status: "issued" | "pai
   await guard();
   await setInvoiceStatus(id, status, status === "paid" ? (paidDate && DATE.test(paidDate) ? paidDate : new Date().toISOString().slice(0, 10)) : null);
   refresh();
+}
+
+/** The days an invoice or payment covers. Both empty = work them out from the dates again. */
+export async function setInvoicePeriodAction(id: string, start: string, end: string): Promise<FinState> {
+  await guard();
+  if ((start && !DATE.test(start)) || (end && !DATE.test(end))) return { ok: false, message: "Укажите даты периода." };
+  if (start && end && end < start) return { ok: false, message: "Дата «по» раньше даты «с»." };
+  if (Boolean(start) !== Boolean(end)) return { ok: false, message: "Укажите обе даты или очистите обе." };
+  await setInvoicePeriod(id, start || null, end || null);
+  refresh();
+  return { ok: true, message: "Период сохранён." };
 }
 
 export async function deleteInvoiceAction(id: string) {

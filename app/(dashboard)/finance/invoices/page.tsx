@@ -1,20 +1,22 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { InvoiceRowActions, RecordPaymentButton } from "@/components/finance/invoice-actions";
+import { InvoiceRowActions, PeriodButton, RecordPaymentButton } from "@/components/finance/invoice-actions";
 import { MethodsList } from "@/components/finance/methods-card";
-import { CardHead, dateLabel, Empty, KpiTile, monthLabel, Pill, Table } from "@/components/finance/ui";
+import { CardHead, dateLabel, Empty, KpiTile, Pill, Table } from "@/components/finance/ui";
 import { Card } from "@/components/ui/card";
 import { requireSection } from "@/lib/access/viewer";
 import { getProjects } from "@/lib/data";
 import { BASE_CURRENCY, convert, getRates, money } from "@/lib/finance/fx";
-import { invoiceIn, listInvoices, listMethods, listTerms } from "@/lib/finance/store";
+import { buildFinanceReport } from "@/lib/finance/report";
+import { invoiceIn, listMethods, listTerms } from "@/lib/finance/store";
 import { currentMonth } from "@/lib/projects/plans";
 
 export const metadata: Metadata = { title: "Financial · Инвойсы" };
 
 export default async function FinanceInvoicesPage() {
   await requireSection("finance");
-  const [invoices, methods, projects, rates, terms] = await Promise.all([listInvoices(), listMethods(), getProjects(), getRates(), listTerms()]);
+  const [report, methods, projects, rates, terms] = await Promise.all([buildFinanceReport(), listMethods(), getProjects(), getRates(), listTerms()]);
+  const invoices = report.invoices;
   const termCurrency = new Map(terms.map((t) => [t.projectId, t.currency]));
   const names = new Map(projects.map((p) => [p.id, p.name]));
   const now = currentMonth();
@@ -45,8 +47,11 @@ export default async function FinanceInvoicesPage() {
       </div>
 
       <Card>
-        <CardHead title="Счета и оплаты" hint="Суммы в валюте счёта; в шапке — в долларах по курсу НБУ">
-          <RecordPaymentButton projects={projects.filter((p) => p.status !== "archived").map((p) => ({ id: p.id, name: p.name, currency: termCurrency.get(p.id) ?? null }))} methods={methods} month={now} />
+        <CardHead
+          title="Счета и оплаты"
+          hint="Период — какие дни покрывает оплата. Считается сам: оплата в начале месяца — за этот месяц, в конце — за следующий, в середине — с дня оплаты; половина суммы — до конца месяца. Нажмите на период, чтобы поправить даты"
+        >
+          <RecordPaymentButton projects={projects.filter((p) => p.status !== "archived").map((p) => ({ id: p.id, name: p.name, currency: termCurrency.get(p.id) ?? null }))} methods={methods} />
           <Link href="/finance/invoices/new" className="btn-primary">
             + Новый инвойс
           </Link>
@@ -58,7 +63,7 @@ export default async function FinanceInvoicesPage() {
                 <th>№</th>
                 <th>Дата</th>
                 <th>Проект</th>
-                <th>За месяц</th>
+                <th>Период</th>
                 <th>Реквизиты</th>
                 <th className="!text-right">Сумма</th>
                 <th>Курс</th>
@@ -72,7 +77,13 @@ export default async function FinanceInvoicesPage() {
                   <td className="tabular-nums text-muted-foreground">{i.document ? i.number : "—"}</td>
                   <td className="tabular-nums">{dateLabel(i.issueDate)}</td>
                   <td className="font-semibold">{names.get(i.projectId ?? "") ?? "—"}</td>
-                  <td className="text-muted-foreground">{monthLabel(i.month)}</td>
+                  <td>
+                    {report.periodOf[i.id] ? (
+                      <PeriodButton id={i.id} start={report.periodOf[i.id].start} end={report.periodOf[i.id].end} auto={report.periodOf[i.id].auto} />
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="text-muted-foreground">{i.recipient?.label ?? "—"}</td>
                   <td className="text-right font-semibold tabular-nums">{money(i.total, i.currency, 2)}</td>
                   <td className="text-xs text-muted-foreground tabular-nums">

@@ -6,7 +6,7 @@ import { CardHead, Empty, KpiTile, monthLabel, Note, Pill, Table } from "@/compo
 import { Card } from "@/components/ui/card";
 import { requireSection } from "@/lib/access/viewer";
 import { money } from "@/lib/finance/fx";
-import { KPI_LABEL, KPI_TONE, termsSummary } from "@/lib/finance/labels";
+import { KPI_LABEL, KPI_TONE, payStatus, termsSummary } from "@/lib/finance/labels";
 import { buildFinanceReport } from "@/lib/finance/report";
 
 export const metadata: Metadata = { title: "Financial" };
@@ -58,9 +58,9 @@ export default async function FinanceOverviewPage() {
       <div className="grid gap-3 md:grid-cols-2 lg:gap-5 xl:grid-cols-4">
         <KpiTile label={`Доход · ${monthLabel(r.now)}`} value={money(cur.revenue)}>
           {cur.plan?.revenuePlan ? <Pill tone={cur.revenue >= cur.plan.revenuePlan ? "good" : "warning"}>{pct(cur.revenue, cur.plan.revenuePlan)} плана</Pill> : null}
-          <span>фикс за месяц + % по факту на сегодня</span>
+          <span>фикс по дням в работе + % по факту на сегодня</span>
           <span className="w-full">
-            получено {money(cur.received)}
+            пришло денег {money(cur.received)}
             {delta(cur.revenue, prev?.revenue) ? ` · ${delta(cur.revenue, prev?.revenue)}` : ""}
           </span>
         </KpiTile>
@@ -126,7 +126,7 @@ export default async function FinanceOverviewPage() {
       </div>
 
       <Card>
-        <CardHead title="Клиенты в этом месяце" hint="Доход по условиям договора и выполнение KPI клиента">
+        <CardHead title="Клиенты в этом месяце" hint="Доход — по дням в работе в этом месяце. Оплата — по какой день клиент оплатил вперёд">
           <Link href="/finance/clients" className="btn-ghost">Условия →</Link>
         </CardHead>
         <Table>
@@ -163,7 +163,15 @@ export default async function FinanceOverviewPage() {
                     )}
                   </td>
                   <td>
-                    {m?.receivedBase ? <Pill tone="good">Оплачено {money(m.receivedBase)}</Pill> : m?.issuedBase ? <Pill tone="warning">Выставлен {money(m.issuedBase)}</Pill> : <Pill>Нет счёта</Pill>}
+                    {(() => {
+                      const st = payStatus(p.pay, r.today, r.invoices.some((x) => x.projectId === p.id && x.status === "issued"));
+                      return (
+                        <>
+                          <Pill tone={st.tone}>{st.label}</Pill>
+                          {st.hint && <span className="block text-xs text-negative">{st.hint}</span>}
+                        </>
+                      );
+                    })()}
                   </td>
                 </tr>
               );
