@@ -55,7 +55,7 @@ export default async function FinanceOverviewPage() {
         </Link>
       )}
 
-      <div className="grid gap-3 md:grid-cols-3 lg:gap-5">
+      <div className="grid gap-3 md:grid-cols-2 lg:gap-5 xl:grid-cols-4">
         <KpiTile label={`Доход · ${monthLabel(r.now)}`} value={money(cur.revenue)}>
           {cur.plan?.revenuePlan ? <Pill tone={cur.revenue >= cur.plan.revenuePlan ? "good" : "warning"}>{pct(cur.revenue, cur.plan.revenuePlan)} плана</Pill> : null}
           <span>фикс за месяц + % по факту на сегодня</span>
@@ -72,10 +72,21 @@ export default async function FinanceOverviewPage() {
             {delta(expenses, prev ? prev.payroll + prev.other : undefined) ? ` · ${delta(expenses, prev ? prev.payroll + prev.other : undefined)}` : ""}
           </span>
         </KpiTile>
-        <KpiTile label={`Прибыль · ${monthLabel(r.now)}`} value={money(cur.profit)} highlight>
+        <KpiTile label={`Прибыль · ${monthLabel(r.now)}`} value={money(cur.profit)}>
           <Pill tone="lime">маржа {pct(cur.profit, cur.revenue)}</Pill>
           {cur.plan?.profitPlan ? <span>план {money(cur.plan.profitPlan)} · {pct(cur.profit, cur.plan.profitPlan)}</span> : <span>план не задан</span>}
           {delta(cur.profit, prev?.profit) ? <span className="w-full">{delta(cur.profit, prev?.profit)}</span> : null}
+        </KpiTile>
+        <KpiTile label="ЗП фонд" value={money(r.payrollFund.total)} highlight>
+          <span>столько должно лежать на зарплаты</span>
+          <span className="w-full">
+            {r.payrollFund.unpaid > 0 ? `не выплачено ${money(r.payrollFund.unpaid)} · ` : ""}
+            {monthLabel(r.now)} {money(r.payrollFund.current)}
+          </span>
+          <span className="w-full">
+            {monthLabel(r.payrollFund.nextMonth)}{" "}
+            {r.payrollFund.next > 0 ? `${money(r.payrollFund.next)} · оплатили: ${r.payrollFund.nextProjects.join(", ")}` : "— ещё никто не оплатил"}
+          </span>
         </KpiTile>
       </div>
 

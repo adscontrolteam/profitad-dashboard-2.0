@@ -132,6 +132,12 @@ export async function setInvoiceStatus(id: string, status: "issued" | "paid" | "
   await getDb().update(finInvoices).set({ status, paidDate, updatedAt: new Date() }).where(eq(finInvoices.id, id));
 }
 
+/** Replaces the lines of an invoice (the monthly recount of an automatically issued one). */
+export async function setInvoiceItems(id: string, items: InvoiceItem[]) {
+  const total = Math.round(items.reduce((a, i) => a + i.amount, 0) * 100) / 100;
+  await getDb().update(finInvoices).set({ items, total, updatedAt: new Date() }).where(eq(finInvoices.id, id));
+}
+
 export async function deleteInvoice(id: string) {
   await getDb().delete(finInvoices).where(eq(finInvoices.id, id));
 }

@@ -153,6 +153,20 @@ export interface PayoutDue {
   paid: Payout | null;
 }
 
+/** How much money has to lie in the payroll fund right now, base currency. */
+export interface PayrollFund {
+  total: number;
+  /** Closed months that are counted and not yet marked as paid. */
+  unpaid: number;
+  /** The current month: every project in work, at the forecast rate. */
+  current: number;
+  /** The next month, only for projects whose client has already paid for it. */
+  next: number;
+  nextMonth: string;
+  /** Projects paid for the next month (their payroll is in `next`). */
+  nextProjects: string[];
+}
+
 export interface FinanceReport {
   now: string;
   months: string[];
@@ -166,6 +180,7 @@ export interface FinanceReport {
   plans: AgencyPlan[];
   pnl: PnlMonth[];
   payoutsDue: PayoutDue[];
+  payrollFund: PayrollFund;
   expensesFor: (month: string) => ExpenseLine[];
   payrollFor: (month: string) => number;
 }
@@ -342,7 +357,32 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     })
     .filter((d) => d.amount > 0 || d.lines.length);
 
-  return { now, months, rates, projects: finProjects, people, assignments, expenses, invoices, plans, pnl, payoutsDue, expensesFor, payrollFor };
+  /* ---- payroll fund: what is already owed + what the clients have paid ahead for ---- */
+  const next = addMonths(now, 1);
+  const paidAhead = new Set(
+    invoices.filter((x) => x.projectId && x.month === next && x.status === "paid").map((x) => x.projectId as string),
+  );
+  const nextPayroll = people.reduce(
+    (a, p) =>
+      a +
+      p.lines
+        .filter((l) => l.month === now && paidAhead.has(l.projectId) && l.rate !== null)
+        // A full month at the rate; the third month in a row with KPI met is already +50%.
+        .reduce((s, l) => s + toBase(l.rate! * (l.streak + 1 >= 3 ? 1.5 : 1), PAY_CURRENCY, rates), 0),
+    0,
+  );
+  const unpaidPayroll = payoutsDue.filter((d) => !d.paid).reduce((a, d) => a + toBase(d.amount, d.currency, rates), 0);
+  const currentPayroll = payrollFor(now);
+  const payrollFund: PayrollFund = {
+    total: unpaidPayroll + currentPayroll + nextPayroll,
+    unpaid: unpaidPayroll,
+    current: currentPayroll,
+    next: nextPayroll,
+    nextMonth: next,
+    nextProjects: finProjects.filter((p) => paidAhead.has(p.id) && people.some((x) => x.lines.some((l) => l.month === now && l.projectId === p.id))).map((p) => p.name),
+  };
+
+  return { now, months, rates, projects: finProjects, people, assignments, expenses, invoices, plans, pnl, payoutsDue, payrollFund, expensesFor, payrollFor };
 }
 
 export { BASE_CURRENCY };

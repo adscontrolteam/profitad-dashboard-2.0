@@ -103,13 +103,23 @@ export default async function FinancePayrollPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-2 gap-3 lg:gap-5 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:gap-5 xl:grid-cols-5">
+        <KpiTile label="ЗП фонд" value={money(r.payrollFund.total)} highlight>
+          <span>столько должно лежать на зарплаты</span>
+          <span className="w-full">
+            {r.payrollFund.unpaid > 0 ? `не выплачено ${money(r.payrollFund.unpaid)} · ` : ""}
+            {monthLabel(r.now)} {money(r.payrollFund.current)}
+          </span>
+          <span className="w-full">
+            {monthLabel(r.payrollFund.nextMonth)}{" "}
+            {r.payrollFund.next > 0 ? `${money(r.payrollFund.next)} · оплатили: ${r.payrollFund.nextProjects.join(", ")}` : "— ещё никто не оплатил"}
+          </span>
+        </KpiTile>
         <KpiTile
           label={
             prevMonth ? `К выплате за ${monthLabel(prevMonth)}` : "К выплате"
           }
           value={money(dueTotal)}
-          highlight={dueTotal > 0}
         >
           <span>
             {dueTotal > 0 ? "выплатить в начале месяца" : "всё выплачено"}
