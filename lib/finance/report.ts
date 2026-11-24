@@ -14,7 +14,6 @@ import {
   flatPay,
   PAY_CURRENCY,
   firstPayMonth,
-  fromEntry,
   LEDGER_MONTH,
   paidState,
   TEST_SHARE,
@@ -307,7 +306,9 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
       const live = invoices.filter((x) => x.projectId === p.id && x.status !== "cancelled");
       const paidIn = (month: string) =>
         t ? live.filter((x) => x.status === "paid" && x.month === month).reduce((a, x) => a + invoiceIn(x, t.currency, (v, f, to) => convert(v, f, to, rates)), 0) : 0;
-      const paidFor = (month: string): PaidState => paidState(paidIn(month), feeFor(month));
+      // Paid ahead: some of the money for the month came before that month began.
+      const paidAhead = (month: string) => live.some((x) => x.status === "paid" && x.month === month && (x.paidDate ?? x.issueDate).slice(0, 7) < month);
+      const paidFor = (month: string): PaidState => paidState(paidIn(month), feeFor(month), paidAhead(month));
       const rows: ProjectFinMonth[] = hist.map((month, i) => {
         const d = data[i];
         const forecast = month === now;
@@ -444,18 +445,14 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
       };
       // Whole months only; a start after the 7th writes the first pay to the next month.
       const first = a?.startDate ? firstPayMonth(a.startDate) : null;
-      const paidLines = fromEntry(pay, a?.startDate ?? null);
-      // The client took a half-month test in month T (paid a part of the fee). Whoever is paid for T gets half the
-      // rate for it. Whoever joined after the 7th of T is paid that half in their first month — and their regular
-      // pay for that month waits until the client pays for it in full.
+      const startMonth = a?.startDate ? a.startDate.slice(0, 7) : null;
+      // The client took a half-month test in month T (paid a part of the fee inside T). Everyone who was on the
+      // project in T is paid half the rate for it, in T itself — whatever day of T they started on.
       const tests = task === "run" ? states.map((x) => x.month).filter((m) => fp.paidFor(m) === "test") : [];
-      const lateTest = first ? tests.filter((m) => m < first && m >= addMonths(first, -1)) : [];
-      for (const line of paidLines) {
-        if (tests.includes(line.month)) add(half(line, "клиент зашёл на полмесяца"), "stub");
-        else if (lateTest.length && line.month === first) {
-          add(half(line, `клиент зашёл на полмесяца (${lateTest[0].slice(5, 7)}.${lateTest[0].slice(0, 4)})`), "stub");
-          if (fp.paidFor(line.month) === "full") add(line, task);
-        } else add(line, task);
+      for (const line of pay) {
+        if (tests.includes(line.month)) {
+          if (!startMonth || startMonth <= line.month) add(half(line, "клиент зашёл на полмесяца"), "stub");
+        } else if (!first || line.month >= first) add(line, task);
       }
     }
   }

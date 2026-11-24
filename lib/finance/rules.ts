@@ -146,12 +146,17 @@ export function payMonthByDate(date: string, partial = false) {
 /** Payments are kept in the dashboard from this month; nothing before it is counted as owed. */
 export const LEDGER_MONTH = "2026-11";
 
-/** How a client paid for a month: the whole fee, a part of it (a test for half a month), or nothing. */
+/**
+ * How a client paid for a month: for the whole month, as a half-month test, or not at all.
+ * A test is a part of the fee paid inside the very month it is for — the client came in the middle of it.
+ * Money paid ahead for a coming month makes that month a paid one whatever the amount: the client may pay in
+ * parts, and the team works the whole month.
+ */
 export type PaidState = "full" | "test" | "none";
 
-export function paidState(paid: number, fee: number): PaidState {
+export function paidState(paid: number, fee: number, paidAhead: boolean): PaidState {
   if (paid <= 0) return "none";
-  return fee <= 0 || paid >= fee * 0.9 ? "full" : "test";
+  return paidAhead || fee <= 0 || paid >= fee * 0.9 ? "full" : "test";
 }
 
 /** A test (a client taken for half a month, an SMM test task) is paid half the rate; the KPI rule does not touch it. */

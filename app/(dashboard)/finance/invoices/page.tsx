@@ -49,7 +49,7 @@ export default async function FinanceInvoicesPage() {
       <Card>
         <CardHead
           title="Счета и оплаты"
-          hint="«За месяц» ставится сам: оплата до 7-го числа — за этот месяц, позже — за следующий. Половина суммы — тест на полмесяца, остаётся в текущем. Нажмите на месяц, чтобы поправить"
+          hint="«За месяц» ставится сам: оплата до 7-го числа — за этот месяц, позже — за следующий. Часть суммы, оплаченная за текущий месяц, — тест на полмесяца. Нажмите на месяц, чтобы поправить"
         >
           <RecordPaymentButton projects={projects.filter((p) => p.status !== "archived").map((p) => ({ id: p.id, name: p.name, currency: termCurrency.get(p.id) ?? null }))} methods={methods} />
           <Link href="/finance/invoices/new" className="btn-primary">
