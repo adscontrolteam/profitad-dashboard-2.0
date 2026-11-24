@@ -7,15 +7,15 @@ import { requireSection } from "@/lib/access/viewer";
 import { money } from "@/lib/finance/fx";
 import { KPI_LABEL, KPI_TONE, termsSummary, payStatus } from "@/lib/finance/labels";
 import { buildFinanceReport } from "@/lib/finance/report";
+import { PaymentsSection } from "./payments";
 
-export const metadata: Metadata = { title: "Financial · Клиенты" };
+export const metadata: Metadata = { title: "Financial · Клиенты и оплаты" };
 
 export default async function FinanceClientsPage() {
   await requireSection("finance");
   const r = await buildFinanceReport();
   const clients = r.projects.filter((p) => p.status !== "archived");
   const missing = clients.filter((p) => !p.terms);
-  const last = r.months.slice(-6);
 
   return (
     <div className="flex flex-col gap-5">
@@ -32,7 +32,7 @@ export default async function FinanceClientsPage() {
       ))}
 
       <Card>
-        <CardHead title="Договоры и условия оплаты" hint="Нажмите на клиента, чтобы открыть всю аналитику по нему: результаты, деньги, цели, счета" />
+        <CardHead title="Договоры и условия оплаты" hint="Нажмите на клиента, чтобы открыть всё по нему: результаты, деньги по месяцам, счета. Счета и оплаты всех клиентов — ниже" />
         <Table>
           <thead>
             <tr>
@@ -85,44 +85,7 @@ export default async function FinanceClientsPage() {
         </Table>
       </Card>
 
-      <Card>
-        <CardHead title="Доход по клиентам" hint="Деньги клиента по месяцу, в котором они зашли. Цвет — выполнение KPI клиента" />
-        <Table>
-          <thead>
-            <tr>
-              <th>Клиент</th>
-              {last.map((m) => (
-                <th key={m} className="!text-right">
-                  {monthShort(m)}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {clients.map((p) => (
-              <ClickRow key={p.id} href={`/finance/clients/${p.id}`}>
-                <td className="font-semibold">{p.name}</td>
-                {last.map((m) => {
-                  const row = p.months.find((x) => x.month === m);
-                  const v = row?.data?.kpi?.[row.forecast ? "pace" : "progress"];
-                  return (
-                    <td key={m} className="text-right tabular-nums">
-                      {row?.accrual || row?.receivedBase ? (
-                        <div className="flex flex-col items-end gap-1">
-                          <b>{row.receivedBase ? money(row.receivedBase) : "—"}</b>
-                          <Pill tone={KPI_TONE[row.kpi]}>{v != null ? `${Math.round(v * 100)}%` : "—"}</Pill>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  );
-                })}
-              </ClickRow>
-            ))}
-          </tbody>
-        </Table>
-      </Card>
+      <PaymentsSection />
     </div>
   );
 }

@@ -4,9 +4,10 @@ import { CardHead, Empty, KpiTile, monthLabel, Pill, Table } from "@/components/
 import { Card } from "@/components/ui/card";
 import { requireSection } from "@/lib/access/viewer";
 import { money } from "@/lib/finance/fx";
+import { PlanSection } from "./plan";
 import { buildFinanceReport, expenseActive } from "@/lib/finance/report";
 
-export const metadata: Metadata = { title: "Financial · Расходы" };
+export const metadata: Metadata = { title: "Financial · Расходы и план" };
 
 export default async function FinanceExpensesPage() {
   await requireSection("finance");
@@ -111,6 +112,7 @@ export default async function FinanceExpensesPage() {
           </Table>
         </Card>
       )}
+      <PlanSection r={r} />
     </div>
   );
 }

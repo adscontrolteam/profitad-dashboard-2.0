@@ -37,11 +37,9 @@ export const SMM_TABS: SubNavItem[] = [
 /** Financial is the admin's alone: only the admin role has the «finance» section. */
 export const FINANCE_TABS: SubNavItem[] = [
   { label: "Обзор", href: "/finance" },
-  { label: "Клиенты", href: "/finance/clients" },
-  { label: "Инвойсы", href: "/finance/invoices" },
+  { label: "Клиенты и оплаты", href: "/finance/clients" },
   { label: "Зарплаты", href: "/finance/payroll" },
-  { label: "Расходы", href: "/finance/expenses" },
-  { label: "План / Факт", href: "/finance/plan" },
+  { label: "Расходы и план", href: "/finance/expenses" },
 ];
 
 export const NAV_ITEMS: NavItem[] = [

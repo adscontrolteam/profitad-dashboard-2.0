@@ -88,11 +88,6 @@ export default async function FinancePayrollPage() {
   const dueTotal = r.payoutsDue
     .filter((p) => !p.paid)
     .reduce((a, p) => a + p.amount, 0);
-  const forecast = r.people.flatMap((p) =>
-    p.lines
-      .filter((l) => l.month === r.now)
-      .map((l) => ({ ...l, person: p.name })),
-  );
   const forecastTotal = r.payrollFor(r.now);
   const cur = r.pnl[r.pnl.length - 1];
   const last = r.months.slice(-6);
@@ -242,223 +237,123 @@ export default async function FinancePayrollPage() {
         )}
       </Card>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:gap-5">
-        <Card>
-          <CardHead
-            title={`Прогноз на ${monthLabel(r.now)}`}
-            hint="Если KPI будут выполнены. Фактическая сумма — в начале следующего месяца"
-          />
-          {forecast.length ? (
-            <Table>
-              <thead>
-                <tr>
-                  <th>Сотрудник</th>
-                  <th>Проект</th>
-                  <th>Сейчас</th>
-                  <th>Правило</th>
-                  <th className="!text-right">Сумма</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {forecast.map((l) => (
-                  <tr key={`${l.person}-${l.role}-${l.projectId}`}>
-                    <td className="font-semibold">
-                      {l.person}
-                      <span className="block text-xs font-normal text-muted-foreground">
-                        {roleLabel(l.role)}
-                      </span>
-                    </td>
-                    <td>{l.projectName}</td>
-                    <td>
-                      <Pill tone={KPI_TONE[l.state]}>
-                        {l.state === "unknown"
-                          ? "нет данных"
-                          : l.state === "met"
-                            ? "в темпе"
-                            : "отстаёт"}
-                      </Pill>
-                    </td>
-                    <td className="text-muted-foreground">{l.rule}</td>
-                    <td className="text-right tabular-nums">
-                      {l.amount === null ? (
-                        <Pill tone="warning">ставка не задана</Pill>
-                      ) : (
-                        money(l.amount)
-                      )}
-                    </td>
-                    <td className="text-right">
-                      <RateButton
-                        projectId={l.projectId}
-                        projectName={l.projectName}
-                        rate={l.rate}
-                        kind={l.role}
-                        sourcesCount={
-                          r.projects.find((x) => x.id === l.projectId)
-                            ?.sourcesCount ?? 1
-                        }
-                        networksCount={
-                          r.projects.find((x) => x.id === l.projectId)
-                            ?.networksCount ?? 0
-                        }
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          ) : (
-            <Empty>Нет проектов с назначенным медиабайером или SMM.</Empty>
-          )}
-        </Card>
-        <div className="flex flex-col gap-3 lg:gap-5">
-          <Card>
-            <CardHead title="Правила медиабайера" />
-            <ul className="flex flex-col gap-2.5 text-sm">
-              <li>
-                Ставка за проект — <b>${BUYER_RATE_ONE_SOURCE}</b> (один
-                источник трафика), <b>$225</b> — два источника. Для 3+
-                источников ставка задаётся кнопкой «Ставка» в прогнозе.
-              </li>
-              <li>
-                KPI клиента не выполнен за месяц — <b>−50%</b> ставки.
-              </li>
-              <li>
-                KPI выполняется <b>3+ месяца подряд</b> — с 3-го месяца{" "}
-                <b>+50%</b>, и так каждый следующий месяц, пока KPI выполняется.
-              </li>
-              <li>
-                Невыполнение сбрасывает счёт — снова нужно 3 месяца подряд.
-              </li>
-              <li>
-                Проект считается целыми месяцами. Начал работу <b>до {ENTRY_DAY}-го числа</b> — зарплата за этот месяц. Начал
-                позже — первая зарплата по проекту пишется на следующий месяц. Дата входа ставится в карточке сотрудника.
-              </li>
-              <li>
-                Клиент зашёл на <b>полмесяца</b> (тест, оплатил половину за текущий месяц) — за этот месяц половина ставки.
-              </li>
-              <li>
-                KPI = главный KPI проекта из «Вводных» (план месяца), факт — из
-                «Реальных результатов».
-              </li>
-              <li>Прогноз текущего месяца считает полную ставку.</li>
-            </ul>
-          </Card>
-          <Card>
-            <CardHead title="Правила SMM" />
-            <ul className="flex flex-col gap-2.5 text-sm">
-              <li>
-                Ставка за проект в месяц — по числу соцсетей: одна —{" "}
-                <b>${SMM_RATES.one}</b>, две — <b>${SMM_RATES.two}</b>, три и
-                больше — <b>${SMM_RATES.many}</b>. Число берётся из подключённых
-                к проекту соцсетей; другую ставку задаёт кнопка «Ставка».
-              </li>
-              <li>
-                Оформление соцсетей (задача на 2–3 недели) —{" "}
-                <b>${SMM_SETUP_RATE}</b>: задаётся кнопкой «Ставка» на время
-                оформления.
-              </li>
-              <li>
-                KPI не выполнен или клиент отказался от SMM — <b>−50%</b>{" "}
-                начальной ставки.
-              </li>
-              <li>
-                KPI выполняется и клиент с нами <b>3+ месяца</b> — с 3-го месяца{" "}
-                <b>+50%</b> каждый месяц, пока условия выполняются.
-              </li>
-              <li>
-                Целые месяцы и правило {ENTRY_DAY}-го числа — как у медиабайера. Тест у SMM не оплачивается.
-              </li>
-              <li>
-                Бонусы на проектах с % от дохода начисляются отдельно, по KPI
-                дохода бизнеса.
-              </li>
-            </ul>
-          </Card>
-        </div>
-      </div>
-
       <Card>
         <CardHead
           title="Команда"
-          hint={`История начислений по месяцам. ${monthLabel(r.now)} — прогноз; потенциал на ${monthLabel(r.nextMonth)} — полный месяц на тех же проектах при выполненных KPI: ${money(r.nextPotential)} на всю команду`}
+          hint={`По каждому человеку — его проекты: ${monthLabel(r.now)} (прогноз, KPI считается выполненным) и ${monthLabel(r.nextMonth)} (полный месяц на тех же проектах). На всю команду в ${monthLabel(r.nextMonth)}: ${money(r.nextPotential)}`}
         />
-        <Table>
-          <thead>
-            <tr>
-              <th>Сотрудник</th>
-              <th>Роль</th>
-              {last.map((m) => (
-                <th key={m} className="!text-right">
-                  {monthShort(m)}
-                </th>
-              ))}
-              <th className="!text-right">{monthShort(r.nextMonth)} · потенциал</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {r.people.map((p) => (
-              <tr key={p.email}>
-                <td>
-                  <b>{p.name}</b>
-                  <span className="block text-xs text-muted-foreground">
-                    {p.staff
-                      ? `зарплата с ${p.staff.sinceMonth.split("-").reverse().join(".")}`
-                      : "не добавлен в команду"}
-                  </span>
-                </td>
-                <td className="text-muted-foreground">{roleLabel(p.role)}</td>
-                {last.map((m) => {
-                  const lines = p.lines.filter((l) => l.month === m);
-                  // A month already paid out shows what was paid, not what today's rules would give.
-                  const total = r.payOf(p, m);
-                  return (
-                    <td key={m} className="text-right tabular-nums">
-                      {total ? (
-                        money(total)
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                      {lines.some(
-                        (l) => l.streak >= 3 && l.state === "met",
-                      ) && (
-                        <span className="block text-[11px] text-positive">
-                          +50%
-                        </span>
-                      )}
-                      {lines.some(
-                        (l) => l.state === "missed" && !l.forecast,
-                      ) && (
-                        <span className="block text-[11px] text-negative">
-                          −50%
-                        </span>
-                      )}
-                    </td>
-                  );
-                })}
-                <td className="text-right tabular-nums text-muted-foreground">
-                  {p.nextPotential ? money(p.nextPotential) : "—"}
-                </td>
-                <td className="text-right">
-                  <StaffButton
-                    staff={p.staff}
-                    label={p.staff ? "Изменить" : "Добавить в команду"}
-                    defaults={{
-                      email: p.email,
-                      name: p.name,
-                      role: p.role,
-                      sinceMonth: r.now,
-                    }}
-                    options={staffOptions}
-                    projects={staffProjects}
-                    allProjects={allProjects}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+        <div className="flex flex-col gap-4">
+          {r.people.map((p) => {
+            const nowLines = p.lines.filter((l) => l.month === r.now);
+            const keys = [...new Set([...nowLines, ...p.nextLines].map((l) => `${l.role}|${l.projectId}`))];
+            const history = last.filter((m) => m < r.now && r.payOf(p, m) > 0);
+            return (
+              <div key={p.email} className="rounded-[20px] border border-border bg-background/70 p-4">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="min-w-0">
+                    <b>{p.name}</b>
+                    <span className="ml-2 text-sm text-muted-foreground">{roleLabel(p.role)}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {p.staff ? `зарплата с ${p.staff.sinceMonth.split("-").reverse().join(".")}` : "не добавлен в команду"}
+                      {history.length ? ` · ${history.map((m) => `${monthShort(m)} ${money(r.payOf(p, m))}`).join(" · ")}` : ""}
+                    </span>
+                  </div>
+                  <div className="ml-auto flex items-center gap-5 text-right tabular-nums">
+                    <div>
+                      <span className="block text-[11px] uppercase tracking-wide text-muted-foreground">{monthShort(r.now)}</span>
+                      <b className="font-display text-xl">{money(r.payOf(p, r.now))}</b>
+                    </div>
+                    <div>
+                      <span className="block text-[11px] uppercase tracking-wide text-muted-foreground">{monthShort(r.nextMonth)}</span>
+                      <b className="font-display text-xl text-muted-foreground">{p.nextPotential ? money(p.nextPotential) : "—"}</b>
+                    </div>
+                    <StaffButton
+                      staff={p.staff}
+                      label={p.staff ? "Изменить" : "Добавить в команду"}
+                      defaults={{ email: p.email, name: p.name, role: p.role, sinceMonth: r.now }}
+                      options={staffOptions}
+                      projects={staffProjects}
+                      allProjects={allProjects}
+                    />
+                  </div>
+                </div>
+                {keys.length > 0 && (
+                  <div className="mt-3">
+                    <Table>
+                      <thead>
+                        <tr>
+                          <th>Проект</th>
+                          <th>KPI сейчас</th>
+                          <th className="!text-right">{monthShort(r.now)}</th>
+                          <th className="!text-right">{monthShort(r.nextMonth)}</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {keys.map((key) => {
+                          const cur = nowLines.filter((l) => `${l.role}|${l.projectId}` === key);
+                          const nxt = p.nextLines.filter((l) => `${l.role}|${l.projectId}` === key);
+                          const any = cur[0] ?? nxt[0];
+                          const project = r.projects.find((x) => x.id === any.projectId);
+                          const sum = (list: typeof cur) => list.reduce((a, l) => a + (l.amount ?? 0), 0);
+                          const noRate = (list: typeof cur) => list.some((l) => l.amount === null);
+                          // The next month is in the payroll fund once the client has paid for it.
+                          const funded = project?.paidFor(r.nextMonth) === "full";
+                          return (
+                            <tr key={key}>
+                              <td>
+                                <span className="font-medium">{any.projectName}</span>
+                                {p.role !== any.role && <span className="ml-2 text-xs text-muted-foreground">{roleLabel(any.role)}</span>}
+                                <span className="block text-xs text-muted-foreground">{(cur[0] ?? nxt[0]).rule}</span>
+                              </td>
+                              <td>
+                                {cur.length ? (
+                                  <Pill tone={KPI_TONE[cur[0].state]}>
+                                    {cur[0].state === "unknown" ? "нет данных" : cur[0].state === "met" ? "в темпе" : "отстаёт"}
+                                  </Pill>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">с {monthShort(r.nextMonth)}</span>
+                                )}
+                              </td>
+                              <td className="text-right tabular-nums">
+                                {!cur.length ? <span className="text-muted-foreground">—</span> : noRate(cur) ? <Pill tone="warning">ставка?</Pill> : money(sum(cur))}
+                              </td>
+                              <td className="text-right tabular-nums">
+                                {!nxt.length ? (
+                                  <span className="text-muted-foreground">—</span>
+                                ) : noRate(nxt) ? (
+                                  <Pill tone="warning">ставка?</Pill>
+                                ) : (
+                                  <>
+                                    {money(sum(nxt))}
+                                    <span className={`block text-[11px] ${funded ? "text-positive" : "text-muted-foreground"}`}>
+                                      {funded ? "клиент оплатил" : "ждём оплату клиента"}
+                                    </span>
+                                  </>
+                                )}
+                              </td>
+                              <td className="text-right">
+                                <RateButton
+                                  projectId={any.projectId}
+                                  projectName={any.projectName}
+                                  rate={any.rate}
+                                  kind={any.role}
+                                  sourcesCount={project?.sourcesCount ?? 1}
+                                  networksCount={project?.networksCount ?? 0}
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {r.people.length === 0 && <Empty>В команде пока никого нет.</Empty>}
+        </div>
         <div className="mt-4">
           <StaffButton
             staff={null}
@@ -469,6 +364,48 @@ export default async function FinancePayrollPage() {
             allProjects={allProjects}
           />
         </div>
+      </Card>
+
+      <Card>
+        <details>
+          <summary className="cursor-pointer select-none font-semibold">Правила расчёта зарплаты</summary>
+          <div className="mt-4 grid gap-5 lg:grid-cols-2">
+            <div>
+              <p className="section-kicker mb-2">Общее</p>
+              <ul className="flex flex-col gap-2 text-sm">
+                <li>
+                  Проект считается целыми месяцами. Начал работу <b>до {ENTRY_DAY}-го числа</b> — зарплата за этот месяц; позже — первая зарплата пишется на
+                  следующий. Дата входа ставится в карточке сотрудника.
+                </li>
+                <li>KPI клиента не выполнен за месяц — <b>−50%</b> ставки.</li>
+                <li>
+                  KPI выполняется <b>3+ месяца подряд</b> — с 3-го месяца <b>+50%</b>, пока выполняется. Невыполнение сбрасывает счёт.
+                </li>
+                <li>KPI = главный KPI проекта из «Вводных», факт — из «Реальных результатов». Текущий месяц считается по полной ставке.</li>
+                <li>
+                  <b>ЗП фонд</b> — сколько предстоит выплатить: невыплаченное за закрытый месяц, зарплаты текущего месяца и следующий месяц по проектам, за которые
+                  клиент уже заплатил.
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p className="section-kicker mb-2">Ставки</p>
+              <ul className="flex flex-col gap-2 text-sm">
+                <li>
+                  <b>Медиабайер:</b> ${BUYER_RATE_ONE_SOURCE} за проект с одним источником трафика, $225 — с двумя; три и больше — кнопкой «Ставка».
+                </li>
+                <li>
+                  <b>Медиабайер, тест:</b> клиент зашёл на полмесяца (оплатил часть суммы за текущий месяц) — половина ставки за этот месяц.
+                </li>
+                <li>
+                  <b>SMM:</b> одна соцсеть — ${SMM_RATES.one}, две — ${SMM_RATES.two}, три и больше — ${SMM_RATES.many}. Оформление соцсетей — $
+                  {SMM_SETUP_RATE}. Тест у SMM не оплачивается.
+                </li>
+                <li>Бонусы на проектах с % от дохода начисляются отдельно, по KPI дохода бизнеса.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
       </Card>
     </div>
   );
