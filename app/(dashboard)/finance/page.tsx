@@ -35,6 +35,21 @@ export default async function FinanceOverviewPage() {
   const free = cur.revenue - fund.total - cur.other;
   const clients = r.projects.filter((p) => p.status === "active");
 
+  // Charts: the last half-year of money, this month's income by client, and where this month's income goes.
+  const recent = r.pnl.slice(-6);
+  const byClient = r.projects
+    .map((p) => ({ label: p.name, value: p.months[p.months.length - 1]?.receivedBase ?? 0 }))
+    .filter((x) => x.value > 0)
+    .sort((a, b) => b.value - a.value);
+  const maxClient = Math.max(1, ...byClient.map((x) => x.value));
+  const split = [
+    { label: `Зарплаты · ${monthLabel(r.now)}`, value: fund.current, tone: "bg-foreground/70" },
+    { label: `Зарплаты · ${monthLabel(fund.nextMonth)}, уже оплачено клиентами`, value: fund.next, tone: "bg-foreground/40" },
+    ...(fund.unpaid > 0 ? [{ label: "Не выплачено за прошлый месяц", value: fund.unpaid, tone: "bg-negative" }] : []),
+    { label: "Расходы", value: cur.other, tone: "bg-muted-foreground/50" },
+    { label: "Свободные деньги", value: Math.max(0, free), tone: "bg-positive" },
+  ];
+
   const todo: Todo[] = [];
   const unpaid = r.payoutsDue.filter((p) => !p.paid);
   if (unpaid.length) {
@@ -116,31 +131,83 @@ export default async function FinanceOverviewPage() {
         )}
       </Card>
 
-      <Card>
-        <CardHead title="Доход, расходы и прибыль" hint="Доход — деньги по месяцу оплаты. Текущий месяц: зарплаты по полной ставке" />
-        <PnlChart data={r.pnl} />
-        <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <i className="size-2.5 rounded-[3px] bg-foreground" />
-            Доход
-          </span>
-          <span className="flex items-center gap-1.5">
-            <i className="size-2.5 rounded-[3px] bg-muted-foreground/40" />
-            Расходы
-          </span>
-          <span className="flex items-center gap-1.5">
-            <i className="size-2.5 rounded-full bg-positive" />
-            Прибыль
-          </span>
-          <span className="flex items-center gap-1.5">
-            <i className="size-2.5 rounded-[3px] bg-cta" />
-            Прогноз месяца
-          </span>
-        </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Суммы в долларах по курсу НБУ: 1 USD = {r.rates.USD?.toFixed(2)} ₴, 1 EUR = {r.rates.EUR?.toFixed(2)} ₴.
-        </p>
-      </Card>
+      <div className="grid gap-3 lg:grid-cols-3 lg:gap-5">
+        <Card>
+          <CardHead title="Доход, расходы и прибыль" hint="Последние полгода. Доход — деньги по месяцу оплаты" />
+          <PnlChart data={recent} />
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <i className="size-2.5 rounded-[3px] bg-foreground" />
+              Доход
+            </span>
+            <span className="flex items-center gap-1.5">
+              <i className="size-2.5 rounded-[3px] bg-muted-foreground/40" />
+              Расходы
+            </span>
+            <span className="flex items-center gap-1.5">
+              <i className="size-2.5 rounded-full bg-positive" />
+              Прибыль
+            </span>
+            <span className="flex items-center gap-1.5">
+              <i className="size-2.5 rounded-[3px] bg-cta" />
+              Текущий месяц
+            </span>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHead title="Доход по клиентам" hint={`Кто сколько заплатил в ${monthLabel(r.now)}`} />
+          {byClient.length ? (
+            <div className="flex flex-col">
+              {byClient.map((c, i) => (
+                <div key={c.label} className={i ? "border-t border-border py-2" : "pb-2"}>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                    <b className="tabular-nums">{money(c.value)}</b>
+                    <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">{pct(c.value, cur.revenue)}</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 rounded-full bg-track">
+                    <div className="h-full rounded-full bg-cta" style={{ width: `${(c.value / maxClient) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">В этом месяце оплат ещё не было.</p>
+          )}
+        </Card>
+
+        <Card>
+          <CardHead title="Куда идёт доход месяца" hint="Сколько отложить на зарплаты, сколько уходит на расходы и что остаётся" />
+          {cur.revenue > 0 ? (
+            <>
+              <div className="flex h-3 overflow-hidden rounded-full bg-track">
+                {split
+                  .filter((x) => x.value > 0)
+                  .map((x) => (
+                    <div key={x.label} className={x.tone} style={{ width: `${(x.value / Math.max(cur.revenue, fund.total + cur.other)) * 100}%` }} title={`${x.label}: ${money(x.value)}`} />
+                  ))}
+              </div>
+              <div className="mt-3 flex flex-col">
+                {split.map((x, i) => (
+                  <div key={x.label} className={`flex items-center gap-2 text-sm ${i ? "border-t border-border py-2" : "pb-2"}`}>
+                    <i className={`size-2.5 shrink-0 rounded-[3px] ${x.tone}`} />
+                    <span className="min-w-0 flex-1">{x.label}</span>
+                    <b className="tabular-nums">{money(x.value)}</b>
+                    <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">{pct(x.value, cur.revenue)}</span>
+                  </div>
+                ))}
+              </div>
+              {free < 0 && <p className="mt-2 text-xs text-negative">Дохода месяца не хватает на ЗП фонд и расходы: не хватает {money(-free)}.</p>}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Дохода в этом месяце пока нет.</p>
+          )}
+        </Card>
+      </div>
+      <p className="-mt-2 text-xs text-muted-foreground">
+        Суммы в долларах по курсу НБУ: 1 USD = {r.rates.USD?.toFixed(2)} ₴, 1 EUR = {r.rates.EUR?.toFixed(2)} ₴.
+      </p>
     </div>
   );
 }
