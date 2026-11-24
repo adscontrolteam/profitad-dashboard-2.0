@@ -7,34 +7,23 @@ import type { ResultMetric } from "@/lib/domain/types";
 import { addMonths, currentMonth, monthEnd, monthOf, monthStart, monthsBetween } from "@/lib/projects/plans";
 import { BASE_CURRENCY, convert, getRates, toBase, type Rates } from "./fx";
 import {
-  billableStart,
-  coveredDays,
-  daysIn,
-  debtOn,
-  firstOf,
-  invoiceDay,
-  lastOf,
-  LEDGER_START,
-  nextPeriod,
-  paidThrough,
-  prepaidOn,
-  resolvePeriods,
-  serviceDays,
-  type Period,
-} from "./periods";
-import {
   accrue,
   buyerPay,
   defaultBuyerRate,
   defaultSmmRate,
   flatPay,
   PAY_CURRENCY,
-  prorateEntry,
+  firstPayMonth,
+  fromEntry,
+  LEDGER_MONTH,
+  paidState,
+  TEST_SHARE,
   SMM_SETUP_RATE,
   smmPay,
   smmTaskLabel,
   type Accrual,
   type KpiState,
+  type PaidState,
   type PayLine,
   type Terms,
 } from "./rules";
@@ -114,27 +103,21 @@ export interface ProjectFinMonth {
   receivedBase: number;
   /** Issued and not yet paid, base currency. */
   issuedBase: number;
-  /** Days of the month the client is in service, and how many of them payments cover. */
-  serviceDays: number;
-  coveredDays: number;
+  /** How the client paid FOR this month (payments marked «за месяц»): whole fee, a half-month test, nothing. */
+  paid: PaidState;
   forecast: boolean;
 }
 
-/** Where a client stands with payments today. Amounts are in the terms currency and in the base one. */
+/** Where a client stands with payments. Amounts are in the terms currency and in the base one. */
 export interface PayState {
-  /** The day the client started to be billed. */
-  from: string;
-  /** The last day covered by payments; null = nothing paid yet. */
-  paidThrough: string | null;
-  /** Days in service up to today that no payment covers, at the monthly fee. */
+  /** The last month the client has paid for; null = no payment on record. */
+  lastPaid: string | null;
+  /** That month was paid as a half-month test. */
+  lastIsTest: boolean;
+  /** Months in work up to the current one with no payment for them, at the monthly fee. */
   debt: number;
   debtBase: number;
-  /** Covered days after today, at the monthly fee: money received for work not done yet. */
-  prepaid: number;
-  prepaidBase: number;
   currency: string;
-  /** The next period to invoice and the day its invoice appears. */
-  next: { start: string; end: string; invoiceOn: string };
 }
 
 export interface ProjectFin {
@@ -149,8 +132,8 @@ export interface ProjectFin {
   buyerRate: number | null;
   /** The day the work started (from «Вводные»). */
   startDate: string;
-  /** The days each invoice and payment covers, oldest first. */
-  periods: Period[];
+  /** How the client paid for a month (any month, the next one too). */
+  paidFor: (month: string) => PaidState;
   /** Payments against the service; null = no terms yet. */
   pay: PayState | null;
   /** Social networks connected to the project and the SMM rate that follows (USD; null = not known yet). */
@@ -164,8 +147,6 @@ export interface ProjectFin {
 }
 
 export interface PayRow extends PayLine {
-  /** Working days paid in the month the person joined the project; null = a full month. */
-  days: number | null;
   /** What the line is paid for: running the ads or the social networks of the project. */
   role: "media_buyer" | "smm";
   /** SMM: run | setup | test. Set-up and test are flat amounts, the KPI rule does not touch them. */
@@ -241,13 +222,6 @@ export interface PayrollFund {
   nextProjects: string[];
 }
 
-/** The service period of an invoice or payment as shown in the lists. */
-export interface InvoicePeriod {
-  start: string;
-  end: string;
-  /** Worked out from the dates, not typed. */
-  auto: boolean;
-}
 
 export interface FinanceReport {
   now: string;
@@ -259,8 +233,6 @@ export interface FinanceReport {
   assignments: Assignment[];
   expenses: Expense[];
   invoices: Invoice[];
-  /** Service period of every invoice and payment, by invoice id. */
-  periodOf: Record<string, InvoicePeriod>;
   /** Today, YYYY-MM-DD: the day debts and prepayments are counted on. */
   today: string;
   plans: AgencyPlan[];
@@ -306,7 +278,6 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
   ]);
   const inBase = (x: Invoice) => invoiceIn(x, BASE_CURRENCY, (a, f, t) => convert(a, f, t, rates));
   const today = new Date().toISOString().slice(0, 10);
-  const ledgerMonth = LEDGER_START.slice(0, 7);
   /** The month money came in: by the day of payment, not by the month typed on the invoice. */
   const cashMonth = (x: Invoice) => (x.paidDate ?? x.issueDate).slice(0, 7);
   const termsBy = new Map(terms.map((t) => [t.projectId, t]));
@@ -330,31 +301,19 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
       const data = await Promise.all(hist.map((m) => loadProjectMonth(p.id, m)));
       const t = termsBy.get(p.id) ?? null;
       const overrides = monthTerms.filter((x) => x.projectId === p.id);
-      // What the client's payments cover, by days: everything about «paid / owes» follows from these periods.
+      // A payment is «for a month» (worked out from the day it came, see payMonthByDate; it can be changed on the
+      // invoice list). Everything about «paid / owes» follows from the months the client has paid for.
       const feeFor = (month: string) => (t ? (overrides.find((o) => o.month === month)?.fixAmount ?? t.fixAmount) : 0);
       const live = invoices.filter((x) => x.projectId === p.id && x.status !== "cancelled");
-      const periods = t
-        ? resolvePeriods(
-            live.map((x) => ({
-              id: x.id,
-              date: x.status === "paid" ? (x.paidDate ?? x.issueDate) : x.issueDate,
-              paid: x.status === "paid",
-              amount: invoiceIn(x, t.currency, (a, f, to) => convert(a, f, to, rates)),
-              periodStart: x.periodStart,
-              periodEnd: x.periodEnd,
-            })),
-            feeFor,
-            p.startDate,
-          )
-        : [];
-      const billFrom = t ? billableStart(periods, p.startDate, firstOf(t.startMonth)) : null;
+      const paidIn = (month: string) =>
+        t ? live.filter((x) => x.status === "paid" && x.month === month).reduce((a, x) => a + invoiceIn(x, t.currency, (v, f, to) => convert(v, f, to, rates)), 0) : 0;
+      const paidFor = (month: string): PaidState => paidState(paidIn(month), feeFor(month));
       const rows: ProjectFinMonth[] = hist.map((month, i) => {
         const d = data[i];
         const forecast = month === now;
         let accrual: Accrual | null = null;
         // `accrual` is what the terms give for the month — what the client is expected to pay. It is NOT the income:
         // income is the money of the month it came in (receivedBase), whole, whatever days it pays for.
-        const inService = billFrom && month >= ledgerMonth ? serviceDays(month, billFrom) : daysIn(month);
         if (t && month >= t.startMonth && month >= startMonth) {
           const cur = d?.currency ?? t.currency;
           // The share is counted on what has actually happened: the client's revenue comes in rare payments, so
@@ -376,8 +335,7 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
           accrualBase: accrual ? toBase(accrual.total, accrual.currency, rates) : 0,
           receivedBase: got.reduce((a, x) => a + inBase(x), 0),
           issuedBase: inv.filter((x) => x.status === "issued").reduce((a, x) => a + inBase(x), 0),
-          serviceDays: billFrom && month >= ledgerMonth ? inService : 0,
-          coveredDays: billFrom && month >= ledgerMonth ? coveredDays(periods, firstOf(month) > billFrom ? firstOf(month) : billFrom, lastOf(month)) : 0,
+          paid: paidFor(month),
           forecast,
         };
       });
@@ -391,30 +349,21 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
         smmEmail: p.owners.smm,
         buyerRate: buyerRates.get(p.id) ?? t?.buyerRate ?? defaultBuyerRate(p.sources.length),
         startDate: p.startDate,
-        periods,
-        pay:
-          t && billFrom
-            ? (() => {
-                // A client pays in advance, always. So the days before the first payment on record were paid for
-                // before the payments were kept here — they are earned, but they are not a debt. A client with no
-                // payment on record at all owes from the first day in service.
-                const firstPaid = periods.reduce<string | null>((a, x) => (!a || x.start < a ? x.start : a), null);
-                const owedFrom = firstPaid && firstPaid > billFrom ? firstPaid : billFrom;
-                const debt = p.status === "active" ? debtOn(today, periods, owedFrom, feeFor) : 0;
-                const prepaid = prepaidOn(today, periods, feeFor);
-                const next = nextPeriod(periods, billFrom);
-                return {
-                  from: billFrom,
-                  paidThrough: paidThrough(periods),
-                  debt,
-                  debtBase: toBase(debt, t.currency, rates),
-                  prepaid,
-                  prepaidBase: toBase(prepaid, t.currency, rates),
-                  currency: t.currency,
-                  next: { ...next, invoiceOn: invoiceDay(next.start) },
-                };
-              })()
-            : null,
+        paidFor,
+        pay: t
+          ? (() => {
+              // The first month the client is billed for: a project that starts after the 7th enters the next month.
+              const firstMonth = [LEDGER_MONTH, t.startMonth, firstPayMonth(p.startDate)].sort().pop()!;
+              const paidMonths = [...new Set(live.filter((x) => x.status === "paid").map((x) => x.month))].sort();
+              // A client pays in advance, always: the months before the first payment on record were paid for before
+              // the payments were kept here — they are not a debt.
+              const owedFrom = paidMonths.length && paidMonths[0] > firstMonth ? paidMonths[0] : firstMonth;
+              let debt = 0;
+              if (p.status === "active") for (const m of monthsBetween(monthStart(owedFrom), monthStart(now))) if (paidFor(m) === "none") debt += feeFor(m);
+              const lastPaid = paidMonths.length ? paidMonths[paidMonths.length - 1] : null;
+              return { lastPaid, lastIsTest: lastPaid ? paidFor(lastPaid) === "test" : false, debt, debtBase: toBase(debt, t.currency, rates), currency: t.currency };
+            })()
+          : null,
         networksCount: networks.get(p.id) ?? 0,
         smmRate: smmRates.get(p.id) ?? defaultSmmRate(networks.get(p.id) ?? 0),
         startMonth,
@@ -478,15 +427,35 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
       } else if (task === "run") {
         pay = smmPay(states, smmRates.get(fp.id) ?? defaultSmmRate(sources), now);
       } else {
-        const flat = smmRates.get(fp.id) ?? (task === "setup" ? SMM_SETUP_RATE : null);
-        pay = flatPay(states.map((x) => x.month), flat, now, smmTaskLabel(task));
+        // A test is half the rate the same work would give as a monthly one; the set-up is its own flat amount.
+        const byNetworks = defaultSmmRate(sources);
+        const flat = smmRates.get(fp.id) ?? (task === "setup" ? SMM_SETUP_RATE : byNetworks === null ? null : byNetworks * TEST_SHARE);
+        pay = flatPay(states.map((x) => x.month), flat, now, task === "test" ? "Тест: половина ставки" : smmTaskLabel(task));
       }
-      // Joined the project in the middle of a month → that month is paid by working days, later ones in full.
-      for (const line of prorateEntry(pay, a?.startDate ?? null)) {
-        if (line.month < since || line.month < fp.startMonth) continue;
-        const row: PayRow = { ...line, role: job.role, task, sources, projectId: fp.id, projectName: fp.name, amountBase: line.amount === null ? 0 : toBase(line.amount, PAY_CURRENCY, rates) };
+      const add = (line: PayLine, lineTask: string) => {
+        if (line.month < since || line.month < fp.startMonth) return;
+        const row: PayRow = { ...line, role: job.role, task: lineTask, sources, projectId: fp.id, projectName: fp.name, amountBase: line.amount === null ? 0 : toBase(line.amount, PAY_CURRENCY, rates) };
         if (line.month === next) who.nextLines.push(row);
         else who.lines.push(row);
+      };
+      const half = (line: PayLine, why: string): PayLine => {
+        const amount = line.rate === null ? null : Math.round(line.rate * TEST_SHARE * 100) / 100;
+        return { ...line, state: "unknown", streak: 0, amount, rule: `Тест: ${why} — половина ставки` };
+      };
+      // Whole months only; a start after the 7th writes the first pay to the next month.
+      const first = a?.startDate ? firstPayMonth(a.startDate) : null;
+      const paidLines = fromEntry(pay, a?.startDate ?? null);
+      // The client took a half-month test in month T (paid a part of the fee). Whoever is paid for T gets half the
+      // rate for it. Whoever joined after the 7th of T is paid that half in their first month — and their regular
+      // pay for that month waits until the client pays for it in full.
+      const tests = task === "run" ? states.map((x) => x.month).filter((m) => fp.paidFor(m) === "test") : [];
+      const lateTest = first ? tests.filter((m) => m < first && m >= addMonths(first, -1)) : [];
+      for (const line of paidLines) {
+        if (tests.includes(line.month)) add(half(line, "клиент зашёл на полмесяца"), "stub");
+        else if (lateTest.length && line.month === first) {
+          add(half(line, `клиент зашёл на полмесяца (${lateTest[0].slice(5, 7)}.${lateTest[0].slice(0, 4)})`), "stub");
+          if (fp.paidFor(line.month) === "full") add(line, task);
+        } else add(line, task);
       }
     }
   }
@@ -539,11 +508,11 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     .filter((d) => d.amount > 0 || d.lines.length);
 
   /* ---- payroll fund: what is already owed + what the clients have paid ahead for ---- */
-  // The share of the next month each client has paid for, by days: a client paid until the 16th covers 16 days of it.
-  const nextCover = new Map(
-    finProjects.map((p) => [p.id, p.pay ? coveredDays(p.periods, firstOf(next) > p.pay.from ? firstOf(next) : p.pay.from, lastOf(next)) / daysIn(next) : 0]),
-  );
-  const nextPayroll = people.reduce((a, p) => a + p.nextLines.reduce((s, l) => s + l.amountBase * (nextCover.get(l.projectId) ?? 0), 0), 0);
+  // The fund is what will have to be paid out: the pay is set aside the moment the client's money comes. The next
+  // month is in it for every project whose client has already paid for that month — whole, at the full rate — and
+  // for every half-month test (the client has paid for it by definition).
+  const nextPaid = new Map(finProjects.map((p) => [p.id, p.paidFor(next) === "full"]));
+  const nextPayroll = people.reduce((a, p) => a + p.nextLines.reduce((s, l) => s + (l.task === "stub" || nextPaid.get(l.projectId) ? l.amountBase : 0), 0), 0);
   const unpaidPayroll = payoutsDue.filter((d) => !d.paid).reduce((a, d) => a + toBase(d.amount, d.currency, rates), 0);
   const currentPayroll = payrollFor(now);
   const payrollFund: PayrollFund = {
@@ -552,13 +521,10 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     current: currentPayroll,
     next: nextPayroll,
     nextMonth: next,
-    nextProjects: finProjects
-      .filter((p) => (nextCover.get(p.id) ?? 0) > 0)
-      .map((p) => ((nextCover.get(p.id) ?? 0) >= 1 ? p.name : `${p.name} по ${p.pay!.paidThrough!.slice(8, 10)}.${p.pay!.paidThrough!.slice(5, 7)}`)),
+    nextProjects: finProjects.filter((p) => nextPaid.get(p.id) || people.some((x) => x.nextLines.some((l) => l.task === "stub" && l.projectId === p.id))).map((p) => p.name),
   };
 
-  const periodOf: Record<string, InvoicePeriod> = {};
-  for (const p of finProjects) for (const x of p.periods) periodOf[x.id] = { start: x.start, end: x.end, auto: x.auto };
+
 
   return {
     now,
@@ -569,7 +535,6 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     assignments,
     expenses,
     invoices,
-    periodOf,
     today,
     plans,
     pnl,

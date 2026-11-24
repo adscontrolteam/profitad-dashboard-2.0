@@ -41,10 +41,9 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
   const accruedAll = months.reduce((a, m) => a + m.accrualBase, 0);
   const receivedAll = months.reduce((a, m) => a + m.receivedBase, 0);
   const costAll = months.reduce((a, m) => a + costOf(m.month), 0);
-  // Owed and paid ahead are counted by days: what the payments cover against the days in service.
+  // Owed: the months in work with no payment for them.
   const debt = p.pay?.debtBase ?? 0;
-  const through = p.pay?.paidThrough ?? null;
-  const dm = (day: string) => day.slice(0, 10).split("-").reverse().join(".");
+  const lastPaid = p.pay?.lastPaid ?? null;
   const judged = closed.filter((m) => m.kpi !== "unknown");
   const metCount = judged.filter((m) => m.kpi === "met").length;
   const metric = months.find((m) => m.data?.kpi)?.data?.kpi?.metric;
@@ -72,13 +71,11 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
         <KpiTile label="Доход за всё время" value={money(receivedAll)}>
           <span>деньги по месяцу оплаты · по условиям {money(accruedAll)}</span>
         </KpiTile>
-        <KpiTile label="Оплата" value={through ? `по ${dm(through).slice(0, 5)}` : "—"}>
-          <span>{through ? `оплачено по ${dm(through)}` : "оплат пока нет"}</span>
-          {p.pay && p.pay.prepaidBase >= 1 ? <span className="w-full">из них вперёд {money(p.pay.prepaidBase)}</span> : null}
+        <KpiTile label="Оплачен" value={lastPaid ? monthLabel(lastPaid) : "—"}>
+          <span>{lastPaid ? (p.pay?.lastIsTest ? "тест на полмесяца" : "последний оплаченный месяц") : "оплат пока нет"}</span>
         </KpiTile>
         <KpiTile label="Не оплачено" value={money(debt)} tone={debt >= 1 ? "negative" : undefined}>
-          <span>{p.pay ? `дни в работе с ${dm(p.pay.from)} без оплаты` : "условия не заполнены"}</span>
-          {p.pay ? <span className="w-full">следующий счёт: {dm(p.pay.next.start)} — {dm(p.pay.next.end)}</span> : null}
+          <span>{p.pay ? "месяцы в работе без оплаты" : "условия не заполнены"}</span>
         </KpiTile>
         <KpiTile label="Маржа" value={money(receivedAll - costAll)} highlight>
           <Pill tone="lime">{receivedAll ? `${Math.round(((receivedAll - costAll) / receivedAll) * 100)}%` : "—"}</Pill>

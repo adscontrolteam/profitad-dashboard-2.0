@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { InvoiceRowActions, PeriodButton, RecordPaymentButton } from "@/components/finance/invoice-actions";
+import { InvoiceRowActions, MonthButton, RecordPaymentButton } from "@/components/finance/invoice-actions";
 import { MethodsList } from "@/components/finance/methods-card";
 import { CardHead, dateLabel, Empty, KpiTile, Pill, Table } from "@/components/finance/ui";
 import { Card } from "@/components/ui/card";
@@ -49,7 +49,7 @@ export default async function FinanceInvoicesPage() {
       <Card>
         <CardHead
           title="Счета и оплаты"
-          hint="Период — какие дни покрывает оплата. Считается сам: оплата в начале месяца — за этот месяц, в конце — за следующий, в середине — с дня оплаты; половина суммы — до конца месяца. Нажмите на период, чтобы поправить даты"
+          hint="«За месяц» ставится сам: оплата до 7-го числа — за этот месяц, позже — за следующий. Половина суммы — тест на полмесяца, остаётся в текущем. Нажмите на месяц, чтобы поправить"
         >
           <RecordPaymentButton projects={projects.filter((p) => p.status !== "archived").map((p) => ({ id: p.id, name: p.name, currency: termCurrency.get(p.id) ?? null }))} methods={methods} />
           <Link href="/finance/invoices/new" className="btn-primary">
@@ -63,7 +63,7 @@ export default async function FinanceInvoicesPage() {
                 <th>№</th>
                 <th>Дата</th>
                 <th>Проект</th>
-                <th>Период</th>
+                <th>За месяц</th>
                 <th>Реквизиты</th>
                 <th className="!text-right">Сумма</th>
                 <th>Курс</th>
@@ -78,11 +78,7 @@ export default async function FinanceInvoicesPage() {
                   <td className="tabular-nums">{dateLabel(i.issueDate)}</td>
                   <td className="font-semibold">{names.get(i.projectId ?? "") ?? "—"}</td>
                   <td>
-                    {report.periodOf[i.id] ? (
-                      <PeriodButton id={i.id} start={report.periodOf[i.id].start} end={report.periodOf[i.id].end} auto={report.periodOf[i.id].auto} />
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
+                    <MonthButton id={i.id} month={i.month} />
                   </td>
                   <td className="text-muted-foreground">{i.recipient?.label ?? "—"}</td>
                   <td className="text-right font-semibold tabular-nums">{money(i.total, i.currency, 2)}</td>

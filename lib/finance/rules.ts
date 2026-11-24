@@ -88,7 +88,7 @@ export function flatPay(months: string[], rate: number | null, currentMonth: str
     streak: 0,
     rate,
     amount: rate,
-    rule: rate === null ? `${label}: ставка не задана — задайте кнопкой «Ставка»` : `${label}: фиксированная ставка, KPI не влияет`,
+    rule: rate === null ? `${label}: ставка не задана — задайте кнопкой «Ставка»` : `${label}, KPI не влияет`,
     forecast: month === currentMonth,
   }));
 }
@@ -112,45 +112,50 @@ export function defaultSmmRate(networks: number) {
 export const smmPay = (states: { month: string; state: KpiState }[], rate: number | null, currentMonth: string) =>
   buyerPay(states, rate, currentMonth, "Ставка не задана: соцсети проекта не подключены");
 
-/** A month is taken as this many working days: the project rate is split into day rates by it. */
-export const WORKDAYS_PER_MONTH = 21;
+/**
+ * A project is paid by whole months — no day rates.
+ * A person who starts on a project up to this day of a month has that month as a full one. A later start writes
+ * the first pay to the NEXT month: the rest of the starting month is not paid apart, the project «enters» the next
+ * month as a full one.
+ */
+export const ENTRY_DAY = 7;
 
-/** Working days (Mon–Fri) from a date to the end of its month, both included. */
-export function workdaysFrom(startDate: string) {
-  const [y, m, d] = startDate.split("-").map(Number);
-  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  let n = 0;
-  for (let day = d; day <= last; day++) {
-    const wd = new Date(Date.UTC(y, m - 1, day)).getUTCDay();
-    if (wd !== 0 && wd !== 6) n++;
-  }
-  return n;
+/** The first month a person is paid for on a project they started on `startDate`. */
+export function firstPayMonth(startDate: string) {
+  const month = startDate.slice(0, 7);
+  if (Number(startDate.slice(8, 10)) <= ENTRY_DAY) return month;
+  const d = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 1));
+  return d.toISOString().slice(0, 7);
+}
+
+/** Pay lines of a person who joined the project on `startDate`: whole months from the first paid one. */
+export function fromEntry<T extends PayLine>(lines: T[], startDate: string | null): T[] {
+  if (!startDate) return lines;
+  const first = firstPayMonth(startDate);
+  return lines.filter((l) => l.month >= first);
 }
 
 /**
- * Pay lines of a person who joined the project on `startDate`.
- * Months before the start are dropped. The month of the start is paid by working days: amount ÷ 21 × days worked
- * (never more than the full amount). Every later month is a full one. The KPI rule (−50% / +50%) is applied first,
- * so a missed month gives 75 ÷ 21 × days for a 150 rate.
+ * The month a client's payment is for, by the day it came: the agency is always paid in advance, so money that comes
+ * after the 7th is for the next month. A part of the fee is a test of the current month — it stays in it.
  */
-export function prorateEntry<T extends PayLine>(lines: T[], startDate: string | null): (T & { days: number | null })[] {
-  if (!startDate) return lines.map((l) => ({ ...l, days: null }));
-  const startMonth = startDate.slice(0, 7);
-  return lines
-    .filter((l) => l.month >= startMonth)
-    .map((l) => {
-      if (l.month !== startMonth) return { ...l, days: null };
-      const days = workdaysFrom(startDate);
-      if (days >= WORKDAYS_PER_MONTH) return { ...l, days: null };
-      const from = startDate.slice(8, 10) + "." + startDate.slice(5, 7);
-      return {
-        ...l,
-        days,
-        amount: l.amount === null ? null : Math.round(((l.amount * days) / WORKDAYS_PER_MONTH) * 100) / 100,
-        rule: `${l.rule} · на проекте с ${from}: ${days} раб. дн. из ${WORKDAYS_PER_MONTH}`,
-      };
-    });
+export function payMonthByDate(date: string, partial = false) {
+  return partial ? date.slice(0, 7) : firstPayMonth(date);
 }
+
+/** Payments are kept in the dashboard from this month; nothing before it is counted as owed. */
+export const LEDGER_MONTH = "2026-11";
+
+/** How a client paid for a month: the whole fee, a part of it (a test for half a month), or nothing. */
+export type PaidState = "full" | "test" | "none";
+
+export function paidState(paid: number, fee: number): PaidState {
+  if (paid <= 0) return "none";
+  return fee <= 0 || paid >= fee * 0.9 ? "full" : "test";
+}
+
+/** A test (a client taken for half a month, an SMM test task) is paid half the rate; the KPI rule does not touch it. */
+export const TEST_SHARE = 0.5;
 
 export function defaultBuyerRate(sourcesCount: number) {
   if (sourcesCount <= 1) return BUYER_RATE_ONE_SOURCE;

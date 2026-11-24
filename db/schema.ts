@@ -518,7 +518,7 @@ export const finInvoices = pgTable(
     projectId: text("project_id"),
     /** YYYY-MM the payment is for (the month its period starts in). */
     month: text("month").notNull(),
-    /** The days the payment covers, when typed by hand; null = worked out from the dates (lib/finance/periods.ts). */
+    /** Not used: payments are counted by `month`. Kept so that a schema push does not drop the columns' data. */
     periodStart: date("period_start"),
     periodEnd: date("period_end"),
     issueDate: date("issue_date").notNull(),

@@ -63,7 +63,7 @@ export default async function FinanceClientsPage() {
                   </td>
                   <td>
                     {(() => {
-                      const st = payStatus(p.pay, r.today, r.invoices.some((x) => x.projectId === p.id && x.status === "issued"));
+                      const st = payStatus(p.pay, r.now, r.invoices.some((x) => x.projectId === p.id && x.status === "issued"));
                       return (
                         <>
                           <Pill tone={st.tone}>{st.label}</Pill>
