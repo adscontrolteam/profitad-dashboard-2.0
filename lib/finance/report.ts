@@ -428,10 +428,9 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
       } else if (task === "run") {
         pay = smmPay(states, smmRates.get(fp.id) ?? defaultSmmRate(sources), now);
       } else {
-        // A test is half the rate the same work would give as a monthly one; the set-up is its own flat amount.
-        const byNetworks = defaultSmmRate(sources);
-        const flat = smmRates.get(fp.id) ?? (task === "setup" ? SMM_SETUP_RATE : byNetworks === null ? null : byNetworks * TEST_SHARE);
-        pay = flatPay(states.map((x) => x.month), flat, now, task === "test" ? "Тест: половина ставки" : smmTaskLabel(task));
+        // The set-up is its own flat amount. An SMM test is not paid at all: only the media buyer is paid for a test.
+        const flat = task === "setup" ? (smmRates.get(fp.id) ?? SMM_SETUP_RATE) : 0;
+        pay = flatPay(states.map((x) => x.month), flat, now, task === "test" ? "Тест: без оплаты" : smmTaskLabel(task));
       }
       const add = (line: PayLine, lineTask: string) => {
         if (line.month < since || line.month < fp.startMonth) return;
@@ -451,7 +450,8 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
       const tests = task === "run" ? states.map((x) => x.month).filter((m) => fp.paidFor(m) === "test") : [];
       for (const line of pay) {
         if (tests.includes(line.month)) {
-          if (!startMonth || startMonth <= line.month) add(half(line, "клиент зашёл на полмесяца"), "stub");
+          // Half the rate for the media buyer; the SMM specialist is not paid for a client's test.
+          if (job.role === "media_buyer" && (!startMonth || startMonth <= line.month)) add(half(line, "клиент зашёл на полмесяца"), "stub");
         } else if (!first || line.month >= first) add(line, task);
       }
     }

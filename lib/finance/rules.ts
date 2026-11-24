@@ -88,7 +88,7 @@ export function flatPay(months: string[], rate: number | null, currentMonth: str
     streak: 0,
     rate,
     amount: rate,
-    rule: rate === null ? `${label}: ставка не задана — задайте кнопкой «Ставка»` : `${label}, KPI не влияет`,
+    rule: rate === null ? `${label}: ставка не задана — задайте кнопкой «Ставка»` : rate === 0 ? label : `${label}, KPI не влияет`,
     forecast: month === currentMonth,
   }));
 }
