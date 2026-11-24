@@ -58,9 +58,9 @@ export default async function FinanceOverviewPage() {
       <div className="grid gap-3 md:grid-cols-2 lg:gap-5 xl:grid-cols-4">
         <KpiTile label={`Доход · ${monthLabel(r.now)}`} value={money(cur.revenue)}>
           {cur.plan?.revenuePlan ? <Pill tone={cur.revenue >= cur.plan.revenuePlan ? "good" : "warning"}>{pct(cur.revenue, cur.plan.revenuePlan)} плана</Pill> : null}
-          <span>фикс по дням в работе + % по факту на сегодня</span>
+          <span>деньги, которые зашли в этом месяце</span>
           <span className="w-full">
-            пришло денег {money(cur.received)}
+            по условиям клиентов {money(cur.expected)}
             {delta(cur.revenue, prev?.revenue) ? ` · ${delta(cur.revenue, prev?.revenue)}` : ""}
           </span>
         </KpiTile>
@@ -92,7 +92,7 @@ export default async function FinanceOverviewPage() {
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-5">
         <Card>
-          <CardHead title="Доход, расходы и прибыль" hint="Текущий месяц — прогноз: зарплаты по полной ставке, % клиентов по факту на сегодня" />
+          <CardHead title="Доход, расходы и прибыль" hint="Доход — деньги по месяцу оплаты. Текущий месяц: зарплаты по полной ставке" />
           <PnlChart data={r.pnl} />
           <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-[3px] bg-foreground" />Доход</span>
@@ -126,7 +126,7 @@ export default async function FinanceOverviewPage() {
       </div>
 
       <Card>
-        <CardHead title="Клиенты в этом месяце" hint="Доход — по дням в работе в этом месяце. Оплата — по какой день клиент оплатил вперёд">
+        <CardHead title="Клиенты в этом месяце" hint="Доход — деньги клиента, которые зашли в этом месяце. Оплата — по какой день он оплатил вперёд">
           <Link href="/finance/clients" className="btn-ghost">Условия →</Link>
         </CardHead>
         <Table>
@@ -153,14 +153,8 @@ export default async function FinanceOverviewPage() {
                     </Pill>
                   </td>
                   <td className="text-right tabular-nums">
-                    {m?.accrual ? (
-                      <>
-                        <b>{money(m.accrual.total, m.accrual.currency)}</b>
-                        {m.accrual.share > 0 && <span className="block text-xs text-muted-foreground">фикс {money(m.accrual.fix, m.accrual.currency)} + {money(m.accrual.share, m.accrual.currency)}</span>}
-                      </>
-                    ) : (
-                      "—"
-                    )}
+                    <b>{m?.receivedBase ? money(m.receivedBase) : "—"}</b>
+                    {m?.accrual ? <span className="block text-xs text-muted-foreground">по условиям {money(m.accrual.total, m.accrual.currency)}</span> : null}
                   </td>
                   <td>
                     {(() => {

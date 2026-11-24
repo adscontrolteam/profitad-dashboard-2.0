@@ -200,8 +200,12 @@ export interface ExpenseLine {
 
 export interface PnlMonth {
   month: string;
+  /** Income: the money that came in this month, by the day of payment. A payment is never split between months. */
   revenue: number;
+  /** The same money (kept for the tables that name it «получено»). */
   received: number;
+  /** What the clients' terms give for the month: the fees + the shares. For comparison only. */
+  expected: number;
   payroll: number;
   other: number;
   profit: number;
@@ -348,10 +352,10 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
         const d = data[i];
         const forecast = month === now;
         let accrual: Accrual | null = null;
-        // From the ledger on, a month is earned by the days the client is in service; a project that starts or is
-        // first paid in the middle of a month earns that share of the fee. Earlier months stay whole, as agreed.
+        // `accrual` is what the terms give for the month — what the client is expected to pay. It is NOT the income:
+        // income is the money of the month it came in (receivedBase), whole, whatever days it pays for.
         const inService = billFrom && month >= ledgerMonth ? serviceDays(month, billFrom) : daysIn(month);
-        if (t && month >= t.startMonth && month >= startMonth && inService > 0) {
+        if (t && month >= t.startMonth && month >= startMonth) {
           const cur = d?.currency ?? t.currency;
           // The share is counted on what has actually happened: the client's revenue comes in rare payments, so
           // stretching a month-to-date figure to the whole month would promise money that may never come.
@@ -360,7 +364,7 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
           // A month can have its own fix / % (set in «Условия по месяцам»).
           const o = overrides.find((x) => x.month === month);
           const pct = o?.sharePct ?? t.sharePct;
-          accrual = accrue({ ...t, fixAmount: ((o?.fixAmount ?? t.fixAmount) * inService) / daysIn(month), sharePct: pct, shareBase: t.shareBase ?? (pct ? "client_profit" : null) }, rev, spend);
+          accrual = accrue({ ...t, fixAmount: o?.fixAmount ?? t.fixAmount, sharePct: pct, shareBase: t.shareBase ?? (pct ? "client_profit" : null) }, rev, spend);
         }
         const inv = live.filter((x) => x.month === month);
         const got = live.filter((x) => x.status === "paid" && cashMonth(x) === month);
@@ -503,12 +507,13 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
   /* ---- P&L ---- */
   const plansBy = new Map(plans.map((p) => [p.month, p]));
   const pnl: PnlMonth[] = months.map((month) => {
-    const revenue = finProjects.reduce((a, p) => a + (p.months.find((m) => m.month === month)?.accrualBase ?? 0), 0);
-    // Every payment of the month, with the ones not tied to a project.
+    const expected = finProjects.reduce((a, p) => a + (p.months.find((m) => m.month === month)?.accrualBase ?? 0), 0);
+    // Income is the money of the month it came in — every payment, with the ones not tied to a project.
     const received = invoices.filter((x) => x.status === "paid" && cashMonth(x) === month).reduce((a, x) => a + inBase(x), 0);
+    const revenue = received;
     const payroll = payrollFor(month);
     const other = expensesFor(month).reduce((a, e) => a + e.amountBase, 0);
-    return { month, revenue, received, payroll, other, profit: revenue - payroll - other, plan: plansBy.get(month) ?? null, forecast: month === now };
+    return { month, revenue, received, expected, payroll, other, profit: revenue - payroll - other, plan: plansBy.get(month) ?? null, forecast: month === now };
   });
 
   /* ---- payouts for the previous month ---- */

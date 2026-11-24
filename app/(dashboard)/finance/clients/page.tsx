@@ -57,7 +57,10 @@ export default async function FinanceClientsPage() {
                   <td>
                     <Pill tone={KPI_TONE[m?.kpi ?? "unknown"]}>{pace != null ? `темп ${Math.round(pace * 100)}%` : KPI_LABEL[m?.kpi ?? "unknown"]}</Pill>
                   </td>
-                  <td className="text-right font-semibold tabular-nums">{m?.accrual ? money(m.accrual.total, m.accrual.currency) : "—"}</td>
+                  <td className="text-right tabular-nums">
+                    <b>{m?.receivedBase ? money(m.receivedBase) : "—"}</b>
+                    {m?.accrual ? <span className="block text-xs text-muted-foreground">по условиям {money(m.accrual.total, m.accrual.currency)}</span> : null}
+                  </td>
                   <td>
                     {(() => {
                       const st = payStatus(p.pay, r.today, r.invoices.some((x) => x.projectId === p.id && x.status === "issued"));
@@ -83,7 +86,7 @@ export default async function FinanceClientsPage() {
       </Card>
 
       <Card>
-        <CardHead title="Доход по клиентам" hint="Начислено по условиям. Цвет — выполнение KPI клиента; в текущем месяце % считается по факту на сегодня" />
+        <CardHead title="Доход по клиентам" hint="Деньги клиента по месяцу, в котором они зашли. Цвет — выполнение KPI клиента" />
         <Table>
           <thead>
             <tr>
@@ -104,9 +107,9 @@ export default async function FinanceClientsPage() {
                   const v = row?.data?.kpi?.[row.forecast ? "pace" : "progress"];
                   return (
                     <td key={m} className="text-right tabular-nums">
-                      {row?.accrual ? (
+                      {row?.accrual || row?.receivedBase ? (
                         <div className="flex flex-col items-end gap-1">
-                          <b>{money(row.accrual.total, row.accrual.currency)}</b>
+                          <b>{row.receivedBase ? money(row.receivedBase) : "—"}</b>
                           <Pill tone={KPI_TONE[row.kpi]}>{v != null ? `${Math.round(v * 100)}%` : "—"}</Pill>
                         </div>
                       ) : (

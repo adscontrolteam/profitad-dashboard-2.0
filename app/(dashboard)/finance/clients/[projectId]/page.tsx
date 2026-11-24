@@ -69,10 +69,10 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:gap-5 xl:grid-cols-4">
-        <KpiTile label="Доход за всё время" value={money(accruedAll)}>
-          <span>начислено по условиям, {months.length} мес.</span>
+        <KpiTile label="Доход за всё время" value={money(receivedAll)}>
+          <span>деньги по месяцу оплаты · по условиям {money(accruedAll)}</span>
         </KpiTile>
-        <KpiTile label="Получено" value={money(receivedAll)}>
+        <KpiTile label="Оплата" value={through ? `по ${dm(through).slice(0, 5)}` : "—"}>
           <span>{through ? `оплачено по ${dm(through)}` : "оплат пока нет"}</span>
           {p.pay && p.pay.prepaidBase >= 1 ? <span className="w-full">из них вперёд {money(p.pay.prepaidBase)}</span> : null}
         </KpiTile>
@@ -80,8 +80,8 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
           <span>{p.pay ? `дни в работе с ${dm(p.pay.from)} без оплаты` : "условия не заполнены"}</span>
           {p.pay ? <span className="w-full">следующий счёт: {dm(p.pay.next.start)} — {dm(p.pay.next.end)}</span> : null}
         </KpiTile>
-        <KpiTile label="Маржа" value={money(accruedAll - costAll)} highlight>
-          <Pill tone="lime">{accruedAll ? `${Math.round(((accruedAll - costAll) / accruedAll) * 100)}%` : "—"}</Pill>
+        <KpiTile label="Маржа" value={money(receivedAll - costAll)} highlight>
+          <Pill tone="lime">{receivedAll ? `${Math.round(((receivedAll - costAll) / receivedAll) * 100)}%` : "—"}</Pill>
           <span>после зарплаты медиабайера {money(costAll)}</span>
         </KpiTile>
       </div>
@@ -158,8 +158,8 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
               <th>Выполнение</th>
               <th className="!text-right">Расход на рекламу</th>
               <th className="!text-right">Доход клиента</th>
+              <th className="!text-right">По условиям</th>
               <th className="!text-right">Наш доход</th>
-              <th className="!text-right">Получено</th>
               <th className="!text-right">Медиабайер</th>
               <th className="!text-right">Маржа</th>
             </tr>
@@ -202,7 +202,7 @@ export default async function FinanceClientPage({ params }: PageProps<"/finance/
                     {m.receivedBase ? <span className="text-positive">{money(m.receivedBase)}</span> : m.issuedBase ? <Pill tone="warning">выставлен</Pill> : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="text-right tabular-nums">{cost ? money(cost) : "—"}</td>
-                  <td className="text-right font-semibold tabular-nums">{m.accrual ? money(m.accrualBase - cost) : "—"}</td>
+                  <td className="text-right font-semibold tabular-nums">{m.receivedBase || cost ? money(m.receivedBase - cost) : "—"}</td>
                 </tr>
               );
             })}
