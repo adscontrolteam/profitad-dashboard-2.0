@@ -1,13 +1,14 @@
 export const INTEGRATION_KINDS = ["crm", "sheets_leads", "sheets_report", "drive"] as const;
 export type IntegrationKind = (typeof INTEGRATION_KINDS)[number];
 
-export const CRM_TYPES = ["webhook", "kommo", "bitrix24"] as const;
+export const CRM_TYPES = ["webhook", "kommo", "bitrix24", "hubspot"] as const;
 export type CrmType = (typeof CRM_TYPES)[number];
 
 export const CRM_LABELS: Record<CrmType, string> = {
   webhook: "Вебхук (любая CRM или форма)",
   kommo: "Kommo / amoCRM",
   bitrix24: "Bitrix24",
+  hubspot: "HubSpot",
 };
 
 export const INTEGRATION_LABELS: Record<IntegrationKind, string> = {

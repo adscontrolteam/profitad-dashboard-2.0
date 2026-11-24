@@ -1,7 +1,7 @@
 import "server-only";
 import { revalidateTag } from "next/cache";
 import { TAGS } from "@/lib/data/tags";
-import { pullBitrix, pullKommo } from "./crm";
+import { pullBitrix, pullHubspot, pullKommo } from "./crm";
 import { readLeadsSheet, writeReport } from "./sheets";
 import { crmLeadKeys, dropOtherSales, listIntegrations, markIntegration, patchIntegrationConfig, readSecret, replaceLeads, replaceSales, upsertLeads, type IntegrationRecord } from "./store";
 import type { CrmConfig, SheetsLeadsConfig, SheetsReportConfig } from "./types";
@@ -34,7 +34,8 @@ async function run(rec: IntegrationRecord): Promise<string> {
       if (!secret) throw new Error("Не сохранён токен или ссылка вебхука CRM.");
       // First run takes 90 days of history, then a window that overlaps the previous sync.
       const since = rec.lastSyncAt ? new Date(rec.lastSyncAt.getTime() - 2 * 3600_000) : new Date(Date.now() - 90 * DAY);
-      const items = cfg.type === "kommo" ? await pullKommo(cfg.domain ?? "", secret, since) : await pullBitrix(secret, since);
+      const items =
+        cfg.type === "kommo" ? await pullKommo(cfg.domain ?? "", secret, since) : cfg.type === "hubspot" ? await pullHubspot(secret, since) : await pullBitrix(secret, since);
       const n = await upsertLeads(rec.projectId, cfg.type, items);
       return `Лидов загружено/обновлено: ${n}`;
     }

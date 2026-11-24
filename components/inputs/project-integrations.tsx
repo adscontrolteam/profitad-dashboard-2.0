@@ -239,6 +239,23 @@ function CrmCard({ projectId, current }: { projectId: string; current?: Integrat
           <SaveButton pending={pending} onClick={save} />
         </>
       )}
+      {type === "hubspot" && (
+        <>
+          <input
+            className="field"
+            type="password"
+            autoComplete="off"
+            placeholder={current?.hasSecret && cfg?.type === "hubspot" ? "Ключ сохранён — вставьте новый, чтобы заменить" : "Service Key"}
+            value={secret}
+            onChange={(e) => setSecret(e.target.value)}
+          />
+          <InfoHint caption="Где взять ключ">
+            HubSpot → Settings → Integrations → Service Keys → создать ключ с правом чтения контактов (crm.objects.contacts.read). Лидом считается контакт: статус берётся из Lead status и Lifecycle stage, сумма — из
+            выручки по его сделкам.
+          </InfoHint>
+          <SaveButton pending={pending} onClick={save} />
+        </>
+      )}
       <Result r={result} />
     </Shell>
   );

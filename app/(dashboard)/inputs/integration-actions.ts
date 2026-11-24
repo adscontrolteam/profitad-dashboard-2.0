@@ -8,7 +8,7 @@ import { randomToken } from "@/lib/crypto";
 import { GoogleApiError, GoogleNotConfigured } from "@/lib/google/auth";
 import { folderInfo, parseFolderId } from "@/lib/google/drive";
 import { parseSpreadsheetId, spreadsheetInfo } from "@/lib/google/sheets";
-import { testBitrix, testKommo } from "@/lib/integrations/crm";
+import { testBitrix, testHubspot, testKommo } from "@/lib/integrations/crm";
 import { isCrmType, isIntegrationKind, type CrmType, type IntegrationKind } from "@/lib/integrations/kinds";
 import { syncIntegration } from "@/lib/integrations/run";
 import { detectReport } from "@/lib/integrations/sheets";
@@ -95,6 +95,16 @@ export async function saveCrmAction(projectId: string, input: { type: CrmType; d
       await saveIntegration(projectId, "crm", { type: "kommo", domain }, secret || undefined, viewer.email);
       const sync = await trySync(projectId, "crm");
       return done(viewer, "integration.crm.kommo", projectId, { ok: true, message: `Kommo «${name}» подключена. ${sync}` });
+    }
+
+    if (input.type === "hubspot") {
+      const existing = await getIntegration(projectId, "crm");
+      const token = secret || (existing?.config.type === "hubspot" ? readSecret(existing) : null);
+      if (!token) return { ok: false, message: "Вставьте Service Key из HubSpot." };
+      const info = await testHubspot(token);
+      await saveIntegration(projectId, "crm", { type: "hubspot" }, secret || undefined, viewer.email);
+      const sync = await trySync(projectId, "crm");
+      return done(viewer, "integration.crm.hubspot", projectId, { ok: true, message: `HubSpot подключён (${info}). ${sync}` });
     }
 
     const existing = await getIntegration(projectId, "crm");

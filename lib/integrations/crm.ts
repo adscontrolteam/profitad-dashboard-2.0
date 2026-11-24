@@ -258,4 +258,170 @@ export async function pullBitrix(webhookUrl: string, since: Date): Promise<Norma
   });
 }
 
+/* ---------- HubSpot (service key) ---------- */
+
+const HUBSPOT = "https://api.hubapi.com";
+/** Date-based API version (HubSpot retires /crm/v3 after September 2027). */
+const HUBSPOT_SEARCH = "/crm/objects/2026-09/contacts/search";
+
+const HS_PROPS = [
+  "firstname", "lastname", "email", "phone", "mobilephone", "createdate", "lastmodifieddate",
+  "lifecyclestage", "hs_lead_status",
+  // Money of the closed-won deals linked to the contact — HubSpot keeps these itself.
+  "total_revenue", "recent_deal_amount", "num_associated_deals",
+  "hs_analytics_source", "hs_analytics_source_data_1", "hs_analytics_source_data_2",
+  "hs_google_click_id", "hs_facebook_click_id",
+  // Custom UTM properties many accounts add to their forms.
+  "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+];
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function hubspotCall<T>(token: string, path: string, body?: unknown): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${HUBSPOT}${path}`, {
+      method: body ? "POST" : "GET",
+      headers: { authorization: `Bearer ${token.trim()}`, ...(body ? { "content-type": "application/json" } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+    });
+    // Search allows five requests a second per account.
+    if (res.status === 429 && attempt < 3) {
+      await sleep(1200 * (attempt + 1));
+      continue;
+    }
+    if (res.status === 401) throw new Error("HubSpot отклонил ключ (401): проверьте, что вставлен Service Key целиком и он не отозван.");
+    if (res.status === 403) throw new Error("HubSpot: у ключа нет доступа к контактам (403). Добавьте ключу право чтения контактов — crm.objects.contacts.read.");
+    const data = (await res.json().catch(() => ({}))) as T & { message?: string };
+    if (!res.ok) throw new Error(`HubSpot ответил ${res.status}${data.message ? `: ${String(data.message).slice(0, 200)}` : ""}`);
+    return data;
+  }
+}
+
+type HsContact = { id: string; properties: Record<string, string | null | undefined> };
+type HsSearch = { total?: number; results?: HsContact[]; paging?: { next?: { after?: string } } };
+
+export async function testHubspot(token: string) {
+  const data = await hubspotCall<HsSearch>(token, HUBSPOT_SEARCH, { limit: 1, properties: ["email"] });
+  return `контактов в аккаунте: ${data.total ?? 0}`;
+}
+
+/** Stage names as the account shows them («Customer», «Попытка связаться»); the raw value is kept when they cannot be read. */
+async function hubspotLabels(token: string, property: string) {
+  const labels = new Map<string, string>();
+  try {
+    const data = await hubspotCall<{ options?: { label?: string; value?: string }[] }>(token, `/crm/v3/properties/contacts/${property}`);
+    for (const o of data.options ?? []) if (o.value) labels.set(o.value, o.label ?? o.value);
+  } catch {
+    // Labels are a nicety: leads still load with the internal names.
+  }
+  return labels;
+}
+
+const HS_SOURCE: Record<string, string> = {
+  DIRECT_TRAFFIC: "direct",
+  SOCIAL_MEDIA: "social",
+  EMAIL_MARKETING: "email",
+  REFERRALS: "referral",
+  OFFLINE: "offline",
+  OTHER_CAMPAIGNS: "campaign",
+  AI_REFERRALS: "ai",
+};
+
+/** One HubSpot contact → a lead. Exported for the fixture check. */
+export function normalizeHubspotContact(c: HsContact, labels?: { stage?: Map<string, string>; lead?: Map<string, string> }): NormalizedLead {
+  const p = c.properties ?? {};
+  const stage = str(p.lifecyclestage);
+  const leadStatus = str(p.hs_lead_status);
+  const stageLabel = labels?.stage?.get(stage) ?? stage;
+  const leadLabel = labels?.lead?.get(leadStatus) ?? leadStatus;
+  const revenue = Number(str(p.total_revenue) || str(p.recent_deal_amount));
+
+  // The lead status says how the conversation goes; the lifecycle stage says how far the person got.
+  const ls = leadStatus.toUpperCase();
+  let outcome: NormalizedLead["outcome"] =
+    stage.toLowerCase() === "customer" || (Number.isFinite(revenue) && revenue > 0 && str(p.total_revenue) !== "")
+      ? "won"
+      : ls === "UNQUALIFIED"
+        ? "junk"
+        : ls === "BAD_TIMING"
+          ? "lost"
+          : ls === "ATTEMPTED_TO_CONTACT"
+            ? "no_answer"
+            : ["CONNECTED", "IN_PROGRESS", "OPEN_DEAL"].includes(ls) || ["marketingqualifiedlead", "salesqualifiedlead", "opportunity"].includes(stage.toLowerCase())
+              ? "qualified"
+              : "new";
+  // Custom statuses with their own names («Отказ», «Спам») are read by name.
+  if (outcome === "new" && (leadLabel || stageLabel)) outcome = outcomeFrom(`${leadLabel} ${stageLabel}`);
+
+  const utm: Record<string, string> = {};
+  for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]) if (str(p[k])) utm[k] = str(p[k]);
+  const source = str(p.hs_analytics_source).toUpperCase();
+  const d1 = str(p.hs_analytics_source_data_1);
+  const d2 = str(p.hs_analytics_source_data_2);
+  if (str(p.hs_google_click_id)) utm.gclid = str(p.hs_google_click_id);
+  if (str(p.hs_facebook_click_id)) utm.fbclid = str(p.hs_facebook_click_id);
+  if (utm.gclid || source === "PAID_SEARCH") utm.ad = "google";
+  else if (utm.fbclid || source === "PAID_SOCIAL") utm.ad = "meta";
+  if (source) utm.hs_source = source;
+  if (!utm.utm_source) {
+    if (source === "PAID_SOCIAL" && d1) utm.utm_source = d1;
+    else if (HS_SOURCE[source]) utm.utm_source = HS_SOURCE[source];
+  }
+  // HubSpot keeps the campaign in a different slot for search and for social ads.
+  const campaign = utm.utm_campaign || (source === "PAID_SOCIAL" ? d2 : source === "PAID_SEARCH" ? d1 : "");
+
+  const name = [str(p.firstname), str(p.lastname)].filter(Boolean).join(" ");
+  return {
+    externalId: String(c.id),
+    leadAt: toDate(p.createdate),
+    name: name || str(p.email),
+    phone: str(p.phone) || str(p.mobilephone),
+    email: str(p.email),
+    status: [leadLabel, stageLabel].filter(Boolean).join(" · "),
+    outcome,
+    value: Number.isFinite(revenue) && revenue > 0 ? revenue : null,
+    campaign,
+    utm,
+    raw: { id: c.id, lifecyclestage: stage, hs_lead_status: leadStatus, hs_analytics_source: source, deals: str(p.num_associated_deals) },
+  } satisfies NormalizedLead;
+}
+
+/**
+ * Contacts changed since the last sync. A contact is a lead; its lead status and lifecycle stage give the outcome,
+ * the revenue of its closed-won deals gives the value.
+ */
+export async function pullHubspot(token: string, since: Date): Promise<NormalizedLead[]> {
+  const [stage, lead] = await Promise.all([hubspotLabels(token, "lifecyclestage"), hubspotLabels(token, "hs_lead_status")]);
+  const seen = new Map<string, HsContact>();
+  let from = since.getTime();
+  // One search returns 10 000 rows at most: past that, continue from the last change time seen.
+  for (let round = 0; round < 3; round++) {
+    let after: string | undefined;
+    let rows = 0;
+    let last = from;
+    for (let page = 0; page < 50; page++) {
+      const data: HsSearch = await hubspotCall<HsSearch>(token, HUBSPOT_SEARCH, {
+        filterGroups: [{ filters: [{ propertyName: "lastmodifieddate", operator: "GTE", value: String(from) }] }],
+        sorts: [{ propertyName: "lastmodifieddate", direction: "ASCENDING" }],
+        properties: HS_PROPS,
+        limit: 200,
+        ...(after ? { after } : {}),
+      });
+      for (const c of data.results ?? []) {
+        seen.set(c.id, c);
+        const m = toDate(c.properties?.lastmodifieddate).getTime();
+        if (m > last) last = m;
+      }
+      rows += data.results?.length ?? 0;
+      after = data.paging?.next?.after;
+      if (!after) break;
+      await sleep(220);
+    }
+    if (rows < 10_000 || last <= from) break;
+    from = last;
+  }
+  return [...seen.values()].map((c) => normalizeHubspotContact(c, { stage, lead }));
+}
+
 export { toDate };

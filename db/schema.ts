@@ -229,7 +229,7 @@ export const leads = pgTable(
   {
     id: text("id").primaryKey(),
     projectId: text("project_id").notNull(),
-    /** webhook | kommo | bitrix24 | sheet */
+    /** webhook | kommo | bitrix24 | hubspot | sheet */
     source: text("source").notNull(),
     externalId: text("external_id").notNull(),
     leadAt: timestamp("lead_at", { withTimezone: true }).notNull(),
