@@ -35,36 +35,32 @@ export default async function FinancePayrollPage() {
   await requireSection("finance");
   const [r, grants] = await Promise.all([buildFinanceReport(), listGrants()]);
 
-  // Projects each person is responsible for, with the day they started there.
-  const staffProjects: StaffProject[] = r.projects
-    .filter((p) => p.status !== "archived")
-    .flatMap((p) =>
-      (
-        [
-          ["media_buyer", p.mediaBuyerEmail],
-          ["smm", p.smmEmail],
-        ] as const
-      ).flatMap(([role, email]) =>
-        email
-          ? [
-              {
-                email: email.toLowerCase(),
-                projectId: p.id,
-                projectName: p.name,
-                role,
-                startDate:
-                  r.assignments.find(
-                    (a) =>
-                      a.projectId === p.id &&
-                      a.email === email.toLowerCase() &&
-                      a.role === role,
-                  )?.startDate ?? null,
-                projectStart: p.startMonth,
-              },
-            ]
-          : [],
-      ),
-    );
+  // Projects each person works on: the owners from «Вводные» and those put on a project in the payroll card.
+  const active = r.projects.filter((p) => p.status !== "archived");
+  const staffProjects: StaffProject[] = active.flatMap((p) => {
+    const owners = new Map<string, string>();
+    if (p.mediaBuyerEmail) owners.set("media_buyer", p.mediaBuyerEmail.toLowerCase());
+    if (p.smmEmail) owners.set("smm", p.smmEmail.toLowerCase());
+    const rows = [...owners].map(([role, email]) => ({ role, email }));
+    for (const a of r.assignments)
+      if (a.projectId === p.id && !rows.some((x) => x.role === a.role && x.email === a.email)) rows.push({ role: a.role, email: a.email });
+    return rows.map(({ role, email }) => {
+      const a = r.assignments.find((x) => x.projectId === p.id && x.email === email && x.role === role);
+      return {
+        email,
+        projectId: p.id,
+        projectName: p.name,
+        role,
+        startDate: a?.startDate ?? null,
+        projectStart: p.startMonth,
+        task: a?.task ?? "run",
+        sources: a?.sources ?? null,
+        autoSources: role === "smm" ? p.networksCount : p.sourcesCount,
+        owner: owners.get(role) === email,
+      };
+    });
+  });
+  const allProjects = active.map((p) => ({ id: p.id, name: p.name }));
   // Everyone who can be picked by email: the team, project owners, people with access to the dashboard.
   const known = new Map<string, StaffOption>();
   for (const g of grants)
@@ -379,7 +375,7 @@ export default async function FinancePayrollPage() {
       <Card>
         <CardHead
           title="Команда"
-          hint="История начислений по месяцам. Последний месяц — прогноз"
+          hint={`История начислений по месяцам. ${monthLabel(r.now)} — прогноз; потенциал на ${monthLabel(r.nextMonth)} — полный месяц на тех же проектах при выполненных KPI: ${money(r.nextPotential)} на всю команду`}
         />
         <Table>
           <thead>
@@ -391,6 +387,7 @@ export default async function FinancePayrollPage() {
                   {monthShort(m)}
                 </th>
               ))}
+              <th className="!text-right">{monthShort(r.nextMonth)} · потенциал</th>
               <th></th>
             </tr>
           </thead>
@@ -437,6 +434,9 @@ export default async function FinancePayrollPage() {
                     </td>
                   );
                 })}
+                <td className="text-right tabular-nums text-muted-foreground">
+                  {p.nextPotential ? money(p.nextPotential) : "—"}
+                </td>
                 <td className="text-right">
                   <StaffButton
                     staff={p.staff}
@@ -449,6 +449,7 @@ export default async function FinancePayrollPage() {
                     }}
                     options={staffOptions}
                     projects={staffProjects}
+                    allProjects={allProjects}
                   />
                 </td>
               </tr>
@@ -462,6 +463,7 @@ export default async function FinancePayrollPage() {
             defaults={{ email: "", name: "", role: "smm", sinceMonth: r.now }}
             options={staffOptions}
             projects={staffProjects}
+            allProjects={allProjects}
           />
         </div>
       </Card>

@@ -6,7 +6,23 @@ import { computeStats } from "@/lib/domain/stats";
 import type { ResultMetric } from "@/lib/domain/types";
 import { addMonths, currentMonth, monthEnd, monthOf, monthStart, monthsBetween } from "@/lib/projects/plans";
 import { BASE_CURRENCY, convert, getRates, toBase, type Rates } from "./fx";
-import { accrue, buyerPay, defaultBuyerRate, defaultSmmRate, PAY_CURRENCY, prorateEntry, smmPay, type Accrual, type KpiState, type PayLine, type Terms } from "./rules";
+import {
+  accrue,
+  buyerPay,
+  defaultBuyerRate,
+  defaultSmmRate,
+  flatPay,
+  nextMonthAmount,
+  PAY_CURRENCY,
+  prorateEntry,
+  SMM_SETUP_RATE,
+  smmPay,
+  smmTaskLabel,
+  type Accrual,
+  type KpiState,
+  type PayLine,
+  type Terms,
+} from "./rules";
 import {
   invoiceIn,
   listAssignments,
@@ -111,6 +127,10 @@ export interface PayRow extends PayLine {
   days: number | null;
   /** What the line is paid for: running the ads or the social networks of the project. */
   role: "media_buyer" | "smm";
+  /** SMM: run | setup | test. Set-up and test are flat amounts, the KPI rule does not touch them. */
+  task: string;
+  /** Traffic sources / social networks the rate was taken for. */
+  sources: number;
   projectId: string;
   projectName: string;
   amountBase: number;
@@ -124,6 +144,8 @@ export interface PersonPay {
   baseSalary: number;
   currency: string;
   lines: PayRow[];
+  /** What the person can earn next month if every project stays and every KPI is met, base currency. */
+  nextPotential: number;
 }
 
 export interface ExpenseLine {
@@ -181,6 +203,9 @@ export interface FinanceReport {
   pnl: PnlMonth[];
   payoutsDue: PayoutDue[];
   payrollFund: PayrollFund;
+  /** The month after the current one and the whole team's potential pay for it, base currency. */
+  nextMonth: string;
+  nextPotential: number;
   expensesFor: (month: string) => ExpenseLine[];
   payrollFor: (month: string) => number;
 }
@@ -288,7 +313,7 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     let p = peopleBy.get(email);
     if (!p) {
       const s = staffBy.get(email) ?? null;
-      p = { email, name: s?.name || nameFromEmail(email), role: s?.role ?? role, staff: s, baseSalary: s?.active === false ? 0 : (s?.baseSalary ?? 0), currency: s?.currency ?? PAY_CURRENCY, lines: [] };
+      p = { email, name: s?.name || nameFromEmail(email), role: s?.role ?? role, staff: s, baseSalary: s?.active === false ? 0 : (s?.baseSalary ?? 0), currency: s?.currency ?? PAY_CURRENCY, lines: [], nextPotential: 0 };
       peopleBy.set(email, p);
     }
     return p;
@@ -297,25 +322,42 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
   for (const fp of finProjects) {
     if (fp.status === "archived") continue;
     const states = fp.months.map((m) => ({ month: m.month, state: m.kpi }));
-    // The same project pays its media buyer and its SMM specialist, each by their own rate.
-    const jobs = [
-      { role: "media_buyer" as const, email: fp.mediaBuyerEmail, pay: () => buyerPay(states, fp.buyerRate, now) },
-      { role: "smm" as const, email: fp.smmEmail, pay: () => smmPay(states, fp.smmRate, now) },
-    ];
+    // The same project pays its media buyer and its SMM specialist, each by their own rate. Who works on it:
+    // the owners from «Вводные» and everyone put on the project in the payroll card.
+    const jobs: { role: "media_buyer" | "smm"; email: string }[] = [];
+    if (fp.mediaBuyerEmail) jobs.push({ role: "media_buyer", email: fp.mediaBuyerEmail.toLowerCase() });
+    if (fp.smmEmail) jobs.push({ role: "smm", email: fp.smmEmail.toLowerCase() });
+    for (const a of assignments) {
+      if (a.projectId !== fp.id || (a.role !== "media_buyer" && a.role !== "smm")) continue;
+      if (!jobs.some((j) => j.role === a.role && j.email === a.email)) jobs.push({ role: a.role, email: a.email });
+    }
     for (const job of jobs) {
-      if (!job.email) continue;
       const who = person(job.email, job.role);
       if (who.staff?.active === false) continue;
       const since = who.staff?.sinceMonth ?? now;
+      const a = assignments.find((x) => x.projectId === fp.id && x.email === job.email && x.role === job.role);
+      const task = job.role === "smm" ? (a?.task ?? "run") : "run";
+      const sources = a?.sources ?? (job.role === "smm" ? fp.networksCount : fp.sourcesCount);
+      // A rate set by the «Ставка» button wins; otherwise it follows the number of sources the person works with.
+      let pay: PayLine[];
+      if (job.role === "media_buyer") {
+        pay = buyerPay(states, buyerRates.get(fp.id) ?? fp.terms?.buyerRate ?? defaultBuyerRate(sources), now);
+      } else if (task === "run") {
+        pay = smmPay(states, smmRates.get(fp.id) ?? defaultSmmRate(sources), now);
+      } else {
+        const flat = smmRates.get(fp.id) ?? (task === "setup" ? SMM_SETUP_RATE : null);
+        pay = flatPay(states.map((x) => x.month), flat, now, smmTaskLabel(task));
+      }
       // Joined the project in the middle of a month → that month is paid by working days, later ones in full.
-      const joined = assignments.find((a) => a.projectId === fp.id && a.email === job.email!.toLowerCase() && a.role === job.role);
-      for (const line of prorateEntry(job.pay(), joined?.startDate ?? null)) {
+      for (const line of prorateEntry(pay, a?.startDate ?? null)) {
         if (line.month < since || line.month < fp.startMonth) continue;
-        who.lines.push({ ...line, role: job.role, projectId: fp.id, projectName: fp.name, amountBase: line.amount === null ? 0 : toBase(line.amount, PAY_CURRENCY, rates) });
+        who.lines.push({ ...line, role: job.role, task, sources, projectId: fp.id, projectName: fp.name, amountBase: line.amount === null ? 0 : toBase(line.amount, PAY_CURRENCY, rates) });
+        if (line.month === now) who.nextPotential += toBase(nextMonthAmount(line, task !== "run"), PAY_CURRENCY, rates);
       }
     }
   }
   const people = [...peopleBy.values()];
+  for (const p of people) p.nextPotential += toBase(p.baseSalary, p.currency, rates);
   const baseSalaryFor = (p: PersonPay, month: string) =>
     p.baseSalary > 0 && (!p.staff || p.staff.sinceMonth <= month) ? p.baseSalary : 0;
   const payrollFor = (month: string) =>
@@ -366,9 +408,9 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     (a, p) =>
       a +
       p.lines
-        .filter((l) => l.month === now && paidAhead.has(l.projectId) && l.rate !== null)
+        .filter((l) => l.month === now && paidAhead.has(l.projectId))
         // A full month at the rate; the third month in a row with KPI met is already +50%.
-        .reduce((s, l) => s + toBase(l.rate! * (l.streak + 1 >= 3 ? 1.5 : 1), PAY_CURRENCY, rates), 0),
+        .reduce((s, l) => s + toBase(nextMonthAmount(l, l.task !== "run"), PAY_CURRENCY, rates), 0),
     0,
   );
   const unpaidPayroll = payoutsDue.filter((d) => !d.paid).reduce((a, d) => a + toBase(d.amount, d.currency, rates), 0);
@@ -382,7 +424,7 @@ export async function buildFinanceReport(): Promise<FinanceReport> {
     nextProjects: finProjects.filter((p) => paidAhead.has(p.id) && people.some((x) => x.lines.some((l) => l.month === now && l.projectId === p.id))).map((p) => p.name),
   };
 
-  return { now, months, rates, projects: finProjects, people, assignments, expenses, invoices, plans, pnl, payoutsDue, payrollFund, expensesFor, payrollFor };
+  return { now, months, rates, projects: finProjects, people, assignments, expenses, invoices, plans, pnl, payoutsDue, payrollFund, nextMonth: next, nextPotential: people.reduce((a, p) => a + p.nextPotential, 0), expensesFor, payrollFor };
 }
 
 export { BASE_CURRENCY };

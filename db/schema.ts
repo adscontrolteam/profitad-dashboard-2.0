@@ -617,8 +617,9 @@ export const finSmmRates = pgTable("fin_smm_rates", {
 });
 
 /**
- * The day a person started working on a project, per role. Pay for that first month is counted by working days
- * from this date; every later month is a full one. No row = on the project from its start (full months).
+ * A person's work on a project, per role: the day they started (pay for that first month is counted by working
+ * days from it, every later month is a full one), what they do there and with how many sources. A row also puts a
+ * person on a project they are not the owner of in «Вводные». No row = the owner, from the project's start.
  */
 export const finAssignments = pgTable(
   "fin_assignments",
@@ -627,7 +628,12 @@ export const finAssignments = pgTable(
     email: text("email").notNull(),
     /** media_buyer | smm */
     role: text("role").notNull(),
-    startDate: date("start_date").notNull(),
+    /** The day the person started on the project; null = from the project's start. */
+    startDate: date("start_date"),
+    /** SMM only: run (monthly, by the number of networks) | setup (one-off set-up task) | test; null = run. */
+    task: text("task"),
+    /** Traffic sources (media buyer) or social networks (SMM) the person works with; null = as the project has. */
+    sources: integer("sources"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [primaryKey({ columns: [t.projectId, t.email, t.role] })],

@@ -246,17 +246,27 @@ export async function saveStaffAction(_prev: FinState, f: FormData): Promise<Fin
   if (base === "bad") return { ok: false, message: "Оклад должен быть числом." };
   if (!currency) return { ok: false, message: "Выберите валюту." };
   if (!MONTH.test(since)) return { ok: false, message: "Укажите, с какого месяца считать зарплату." };
-  // «start|role|projectId» → the day the person started on that project; empty = from the project's start.
-  const starts: { projectId: string; role: string; startDate: string | null }[] = [];
+  // One row per project the person works on: «row|role|projectId» = "owner" (from «Вводные») or "added" (put on
+  // the project here), with «start|…», «task|…», «sources|…» and «remove|…» beside it.
+  const rows: { projectId: string; role: string; startDate: string | null; task: string | null; sources: number | null; keep: boolean }[] = [];
   for (const [key, value] of f.entries()) {
-    if (!key.startsWith("start|")) continue;
+    if (!key.startsWith("row|")) continue;
     const [, role, projectId] = key.split("|");
-    const day = String(value).trim();
     if (!projectId || (role !== "media_buyer" && role !== "smm")) continue;
+    const tail = `${role}|${projectId}`;
+    const day = text(f, `start|${tail}`, 10);
+    const task = text(f, `task|${tail}`, 10);
+    const rawSources = text(f, `sources|${tail}`, 4);
+    const sources = rawSources ? Number(rawSources) : null;
     if (day && !DATE.test(day)) return { ok: false, message: "Дата начала работы на проекте указана неверно." };
-    starts.push({ projectId, role, startDate: day || null });
+    if (sources !== null && (!Number.isInteger(sources) || sources < 1 || sources > 20)) return { ok: false, message: "Количество источников — целое число от 1." };
+    const smmTask = role === "smm" && (task === "setup" || task === "test") ? task : null;
+    const removed = f.get(`remove|${tail}`) === "on";
+    // An owner's row with nothing set is not stored at all; a person put on a project here needs the row to stay.
+    const keep = !removed && (String(value) === "added" || Boolean(day) || smmTask !== null || sources !== null);
+    rows.push({ projectId, role, startDate: day || null, task: smmTask, sources, keep });
   }
-  for (const s of starts) await saveAssignment({ ...s, email });
+  for (const r of rows) await saveAssignment({ ...r, email });
   await saveStaff({
     email,
     name,

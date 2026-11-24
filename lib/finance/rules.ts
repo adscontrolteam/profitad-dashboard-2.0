@@ -68,6 +68,36 @@ export const SMM_RATES = { one: 120, two: 150, many: 200 } as const;
 /** Setting up the social networks before running them: a one-off task of 2–3 weeks, set by hand as the rate. */
 export const SMM_SETUP_RATE = 100;
 
+/** What an SMM specialist does on a project. */
+export type SmmTask = "run" | "setup" | "test";
+export const SMM_TASKS: { value: SmmTask; label: string }[] = [
+  { value: "run", label: "Ведение" },
+  { value: "setup", label: "Оформление" },
+  { value: "test", label: "Тест" },
+];
+export const smmTaskLabel = (t: string | null | undefined) => SMM_TASKS.find((x) => x.value === t)?.label ?? "Ведение";
+
+/**
+ * A task paid by a flat amount a month: the set-up of social networks, a test. No KPI rule — neither −50% nor +50%.
+ */
+export function flatPay(months: string[], rate: number | null, currentMonth: string, label: string): PayLine[] {
+  return months.map((month) => ({
+    month,
+    state: "unknown" as const,
+    streak: 0,
+    rate,
+    amount: rate,
+    rule: rate === null ? `${label}: ставка не задана — задайте кнопкой «Ставка»` : `${label}: фиксированная ставка, KPI не влияет`,
+    forecast: month === currentMonth,
+  }));
+}
+
+/** A full next month by the line of the current one: KPI is taken as met, the third month in a row is already +50%. */
+export function nextMonthAmount(line: Pick<PayLine, "rate" | "streak">, flat: boolean) {
+  if (line.rate === null) return 0;
+  return flat ? line.rate : line.rate * (line.streak + 1 >= 3 ? 1.5 : 1);
+}
+
 /** Rate by the number of social networks run for the project; none connected → not known, set by hand. */
 export function defaultSmmRate(networks: number) {
   if (networks <= 0) return null;

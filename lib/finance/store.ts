@@ -224,23 +224,27 @@ export interface Assignment {
   projectId: string;
   email: string;
   role: string;
-  startDate: string;
+  startDate: string | null;
+  /** SMM: run | setup | test; null = run. */
+  task: string | null;
+  /** Sources / social networks the person works with; null = as the project has. */
+  sources: number | null;
 }
 
 export async function listAssignments(): Promise<Assignment[]> {
   const rows = await getDb().select().from(finAssignments);
-  return rows.map((r) => ({ projectId: r.projectId, email: r.email, role: r.role, startDate: r.startDate }));
+  return rows.map((r) => ({ projectId: r.projectId, email: r.email, role: r.role, startDate: r.startDate, task: r.task, sources: r.sources }));
 }
 
-/** null = forget the date: the person counts as on the project from its start. */
-export async function saveAssignment(a: Omit<Assignment, "startDate"> & { startDate: string | null }) {
+/** `keep: false` removes the row: the person is then on the project only if they own it in «Вводные», on defaults. */
+export async function saveAssignment(a: Assignment & { keep: boolean }) {
   const db = getDb();
   const key = and(eq(finAssignments.projectId, a.projectId), eq(finAssignments.email, a.email), eq(finAssignments.role, a.role));
-  if (a.startDate === null) {
+  if (!a.keep) {
     await db.delete(finAssignments).where(key);
     return;
   }
-  const values = { projectId: a.projectId, email: a.email, role: a.role, startDate: a.startDate, updatedAt: new Date() };
+  const values = { projectId: a.projectId, email: a.email, role: a.role, startDate: a.startDate, task: a.task, sources: a.sources, updatedAt: new Date() };
   await db
     .insert(finAssignments)
     .values(values)

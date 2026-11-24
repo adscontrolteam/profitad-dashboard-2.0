@@ -4,6 +4,7 @@ import { useActionState, useId, useState, useTransition } from "react";
 import { markPayoutAction, saveStaffAction, unmarkPayoutAction, type FinState } from "@/app/(dashboard)/finance/actions";
 import { CURRENCIES } from "@/lib/finance/currency";
 import { STAFF_ROLES as ROLES } from "@/lib/finance/labels";
+import { SMM_TASKS } from "@/lib/finance/rules";
 import type { Staff } from "@/lib/finance/store";
 import { Drawer, Field, FormError } from "./drawer";
 
@@ -38,6 +39,13 @@ export interface StaffProject {
   role: string;
   startDate: string | null;
   projectStart: string;
+  /** SMM: run | setup | test. */
+  task: string;
+  /** Sources / networks set for this person; null = as the project has (`autoSources`). */
+  sources: number | null;
+  autoSources: number;
+  /** Responsible for the project in «Вводные»; false = put on the project in this card. */
+  owner: boolean;
 }
 
 export function StaffButton({
@@ -46,12 +54,15 @@ export function StaffButton({
   defaults,
   options = [],
   projects = [],
+  allProjects = [],
 }: {
   staff: Staff | null;
   label: string;
   defaults?: { email: string; name: string; role: string; sinceMonth: string };
   options?: StaffOption[];
   projects?: StaffProject[];
+  /** Every project in work: any of them can be given to the person here. */
+  allProjects?: { id: string; name: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const listId = useId();
@@ -66,7 +77,28 @@ export function StaffButton({
     if (!name.trim()) setName(known.name);
     setRole(known.role);
   };
-  const mine = projects.filter((p) => p.email === email.trim().toLowerCase());
+  // Projects given to the person in this card and not saved yet.
+  const [added, setAdded] = useState<string[]>([]);
+  const payRole = role === "smm" ? "smm" : role === "media_buyer" ? "media_buyer" : null;
+  const saved = projects.filter((p) => p.email === email.trim().toLowerCase());
+  const mine: StaffProject[] = [
+    ...saved,
+    ...added
+      .filter((id) => payRole && !saved.some((p) => p.projectId === id && p.role === payRole))
+      .map((id) => ({
+        email: email.trim().toLowerCase(),
+        projectId: id,
+        projectName: allProjects.find((p) => p.id === id)?.name ?? id,
+        role: payRole!,
+        startDate: null,
+        projectStart: "",
+        task: "run",
+        sources: null,
+        autoSources: 0,
+        owner: false,
+      })),
+  ];
+  const free = payRole ? allProjects.filter((p) => !mine.some((m) => m.projectId === p.id && m.role === payRole)) : [];
   const [state, action, saving] = useActionState(async (prev: FinState, f: FormData) => {
     const res = await saveStaffAction(prev, f);
     if (res.ok) setOpen(false);
@@ -128,24 +160,76 @@ export function StaffButton({
                 <input name="sinceMonth" type="month" defaultValue={s?.sinceMonth ?? defaults?.sinceMonth} className="field" />
               </Field>
             </div>
-            {mine.length > 0 && (
+            {(mine.length > 0 || free.length > 0) && (
               <div className="flex flex-col gap-2">
-                <span className="text-xs font-medium text-muted-foreground">Проекты: с какого дня работает</span>
-                {mine.map((p) => (
-                  <div key={`${p.role}-${p.projectId}`} className="flex flex-wrap items-center gap-2 rounded-[14px] border border-border px-3 py-2 text-sm">
-                    <span className="font-medium">{p.projectName}</span>
-                    <span className="text-xs text-muted-foreground">{ROLES.find((r) => r.value === p.role)?.label ?? p.role}</span>
-                    <input
-                      type="date"
-                      name={`start|${p.role}|${p.projectId}`}
-                      defaultValue={p.startDate ?? ""}
-                      className="field ml-auto w-auto py-1.5 tabular-nums"
-                      aria-label={`С какого дня на проекте ${p.projectName}`}
-                    />
-                  </div>
-                ))}
+                <span className="text-xs font-medium text-muted-foreground">Проекты</span>
+                {mine.map((p) => {
+                  const tail = `${p.role}|${p.projectId}`;
+                  const smm = p.role === "smm";
+                  return (
+                    <div key={tail} className="flex flex-col gap-2 rounded-[14px] border border-border px-3 py-2.5 text-sm">
+                      <input type="hidden" name={`row|${tail}`} value={p.owner ? "owner" : "added"} />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{p.projectName}</span>
+                        <span className="text-xs text-muted-foreground">{ROLES.find((r) => r.value === p.role)?.label ?? p.role}</span>
+                        {p.owner ? (
+                          <span className="ml-auto text-xs text-muted-foreground">ответственный во «Вводных»</span>
+                        ) : (
+                          <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <input type="checkbox" name={`remove|${tail}`} /> убрать с проекта
+                          </label>
+                        )}
+                      </div>
+                      <div className={`grid gap-2 ${smm ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+                        {smm && (
+                          <label className="flex flex-col gap-1">
+                            <span className="text-[11px] text-muted-foreground">Задача</span>
+                            <select name={`task|${tail}`} defaultValue={p.task} className="field py-1.5">
+                              {SMM_TASKS.map((t) => (
+                                <option key={t.value} value={t.value}>
+                                  {t.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                        <label className="flex flex-col gap-1">
+                          <span className="text-[11px] text-muted-foreground">{smm ? "Соцсетей" : "Источников трафика"}</span>
+                          <input
+                            name={`sources|${tail}`}
+                            inputMode="numeric"
+                            defaultValue={p.sources ?? ""}
+                            placeholder={p.autoSources ? `${p.autoSources} — как в проекте` : "не задано"}
+                            className="field py-1.5 tabular-nums"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-[11px] text-muted-foreground">На проекте с</span>
+                          <input type="date" name={`start|${tail}`} defaultValue={p.startDate ?? ""} className="field py-1.5 tabular-nums" />
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })}
+                {free.length > 0 && (
+                  <select
+                    className="field"
+                    value=""
+                    onChange={(e) => e.target.value && setAdded((list) => [...list, e.target.value])}
+                    aria-label="Добавить проект"
+                  >
+                    <option value="">+ Добавить проект</option>
+                    {free.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <span className="text-xs text-muted-foreground">
-                  Месяц входа считается по рабочим дням: ставка ÷ 21 × отработанные дни. Следующие месяцы — полная ставка. Пустая дата — с начала проекта.
+                  Ставка идёт от числа источников: медиабайер — один источник $150, больше — задаётся кнопкой «Ставка»; SMM — 1 соцсеть $120, 2 — $150, 3+ —
+                  $200. Оформление — $100, тест — ставка задаётся вручную; на них KPI не влияет. Месяц входа считается по рабочим дням: ставка ÷ 21 × дни. Пустая дата —
+                  с начала проекта.
                 </span>
               </div>
             )}
