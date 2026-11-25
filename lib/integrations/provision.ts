@@ -1,5 +1,6 @@
 import "server-only";
 import { GOOGLE_LAYOUT, TEMPLATE_SKIP_FILES } from "@/config/google";
+import { ensureLeadStatuses } from "./lead-statuses";
 import { copyFile, copyFolderTree, createFolder, findChild, FOLDER_MIME, folderInfo, folderUrl, listTree, renameFile } from "@/lib/google/drive";
 import { batchUpdate, spreadsheetInfo, spreadsheetUrl } from "@/lib/google/sheets";
 import { detectReport, resetReportCopy } from "./sheets";
@@ -87,6 +88,8 @@ export async function ensureLeadsSheet(projectId: string, projectName: string, a
     };
     await batchUpdate(spreadsheetId, [...clear(leadsTab, 1), ...clear(salesTab, 2)]);
   }
+  // Every lead table has the status dropdown with colours, whatever the template or the found file carried.
+  await ensureLeadStatuses(spreadsheetId, leadsTab);
   await saveIntegration(
     projectId,
     "sheets_leads",
