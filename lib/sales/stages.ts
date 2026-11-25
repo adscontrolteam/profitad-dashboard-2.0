@@ -15,7 +15,8 @@ export type DealStage = (typeof DEAL_STAGES)[number];
 export const STAGE_META: Record<DealStage, { label: string; tone: StatusTone }> = {
   contacted: { label: "Связались с проектом", tone: "gray" },
   call_scheduled: { label: "Созвон назначен", tone: "blue" },
-  brief: { label: "Бриф получен", tone: "blue" },
+  // Stored as «brief» (the stage used to be «Бриф получен»); renamed without moving the deals.
+  brief: { label: "В анализе", tone: "blue" },
   proposal: { label: "КП отправлено", tone: "amber" },
   negotiation: { label: "Переговоры", tone: "amber" },
   active: { label: "Активный проект", tone: "green" },
