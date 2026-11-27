@@ -54,7 +54,6 @@ async function desired(projectId: string): Promise<{ wants: Want[]; name: string
   const ga4 = ga4PropertyId(sv.ga4);
   const gtm = gtmIds(sv.gtm);
   const google = p.sources.filter((s) => s.platform === "google" && s.accountId).map((s) => s.accountId.replace(/\D/g, ""));
-  const metaAcc = p.sources.filter((s) => s.platform === "meta" && s.accountId).map((s) => s.accountId.replace(/\D/g, ""));
 
   const wants: Want[] = [];
   const people: [string | null, Role][] = [
@@ -69,7 +68,7 @@ async function desired(projectId: string): Promise<{ wants: Want[]; name: string
     };
     if (folderId) add("drive", folderId);
     if (ga4) add("ga4", ga4);
-    for (const a of metaAcc) add("meta", a);
+    // Meta Ads access is given by the owner by hand in Business Manager (his decision, 27.11.2026): the dashboard does not touch it.
     if (role === "media_buyer") {
       for (const g of google) add("google_ads", g);
       if (gtm) add("gtm", `${gtm.accountId}/${gtm.containerId}`);
@@ -172,7 +171,10 @@ export async function syncProjectAccess(projectId: string, actor = "дашбор
     if (taskIds.length) await archiveTasks(taskIds, actor);
     await db.delete(projectAccess).where(inArray(projectAccess.id, telegram.map((r) => r.id)));
   }
-  rows = rows.filter((r) => r.service !== "telegram");
+  // Meta Ads is no longer handled here either: the old rows (all of them failed attempts or «уже был») go without touching Business Manager.
+  const meta = rows.filter((r) => r.service === "meta");
+  if (meta.length) await db.delete(projectAccess).where(inArray(projectAccess.id, meta.map((r) => r.id)));
+  rows = rows.filter((r) => r.service !== "telegram" && r.service !== "meta");
 
   // Take back what the dashboard gave to people who are no longer on the project (or from a replaced resource).
   for (const row of rows.filter((r) => ["granted", "task"].includes(r.status) && !wanted.has(key(r.service, r.target, r.email)))) {

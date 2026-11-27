@@ -164,7 +164,7 @@ Bad timing → отказ) и Lifecycle stage (MQL, SQL, Opportunity → цел�
 | Google Ads | стандартный доступ (приглашение на почту) | — | кабинет в MCC с правами администратора |
 | GA4 | редактор | читатель | в делегировании сервис-аккаунта (Admin Console → Безопасность → Управление API → Делегирование) добавить `https://www.googleapis.com/auth/analytics.manage.users`; у `GOOGLE_WORKSPACE_USER` права администратора в ресурсе GA4 |
 | GTM | публикация в контейнере | чтение | в делегирование добавить `https://www.googleapis.com/auth/tagmanager.manage.users`; у `GOOGLE_WORKSPACE_USER` права администратора аккаунта GTM |
-| Meta Ads | анализ + реклама | анализ | `META_SYSTEM_USER_TOKEN` с `business_management`, `META_BUSINESS_ID`; специалист — сотрудник нашего Business Manager |
+| Meta Ads | выдаёт владелец вручную в Business Manager | | дашборд доступ к Meta Ads не выдаёт и не забирает |
 | Clarity, Search Console, Telegram-чат | задача админу в Task Manager | | у сервисов нет API для выдачи доступа |
 
 Что выдано и что не получилось — в карточке проекта («Доступы специалистов») и в Логе проекта.
