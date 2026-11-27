@@ -5,6 +5,8 @@ import { getDb } from "@/db";
 import { adMetricsDaily, projectChat } from "@/db/schema";
 import { getBrief, briefAsText } from "@/lib/brief/store";
 import { getProject } from "@/lib/data";
+import { INTEGRATION_LABELS } from "@/lib/integrations/kinds";
+import { listIntegrations } from "@/lib/integrations/store";
 import { listLog } from "@/lib/log/store";
 import { buildProjectContext } from "./context";
 
@@ -57,8 +59,9 @@ async function projectKnowledge(projectId: string) {
   const project = await getProject(projectId);
   if (!project) return null;
   const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
-  const [brief, campaigns, log] = await Promise.all([
+  const [brief, integrations, campaigns, log] = await Promise.all([
     getBrief(projectId),
+    listIntegrations(projectId),
     getDb()
       .select({
         platform: adMetricsDaily.platform,
@@ -84,6 +87,8 @@ async function projectKnowledge(projectId: string) {
     JSON.stringify(buildProjectContext(project), null, 1),
     "## Настройки для агента («Вводные»)",
     JSON.stringify(project.agent, null, 1),
+    "## Подключения («Вводные» → «Таблицы, CRM и Drive»)",
+    integrations.length ? integrations.map(integrationLine).join("\n") : "Ничего не подключено.",
     "## Планы по месяцам",
     JSON.stringify(project.plans, null, 1),
     "## Кампании за последние 30 дней (рекламные кабинеты)",
@@ -96,6 +101,14 @@ async function projectKnowledge(projectId: string) {
       : "Записей нет.",
   ];
   return parts.join("\n\n");
+}
+
+/** One connected sheet / folder / CRM with its link; the config never holds the secret. */
+function integrationLine(r: Awaited<ReturnType<typeof listIntegrations>>[number]) {
+  const c = r.config as { url?: string; title?: string; name?: string; type?: string; domain?: string };
+  const what = [c.title ?? c.name ?? c.type, c.domain, c.url].filter(Boolean).join(" · ");
+  const sync = r.lastSyncAt ? `, обновлено ${r.lastSyncAt.toISOString().slice(0, 10)}` : "";
+  return `— ${INTEGRATION_LABELS[r.kind]}: ${what || "без ссылки"} (статус ${r.status ?? "pending"}${sync}${r.lastError ? `, ошибка: ${r.lastError}` : ""})`;
 }
 
 /** Stores the question, asks the model, stores and returns the answer. */
