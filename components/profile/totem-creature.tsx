@@ -144,7 +144,7 @@ export function TotemCreature({
         {/* Body */}
         <path d={BODIES[body]} fill={fill} {...stroke} />
         <ellipse cx={cx} cy={150} rx={body === 2 ? 40 : 30} ry={26} fill={belly} opacity={0.85} />
-        <path d={`M${cx - 38} ${top + 26} q8 -14 20 -18`} fill="none" stroke="#fff" strokeOpacity={0.45} strokeWidth={5} strokeLinecap="round" />
+        <path d={`M${cx - 30} ${top + 32} q6 -11 16 -15`} fill="none" stroke="#fff" strokeOpacity={0.45} strokeWidth={5} strokeLinecap="round" />
 
         {/* Cheeks */}
         {happyish && (

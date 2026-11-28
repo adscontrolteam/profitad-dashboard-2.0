@@ -90,31 +90,36 @@ export function TotemStage({ members, viewerEmail, detailed }: { members: TotemM
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-xl font-bold tracking-[-0.02em]">{isMe ? "Твой тотем" : main.name ?? main.email}</h3>
             <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold", MOOD_TONE[main.mood])}>{MOOD_LABEL[main.mood]}</span>
-            {detailed && main.score !== null && (
-              <span className={cn("text-sm font-bold tabular-nums", scoreTone(main.score))}>{main.score}/100</span>
-            )}
           </div>
-          <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-            {isMe && !detailed
-              ? "Существо живёт твоими проектами: чем лучше результаты, тем оно ярче и бодрее."
-              : MOOD_HINT[main.mood]}
-          </p>
+          {/* Own totem: just the energy. Someone else's (admin only): the energy and what it calls for. */}
+          {main.score !== null && (isMe || detailed) ? (
+            <p className="mt-2 flex items-baseline gap-2">
+              <span className={cn("text-[40px] font-extrabold leading-none tracking-[-0.03em] tabular-nums", scoreTone(main.score))}>{main.score}</span>
+              <span className="text-sm text-muted-foreground">из 100 · энергия</span>
+            </p>
+          ) : (
+            isMe && <p className="mt-1.5 text-sm text-muted-foreground">Пока нет проектов с оценкой.</p>
+          )}
+          {!isMe && detailed && <p className="mt-2 text-sm leading-6 text-muted-foreground">{MOOD_HINT[main.mood]}</p>}
         </div>
 
         {(detailed || isMe) && main.projects.length > 0 && (
-          <ul className="flex flex-col gap-1.5">
-            {main.projects.map((p) => (
-              <li key={p.id}>
-                <Link href={`/projects/${p.id}`} className="flex items-center justify-between gap-3 rounded-2xl border border-border px-3 py-2 text-sm transition-colors hover:bg-muted">
-                  <span className="min-w-0 truncate font-medium">
-                    {p.name}
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">{p.role}</span>
-                  </span>
-                  <span className={cn("shrink-0 font-bold tabular-nums", scoreTone(p.score))}>{p.score ?? "—"}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <div>
+            <p className="mb-2 text-xs font-semibold text-muted-foreground">{isMe ? "Где добавить фокуса" : "Проекты"}</p>
+            <ul className="flex flex-col gap-1.5">
+              {main.projects.map((p) => (
+                <li key={p.id}>
+                  <Link href={`/projects/${p.id}`} className="flex items-center justify-between gap-3 rounded-2xl border border-border px-3 py-2 text-sm transition-colors hover:bg-muted">
+                    <span className="min-w-0 truncate font-medium">
+                      {p.name}
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">{p.role}</span>
+                    </span>
+                    <span className={cn("shrink-0 font-bold tabular-nums", scoreTone(p.score))}>{p.score ?? "—"}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {detailed && (
