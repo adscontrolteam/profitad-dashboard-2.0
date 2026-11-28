@@ -36,20 +36,6 @@ export const accessGrants = pgTable("access_grants", {
 
 export type AccessGrantRow = typeof accessGrants.$inferSelect;
 
-/**
- * A team member's Telegram for personal notifications (deadlines, project score). The admin enters the @username;
- * the chat id arrives when the person presses Start in the notifications bot (webhook /api/telegram).
- */
-export const teamTelegram = pgTable("team_telegram", {
-  email: text("email").primaryKey(),
-  username: text("username"),
-  chatId: text("chat_id"),
-  linkedAt: timestamp("linked_at", { withTimezone: true }),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-export type TeamTelegramRow = typeof teamTelegram.$inferSelect;
-
 export const deals = pgTable(
   "deals",
   {
@@ -94,9 +80,6 @@ export const tasks = pgTable(
     createdBy: text("created_by"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
     updatedBy: text("updated_by"),
-    /** Telegram reminders to the assignee: the day before the deadline (once), then every 2 days while overdue. */
-    dueNotifiedAt: timestamp("due_notified_at", { withTimezone: true }),
-    overdueNotifiedAt: timestamp("overdue_notified_at", { withTimezone: true }),
   },
   (t) => [
     index("tasks_stage_position_idx").on(t.stage, t.position),
@@ -154,7 +137,7 @@ export const projects = pgTable("projects", {
   telegramThreadId: integer("telegram_thread_id"),
   /** Last «Посмотреть Лог» reminder; the next one comes no sooner than 3 days later. */
   logNotifiedAt: timestamp("log_notified_at", { withTimezone: true }),
-  /** Health zone seen by the last daily check: a change sends the specialists a Telegram message. */
+  /** Health zone seen by the last daily check: a change is announced in the team chat (TELEGRAM_TEAM_CHAT). */
   healthZone: text("health_zone"),
   healthZoneAt: timestamp("health_zone_at", { withTimezone: true }),
   /**

@@ -1,5 +1,5 @@
 import { notifyLogs } from "@/lib/log/notify";
-import { notifyHealthChanges, notifyTaskDeadlines } from "@/lib/notify/team-daily";
+import { notifyHealthChanges } from "@/lib/notify/team-daily";
 
 /** The digest goes out in this hour of the Warsaw day, whatever the season. */
 const SEND_HOUR = 9;
@@ -22,8 +22,7 @@ export async function GET(request: Request) {
   if (hour !== SEND_HOUR) return Response.json({ sent: 0, skipped: `в Варшаве ${hour}:00, дайджест уходит в ${SEND_HOUR}:00` });
   const results = [
     ...(await notifyLogs(now)),
-    // Personal messages to the team: deadlines and project-score changes.
-    ...(await notifyTaskDeadlines(now).catch((e) => [{ projectId: "", kind: "telegram_tasks", ok: false, message: (e as Error).message }])),
+    // Project score moved to another zone: a message in the team chat.
     ...(await notifyHealthChanges(now).catch((e) => [{ projectId: "", kind: "telegram_score", ok: false, message: (e as Error).message }])),
   ];
   return Response.json({ sent: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length, results });

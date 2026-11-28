@@ -6,15 +6,13 @@ import { manageableRoles } from "@/lib/access/policy";
 import { listGrants } from "@/lib/access/store";
 import { requireAccessManager } from "@/lib/access/viewer";
 import { getProjects } from "@/lib/data";
-import { botUsername, listTeamTelegram } from "@/lib/notify/team-telegram";
 
 export const metadata: Metadata = { title: "Доступы" };
 
 export default async function AccessPage() {
   const viewer = await requireAccessManager();
   const actorRole = viewer.permissions.role;
-  const [grants, projects, telegramRows, bot] = await Promise.all([listGrants(), getProjects(), listTeamTelegram(), botUsername()]);
-  const telegram = Object.fromEntries([...telegramRows].map(([email, t]) => [email, { username: t.username, linked: t.linked }]));
+  const [grants, projects] = await Promise.all([listGrants(), getProjects()]);
   const admins = getAdminEmails();
 
   const rows: AccessRow[] = [
@@ -35,8 +33,6 @@ export default async function AccessPage() {
         rows={rows}
         assignableRoles={manageableRoles(actorRole)}
         projects={projects.map(({ id, name }) => ({ id, name }))}
-        telegram={telegram}
-        botUsername={bot}
       />
       <RoleMatrix />
     </div>

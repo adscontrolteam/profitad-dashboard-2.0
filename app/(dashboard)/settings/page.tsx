@@ -4,8 +4,6 @@ import Link from "next/link";
 import { AvatarSettings } from "@/components/settings/avatar-settings";
 import { ThemePicker } from "@/components/settings/theme-picker";
 import { TotemPicker } from "@/components/settings/totem-picker";
-import { TelegramSettings } from "@/components/settings/telegram-settings";
-import { botUsername, listTeamTelegram, notifyBotConfigured } from "@/lib/notify/team-telegram";
 import { currentUser } from "@clerk/nextjs/server";
 import { Card } from "@/components/ui/card";
 import { requireViewer } from "@/lib/access/viewer";
@@ -16,16 +14,12 @@ export default async function SettingsPage() {
   const { permissions, email } = await requireViewer();
   const user = await currentUser();
   const totem = (user?.publicMetadata as { totem?: { kind?: string; color?: string; name?: string } } | undefined)?.totem ?? null;
-  const [telegramRows, bot] = await Promise.all([listTeamTelegram([email]), botUsername()]);
-  const tg = telegramRows.get(email);
 
   return (
     <div className="flex flex-col gap-5">
       <AvatarSettings />
 
       <TotemPicker seed={email} initial={totem} />
-
-      <TelegramSettings username={tg?.username ?? null} linked={!!tg?.linked} botUsername={bot} configured={notifyBotConfigured()} />
 
       <Card className="min-w-0">
         <h2 className="section-title">Оформление <InfoHint className="ml-1">Выбор сохраняется на этом устройстве.</InfoHint></h2>

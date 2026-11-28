@@ -1,36 +1,39 @@
-import type { HealthZone } from "@/lib/domain/health";
+/** Texts of the team-chat messages about project score zones. Edit the wording here (plain text, no markup). */
 
-/** Texts of the personal Telegram messages. Edit the wording here. */
+export type Zone = "green" | "yellow" | "red";
 
-export const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const RANK: Record<Zone, number> = { red: 0, yellow: 1, green: 2 };
 
-const RANK: Record<Exclude<HealthZone, "none">, number> = { red: 0, yellow: 1, green: 2 };
-const ZONE_WORD: Record<Exclude<HealthZone, "none">, string> = { green: "зелёной", yellow: "жёлтой", red: "красной" };
+const joinNames = (names: string[]) =>
+  names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} и ${names[names.length - 1]}`;
 
-/** The message for one specialist about one project that changed zone. */
 export function zoneMessage(o: {
-  name: string;
+  /** First names of the project's MediaBuyer and SMM. */
+  names: string[];
   project: string;
   score: number;
-  from: Exclude<HealthZone, "none">;
-  to: Exclude<HealthZone, "none">;
-  /** Other projects of this person that are still in yellow (or red, when none are yellow). */
+  from: Zone;
+  to: Zone;
+  /** The specialists' other projects still in yellow (or red, when none are yellow). */
   toImprove: string[];
 }) {
-  const p = `«${escapeHtml(o.project)}»`;
-  const n = escapeHtml(o.name);
+  const p = `«${o.project}»`;
+  const who = joinNames(o.names);
+  const score = `${o.score}/100`;
+  const many = o.names.length > 1;
+
   if (o.to === "green") {
+    const thanks = who ? `${who}, спасибо ${many ? "вам за ваш" : "тебе за твой"} вклад и ответственность!` : "Спасибо команде за вклад и ответственность!";
     const more = o.toImprove.length
-      ? `\n\nЕсли ещё улучшишь результат на ${o.toImprove.map((x) => `«${escapeHtml(x)}»`).join(", ")}, будет вообще супер!`
+      ? `\n\nЕсли ещё ${many ? "улучшите" : "улучшишь"} результат на ${o.toImprove.map((x) => `«${x}»`).join(", ")}, будет вообще супер!`
       : "";
-    return `🎉 <b>Улучшился уровень!</b>\n\n${n}, спасибо тебе за твой вклад и ответственность! Проект ${p} теперь в зелёной зоне — ${o.score}/100.${more}`;
+    return `🎉 Улучшился уровень! ${p} в зелёной зоне — ${score}.\n\n${thanks}${more}`;
   }
   if (RANK[o.to] > RANK[o.from]) {
-    return `📈 <b>Уровень растёт!</b>\n\n${n}, проект ${p} выбрался из красной зоны — ${o.score}/100. Так держать, до зелёной совсем немного!`;
+    return `📈 Уровень растёт! ${p} выбрался из красной зоны — ${score}.${who ? `\n\n${who}, так держать — до зелёной совсем немного!` : ""}`;
   }
   if (o.to === "yellow") {
-    return `⚠️ <b>Проект просел</b>\n\n${n}, проект ${p} опустился в жёлтую зону — ${o.score}/100. Посмотри, что изменилось. Если нужна помощь — напиши, разберёмся вместе.`;
+    return `⚠️ Обратите внимание: ${p} перешёл в жёлтую зону — ${score}.${who ? `\n\n${who}, ${many ? "посмотрите" : "посмотри"}, что просело. Если нужна помощь — ${many ? "пишите" : "пиши"}, разберёмся вместе.` : ""}`;
   }
-  return `🔴 <b>Проект в красной зоне</b>\n\n${n}, проект ${p} сейчас ${o.score}/100 (был в ${ZONE_WORD[o.from]} зоне). Давай разберёмся вместе, что мешает результату — напиши, когда удобно.`;
+  return `🔴 ${p} в красной зоне — ${score} (был в ${o.from === "green" ? "зелёной" : "жёлтой"}).${who ? `\n\n${who}, ${many ? "давайте" : "давай"} разберёмся вместе, что мешает результату.` : ""}`;
 }
-

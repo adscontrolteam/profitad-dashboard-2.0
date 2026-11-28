@@ -22,21 +22,14 @@ interface ProjectOption {
 
 const IDLE: AccessActionState = { ok: false, message: null };
 
-/** email → Telegram for personal notifications. */
-export type TelegramMap = Record<string, { username: string | null; linked: boolean }>;
-
 export function AccessManager({
   rows,
   assignableRoles,
   projects,
-  telegram,
-  botUsername,
 }: {
   rows: AccessRow[];
   assignableRoles: AssignableRole[];
   projects: ProjectOption[];
-  telegram: TelegramMap;
-  botUsername: string | null;
 }) {
   const [editing, setEditing] = useState<AccessGrant | null>(null);
   const [formKey, setFormKey] = useState(0);
@@ -78,7 +71,6 @@ export function AccessManager({
               key={row.kind === "admin" ? `admin:${row.email}` : row.grant.email}
               row={row}
               projects={projects}
-              telegram={telegram[row.kind === "admin" ? row.email : row.grant.email]}
               active={row.kind === "grant" && editing?.email === row.grant.email}
               onEdit={startEdit}
               onRevoked={(state) => {
@@ -95,8 +87,6 @@ export function AccessManager({
         grant={editing}
         assignableRoles={assignableRoles}
         projects={projects}
-        telegram={editing ? telegram[editing.email]?.username ?? "" : ""}
-        botUsername={botUsername}
         onSaved={(state) => {
           setNotice(state);
           setEditing(null);
@@ -119,14 +109,12 @@ function describeGrant(grant: AccessGrant, projects: ProjectOption[]) {
 function UserRow({
   row,
   projects,
-  telegram,
   active,
   onEdit,
   onRevoked,
 }: {
   row: AccessRow;
   projects: ProjectOption[];
-  telegram?: { username: string | null; linked: boolean };
   active: boolean;
   onEdit: (grant: AccessGrant) => void;
   onRevoked: (state: AccessActionState) => void;
@@ -151,16 +139,6 @@ function UserRow({
         <p className="mt-0.5 text-xs text-muted-foreground">
           {row.kind === "admin" ? ROLE_META.admin.description : describeGrant(row.grant, projects)}
         </p>
-        {telegram?.username && (
-          <p className="mt-0.5 text-xs">
-            <span className="text-muted-foreground">Telegram @{telegram.username} · </span>
-            {telegram.linked ? (
-              <span className="font-medium text-positive">подключён</span>
-            ) : (
-              <span className="font-medium text-warning">ждёт Start в боте</span>
-            )}
-          </p>
-        )}
       </div>
 
       <span
@@ -203,16 +181,12 @@ function GrantForm({
   grant,
   assignableRoles,
   projects,
-  telegram,
-  botUsername,
   onSaved,
   onCancel,
 }: {
   grant: AccessGrant | null;
   assignableRoles: AssignableRole[];
   projects: ProjectOption[];
-  telegram: string;
-  botUsername: string | null;
   onSaved: (state: AccessActionState) => void;
   onCancel: () => void;
 }) {
@@ -252,17 +226,6 @@ function GrantForm({
               className="field"
             />
           )}
-        </label>
-
-        <label className="flex flex-col gap-2">
-          <span className="section-kicker">
-            Telegram
-            <InfoHint className="ml-1">
-              Сюда придут напоминания о дедлайнах задач и новости по оценке проектов. После сохранения человеку нужно один раз
-              открыть бота{botUsername ? ` @${botUsername}` : ""} и нажать Start.
-            </InfoHint>
-          </span>
-          <input name="telegram" defaultValue={telegram ? `@${telegram}` : ""} autoComplete="off" placeholder="@username" className="field" />
         </label>
 
         <fieldset className="flex flex-col gap-2">
