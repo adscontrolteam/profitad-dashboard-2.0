@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LocalClock } from "@/components/profile/local-clock";
+import { MyIncome } from "@/components/profile/my-income";
+import { buildFinanceReport } from "@/lib/finance/report";
 import { TotemStage } from "@/components/profile/totem-stage";
 import { teamTotems } from "@/lib/team/mood";
 import { ProjectCard } from "@/components/projects/project-card";
@@ -23,11 +25,12 @@ export default async function ProfilePage() {
   const showTasks = canViewSection(permissions, "tasks");
   const showProjects = canViewSection(permissions, "dashboard");
 
-  const [allTasks, projects, team, totems] = await Promise.all([
+  const [allTasks, projects, team, totems, finance] = await Promise.all([
     showTasks ? listTasks({ archived: false }) : Promise.resolve([]),
     getVisibleProjects(permissions),
     showTasks ? listTeam() : Promise.resolve([]),
     teamTotems(),
+    buildFinanceReport().catch(() => null),
   ]);
 
   const myTasks = allTasks.filter(
@@ -79,6 +82,12 @@ export default async function ProfilePage() {
         <h2 className="section-title mb-4">{permissions.canManageAccess ? "Команда" : "Твой тотем"}</h2>
         <TotemStage members={totems} viewerEmail={viewer.email} detailed={permissions.canManageAccess} />
       </Card>
+
+      {finance && finance.people.some((x) => x.email.toLowerCase() === viewer.email) && (
+        <Card className="min-w-0">
+          <MyIncome report={finance} email={viewer.email} />
+        </Card>
+      )}
 
       {showProjects && (
         <Card className="min-w-0">
