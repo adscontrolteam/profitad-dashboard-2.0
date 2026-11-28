@@ -79,10 +79,13 @@ export async function updateTask(id: string, input: TaskInput, actorEmail: strin
   if (!current) return false;
 
   const stageChanged = current.stage !== input.stage;
+  const deadlineChanged = current.deadline !== input.deadline;
   await getDb()
     .update(tasks)
     .set({
       ...input,
+      // A new deadline gets its own reminders.
+      ...(deadlineChanged && { dueNotifiedAt: null, overdueNotifiedAt: null }),
       ...(stageChanged && { position: await nextPosition(input.stage), stageChangedAt: new Date() }),
       updatedAt: new Date(),
       updatedBy: actorEmail,

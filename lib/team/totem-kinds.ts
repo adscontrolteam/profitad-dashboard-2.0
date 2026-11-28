@@ -50,7 +50,12 @@ export const TOTEM_COLORS: { id: string; label: string; hue: number }[] = [
 export interface TotemChoice {
   kind?: string | null;
   color?: string | null;
+  /** The creature's own name, given in «Настройки». */
+  name?: string | null;
 }
+
+export const TOTEM_NAME_MAX = 24;
+export const cleanTotemName = (raw: unknown) => String(raw ?? "").replace(/\s+/g, " ").trim().slice(0, TOTEM_NAME_MAX);
 
 function hash(text: string) {
   let h = 2166136261;

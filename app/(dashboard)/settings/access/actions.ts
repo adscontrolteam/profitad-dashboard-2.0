@@ -7,6 +7,7 @@ import { isAssignableRole } from "@/lib/access/roles";
 import { deleteGrant, saveGrant } from "@/lib/access/store";
 import { requireAccessManager, type Viewer } from "@/lib/access/viewer";
 import { getProjects } from "@/lib/data";
+import { normalizeUsername, setTeamTelegramUsername } from "@/lib/notify/team-telegram";
 
 export interface AccessActionState {
   ok: boolean;
@@ -50,8 +51,11 @@ export async function saveGrantAction(
   }
 
   const grant = { email, role, projectIds };
+  const telegramRaw = String(formData.get("telegram") ?? "").trim();
+  if (telegramRaw && !normalizeUsername(telegramRaw)) return { ok: false, message: "Telegram: укажите @username (латиница, цифры, _; от 5 символов)." };
 
   await saveGrant(grant, actor.email);
+  await setTeamTelegramUsername(email, telegramRaw || null);
   refresh();
   return { ok: true, message: `Доступ для ${email} сохранён.` };
 }

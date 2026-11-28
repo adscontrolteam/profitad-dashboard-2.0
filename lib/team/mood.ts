@@ -36,7 +36,7 @@ export interface TotemMember {
   email: string;
   name: string | null;
   imageUrl: string | null;
-  choice: { kind?: string | null; color?: string | null } | null;
+  choice: { kind?: string | null; color?: string | null; name?: string | null } | null;
   score: number | null;
   mood: Mood;
   /** Open tasks: the grass and ropes around the creature. */

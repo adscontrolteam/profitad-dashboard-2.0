@@ -5,25 +5,26 @@ import { saveTotemAction } from "@/app/(dashboard)/settings/totem-actions";
 import { TotemCreature } from "@/components/profile/totem-creature";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
-import { resolveTotem, TOTEM_COLORS, TOTEM_KINDS, type TotemChoice } from "@/lib/team/totem-kinds";
+import { cleanTotemName, resolveTotem, TOTEM_COLORS, TOTEM_KINDS, TOTEM_NAME_MAX, type TotemChoice } from "@/lib/team/totem-kinds";
 
 /** «Твой тотем» in Настройки: pick a creature and its colour; the preview shows it happy. */
 export function TotemPicker({ seed, initial }: { seed: string; initial: TotemChoice | null }) {
   const start = resolveTotem(seed, initial);
   const [kind, setKind] = useState(start.kind.id);
   const [color, setColor] = useState(start.color.id);
-  const [saved, setSaved] = useState({ kind: start.kind.id, color: start.color.id });
+  const [name, setName] = useState(initial?.name ?? "");
+  const [saved, setSaved] = useState({ kind: start.kind.id, color: start.color.id, name: initial?.name ?? "" });
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const dirty = kind !== saved.kind || color !== saved.color;
+  const dirty = kind !== saved.kind || color !== saved.color || cleanTotemName(name) !== cleanTotemName(saved.name);
   const choice = { kind, color };
 
   const save = () =>
     startTransition(async () => {
       setMessage(null);
       try {
-        const r = await saveTotemAction(kind, color);
-        if (r.ok) setSaved({ kind, color });
+        const r = await saveTotemAction(kind, color, name);
+        if (r.ok) setSaved({ kind, color, name });
         setMessage({ ok: r.ok, text: r.message });
       } catch {
         setMessage({ ok: false, text: "Не получилось сохранить. Попробуйте ещё раз." });
@@ -40,10 +41,22 @@ export function TotemPicker({ seed, initial }: { seed: string; initial: TotemCho
       <div className="mt-5 grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
         <div className="flex flex-col items-center justify-center rounded-[22px] border border-border bg-muted/50 py-4">
           <TotemCreature seed={seed} choice={choice} mood="happy" size={150} className="text-foreground" />
-          <span className="mt-1 text-sm font-semibold">{TOTEM_KINDS.find((k) => k.id === kind)?.label}</span>
+          <span className="mt-1 text-sm font-semibold">{cleanTotemName(name) || TOTEM_KINDS.find((k) => k.id === kind)?.label}</span>
+          {cleanTotemName(name) && <span className="text-xs text-muted-foreground">{TOTEM_KINDS.find((k) => k.id === kind)?.label}</span>}
         </div>
 
         <div className="flex min-w-0 flex-col gap-5">
+          <label className="flex max-w-sm flex-col gap-2">
+            <span className="text-xs font-semibold text-muted-foreground">Имя</span>
+            <input
+              className="field"
+              value={name}
+              maxLength={TOTEM_NAME_MAX}
+              placeholder="Например, Бублик"
+              onChange={(e) => setName(e.target.value)}
+            />
+          </label>
+
           <div>
             <p className="mb-2 text-xs font-semibold text-muted-foreground">Существо</p>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-6">

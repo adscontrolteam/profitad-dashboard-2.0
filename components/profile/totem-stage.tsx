@@ -95,7 +95,7 @@ export function TotemStage({ members, viewerEmail, detailed }: { members: TotemM
               type="button"
               onClick={() => setFocus(m.email)}
               disabled={!detailed}
-              title={`${m.name ?? m.email} — ${MOOD_LABEL[m.mood]}${detailed && m.score !== null ? `, ${m.score}/100` : ""}`}
+              title={`${m.choice?.name ? `${m.choice.name} · ` : ""}${m.name ?? m.email} — ${MOOD_LABEL[m.mood]}${detailed && m.score !== null ? `, ${m.score}/100` : ""}`}
               className={cn(
                 "group flex shrink-0 flex-col items-center rounded-2xl px-1 pt-1 transition-[opacity,transform] duration-200",
                 detailed ? "cursor-pointer opacity-80 hover:-translate-y-1 hover:opacity-100" : "cursor-default opacity-75",
@@ -111,7 +111,7 @@ export function TotemStage({ members, viewerEmail, detailed }: { members: TotemM
         <div className="relative z-10 mt-4 flex flex-col items-center pb-5">
           <TotemCreature key={main.email} seed={main.email} choice={main.choice} mood={main.mood} ground={main.ground} size={176} className="text-foreground drop-shadow-[0_10px_18px_rgba(0,0,0,0.12)]" />
           <span className="mt-1 rounded-full bg-card px-3 py-1 text-sm font-semibold shadow-[var(--shadow)]">
-            {isMe ? "Ты" : main.name ?? main.email}
+            {main.choice?.name ? `${main.choice.name} · ${isMe ? "ты" : firstName(main)}` : isMe ? "Ты" : main.name ?? main.email}
           </span>
         </div>
       </div>
@@ -120,7 +120,9 @@ export function TotemStage({ members, viewerEmail, detailed }: { members: TotemM
       <div className="flex min-w-0 flex-col gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-xl font-bold tracking-[-0.02em]">{isMe ? "Твой тотем" : main.name ?? main.email}</h3>
+            <h3 className="text-xl font-bold tracking-[-0.02em]">
+              {isMe ? (main.choice?.name ? `Твой тотем «${main.choice.name}»` : "Твой тотем") : main.name ?? main.email}
+            </h3>
             <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold", MOOD_TONE[main.mood])}>{MOOD_LABEL[main.mood]}</span>
           </div>
           {/* Own totem: just the energy. Someone else's (admin only): the energy and what it calls for. */}
