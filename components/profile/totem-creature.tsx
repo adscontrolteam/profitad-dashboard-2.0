@@ -1,21 +1,11 @@
 import { cn } from "@/lib/cn";
 import type { Mood } from "@/lib/team/mood";
+import { resolveTotem, type TotemChoice, type TotemKind } from "@/lib/team/totem-kinds";
 
 /**
- * A person's totem creature, drawn in SVG. Its build (body, ears, colour) is fixed by the email,
- * so everyone keeps the same creature; its look and motion follow the mood.
+ * A person's totem creature, drawn in SVG. Kind and colour are the person's pick (or follow the email);
+ * how bright it is, its face and its motion follow the mood.
  */
-
-function hash(text: string) {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-const HUES = [78, 168, 200, 262, 328, 26, 46, 145, 290, 8];
 
 const TONE: Record<Mood, { s: number; l: number }> = {
   fire: { s: 88, l: 57 },
@@ -45,156 +35,278 @@ const BODIES = [
   // little ghost with a wavy hem
   "M100 56c36 0 58 30 58 66v60c-8 8-16 8-24 0-8 8-17 8-25 0-8 8-17 8-25 0-8 8-16 8-24 0v-60c0-36 22-66 58-66z",
 ];
+const TOPS = [58, 48, 74, 56];
+/** Where ears sit, from the middle. */
+const EAR_X = [40, 32, 46, 38];
+/** Half-width of the body at arm height. */
+const SIDE_X = [56, 48, 66, 54];
 
 const OUTLINE = "#17191c";
+const CX = 100;
+const line = { stroke: OUTLINE, strokeWidth: 4, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
 export function TotemCreature({
   seed,
+  choice,
   mood,
   className,
   size = 160,
 }: {
   seed: string;
+  choice?: TotemChoice | null;
   mood: Mood;
   className?: string;
   size?: number;
 }) {
-  const h = hash(seed);
-  const body = h % BODIES.length;
-  const head = (h >>> 3) % 5;
-  const hue = HUES[(h >>> 7) % HUES.length];
-  const eyeGap = 20 + ((h >>> 11) % 3) * 4;
+  const { kind, color } = resolveTotem(seed, choice);
   const { s, l } = TONE[mood];
+  const hue = color.hue;
   const fill = `hsl(${hue} ${s}% ${l}%)`;
   const shade = `hsl(${hue} ${Math.max(s - 8, 0)}% ${l - 14}%)`;
   const belly = `hsl(${hue} ${Math.max(s - 20, 0)}% ${Math.min(l + 18, 92)}%)`;
-  const top = body === 2 ? 74 : body === 1 ? 48 : 58;
-  const eyeY = top + (body === 2 ? 40 : 46);
-  const cx = 100;
+  const top = TOPS[kind.body];
+  const eyeY = top + (kind.body === 2 ? 40 : 46);
   const sadish = mood === "sad" || mood === "exhausted";
   const happyish = mood === "fire" || mood === "happy";
-  const stroke = { stroke: OUTLINE, strokeWidth: 4, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+
+  const eyes =
+    kind.eyes === "one"
+      ? [{ x: CX, y: eyeY + 2, r: 17 }]
+      : kind.eyes === "frog"
+        ? [
+            { x: CX - 30, y: top + 2, r: 12 },
+            { x: CX + 30, y: top + 2, r: 12 },
+          ]
+        : [
+            { x: CX - 22, y: eyeY, r: kind.head === "owl" ? 14 : 11 },
+            { x: CX + 22, y: eyeY, r: kind.head === "owl" ? 14 : 11 },
+          ];
+  const mouthY = kind.eyes === "frog" ? top + 40 : kind.eyes === "one" ? eyeY + 32 : eyeY + 24;
+  const cheekY = kind.eyes === "frog" ? top + 34 : eyeY + 16;
+  const side = SIDE_X[kind.body];
 
   return (
     <svg viewBox="0 0 200 220" width={size} height={size * 1.1} className={cn("overflow-visible", className)} aria-hidden>
       <ellipse cx={100} cy={204} rx={54} ry={8} fill="currentColor" opacity={0.12} />
 
       <g className={cn("totem-motion", MOTION[mood])}>
-        {/* Head decoration: ears, horns, antenna, bunny ears or a tuft */}
-        {head === 0 && (
-          <g fill={fill} {...stroke}>
-            <path d={`M${cx - 40} ${top + 22} L${cx - 46} ${top - 14} L${cx - 14} ${top + 4} Z`} />
-            <path d={`M${cx + 40} ${top + 22} L${cx + 46} ${top - 14} L${cx + 14} ${top + 4} Z`} />
-          </g>
+        {kind.tail && (
+          <path d={`M${CX + 40} 172 q44 6 50 -26 q2 -10 -6 -14 l14 -4 l-4 14 q-4 -6 -8 -2 q-6 30 -44 40z`} fill={shade} {...line} />
         )}
-        {head === 1 && (
-          <g fill="#f5efe1" {...stroke}>
-            <path d={`M${cx - 28} ${top + 6} q-14 -22 -4 -34 q6 18 18 28 z`} />
-            <path d={`M${cx + 28} ${top + 6} q14 -22 4 -34 q-6 18 -18 28 z`} />
+        {kind.spikes && (
+          <g fill={shade} {...line}>
+            <path d={`M${CX - 22} ${top + 6} l8 -20 l10 16z`} />
+            <path d={`M${CX - 6} ${top + 2} l8 -22 l10 18z`} />
+            <path d={`M${CX + 12} ${top + 4} l8 -20 l8 18z`} />
           </g>
-        )}
-        {head === 2 && (
-          <g {...stroke}>
-            <path d={`M${cx} ${top + 2} q6 -22 -6 -36`} fill="none" />
-            <circle cx={cx - 6} cy={top - 38} r={8} fill={mood === "fire" ? "#d7ff3a" : fill} />
-          </g>
-        )}
-        {head === 3 &&
-          (sadish ? (
-            // Ears hang down along the head when things are bad
-            <g fill={fill} {...stroke}>
-              <ellipse cx={cx - 40} cy={top + 18} rx={10} ry={28} transform={`rotate(58 ${cx - 40} ${top + 18})`} />
-              <ellipse cx={cx + 40} cy={top + 18} rx={10} ry={28} transform={`rotate(-58 ${cx + 40} ${top + 18})`} />
-            </g>
-          ) : (
-            <g fill={fill} {...stroke}>
-              <ellipse cx={cx - 22} cy={top - 18} rx={11} ry={30} transform={`rotate(-14 ${cx - 22} ${top - 18})`} />
-              <ellipse cx={cx + 22} cy={top - 18} rx={11} ry={30} transform={`rotate(14 ${cx + 22} ${top - 18})`} />
-            </g>
-          ))}
-        {head === 4 && (
-          <path d={`M${cx - 16} ${top + 6} q4 -26 14 -8 q6 -24 14 -2 q10 -18 8 10`} fill={shade} {...stroke} />
         )}
 
-        {/* Arms: a thumbs-up when things go great */}
-        <g fill={fill} {...stroke}>
-          <path d={`M${cx - 54} 132 q-22 ${sadish ? 22 : 6} -16 ${sadish ? 34 : 24}`} fill="none" strokeWidth={9} stroke={OUTLINE} />
-          <path d={`M${cx - 54} 132 q-22 ${sadish ? 22 : 6} -16 ${sadish ? 34 : 24}`} fill="none" strokeWidth={5} stroke={fill} />
-          {mood === "fire" ? (
-            <g className="totem-wave">
-              <path d={`M${cx + 54} 128 q22 -10 24 -36`} fill="none" strokeWidth={9} stroke={OUTLINE} />
-              <path d={`M${cx + 54} 128 q22 -10 24 -36`} fill="none" strokeWidth={5} stroke={fill} />
-              <rect x={cx + 68} y={78} width={20} height={18} rx={6} />
-              <rect x={cx + 72} y={64} width={8} height={18} rx={4} />
-            </g>
-          ) : (
-            <>
-              <path d={`M${cx + 54} 132 q22 ${sadish ? 22 : 6} 16 ${sadish ? 34 : 24}`} fill="none" strokeWidth={9} stroke={OUTLINE} />
-              <path d={`M${cx + 54} 132 q22 ${sadish ? 22 : 6} 16 ${sadish ? 34 : 24}`} fill="none" strokeWidth={5} stroke={fill} />
-            </>
-          )}
-        </g>
+        <Head kind={kind} top={top} earX={EAR_X[kind.body]} fill={fill} shade={shade} sadish={sadish} mood={mood} />
 
-        {/* Feet */}
-        <g fill={shade} {...stroke}>
-          <ellipse cx={cx - 24} cy={192} rx={15} ry={9} />
-          <ellipse cx={cx + 24} cy={192} rx={15} ry={9} />
-        </g>
+        <Arms kind={kind} side={side} fill={fill} mood={mood} sadish={sadish} />
+
+        {kind.bottom === "feet" && (
+          <g fill={shade} {...line}>
+            <ellipse cx={CX - 24} cy={192} rx={15} ry={9} />
+            <ellipse cx={CX + 24} cy={192} rx={15} ry={9} />
+          </g>
+        )}
+        {kind.bottom === "tentacles" && (
+          <g fill={fill} {...line}>
+            {[-42, -15, 15, 42].map((dx, i) => (
+              <path key={dx} d={`M${CX + dx - 9} 176 q${i % 2 ? 6 : -6} 18 ${i % 2 ? 2 : -10} 26 q8 2 14 -6 q-4 -10 4 -20z`} />
+            ))}
+          </g>
+        )}
 
         {/* Body */}
-        <path d={BODIES[body]} fill={fill} {...stroke} />
-        <ellipse cx={cx} cy={150} rx={body === 2 ? 40 : 30} ry={26} fill={belly} opacity={0.85} />
-        <path d={`M${cx - 30} ${top + 32} q6 -11 16 -15`} fill="none" stroke="#fff" strokeOpacity={0.45} strokeWidth={5} strokeLinecap="round" />
+        <path d={BODIES[kind.body]} fill={fill} {...line} />
+        <ellipse cx={CX} cy={150} rx={kind.body === 2 ? 40 : 30} ry={26} fill={belly} opacity={0.85} />
+        <path d={`M${CX - 30} ${top + 32} q6 -11 16 -15`} fill="none" stroke="#fff" strokeOpacity={0.45} strokeWidth={5} strokeLinecap="round" />
 
-        {/* Cheeks */}
-        {happyish && (
-          <g fill="#ff7a9a" opacity={0.55}>
-            <ellipse cx={cx - eyeGap - 14} cy={eyeY + 16} rx={8} ry={5} />
-            <ellipse cx={cx + eyeGap + 14} cy={eyeY + 16} rx={8} ry={5} />
+        {kind.eyes === "frog" && (
+          // Eye bumps on top of the head
+          <g fill={fill} {...line}>
+            <circle cx={CX - 30} cy={top + 2} r={17} />
+            <circle cx={CX + 30} cy={top + 2} r={17} />
           </g>
         )}
 
-        <Eyes mood={mood} cx={cx} y={eyeY} gap={eyeGap} />
-        <Mouth mood={mood} cx={cx} y={eyeY + 24} />
-
-        {/* Sweat drop when under strain */}
-        {mood === "ok" && (
-          <path className="totem-sweat" d={`M${cx + 46} ${eyeY - 20} q7 10 0 14 q-7 -4 0 -14z`} fill="#8fd3ff" stroke={OUTLINE} strokeWidth={2.5} />
+        {happyish && (
+          <g fill="#ff7a9a" opacity={0.55}>
+            <ellipse cx={CX - 40} cy={cheekY} rx={8} ry={5} />
+            <ellipse cx={CX + 40} cy={cheekY} rx={8} ry={5} />
+          </g>
         )}
-        {/* Tears */}
+
+        <Eyes mood={mood} eyes={eyes} />
+        {kind.head === "owl" ? (
+          <path d={`M${CX - 7} ${eyeY + 12} l7 ${mood === "fire" ? 14 : 10} l7 ${mood === "fire" ? -14 : -10}z`} fill="#ffb547" {...line} strokeWidth={3} />
+        ) : (
+          <Mouth mood={mood} y={mouthY} wide={kind.eyes === "frog"} />
+        )}
+
+        {mood === "ok" && (
+          <path className="totem-sweat" d={`M${CX + 46} ${eyeY - 20} q7 10 0 14 q-7 -4 0 -14z`} fill="#8fd3ff" stroke={OUTLINE} strokeWidth={2.5} />
+        )}
         {sadish && (
           <g fill="#7cc8ff" stroke={OUTLINE} strokeWidth={2.5}>
-            <path className="totem-tear" d={`M${cx - eyeGap} ${eyeY + 10} q6 9 0 13 q-6 -4 0 -13z`} />
-            {mood === "exhausted" && (
-              <path className="totem-tear totem-tear-late" d={`M${cx + eyeGap} ${eyeY + 10} q6 9 0 13 q-6 -4 0 -13z`} />
+            <path className="totem-tear" d={`M${eyes[0].x} ${eyes[0].y + eyes[0].r - 1} q6 9 0 13 q-6 -4 0 -13z`} />
+            {mood === "exhausted" && eyes[1] && (
+              <path className="totem-tear totem-tear-late" d={`M${eyes[1].x} ${eyes[1].y + eyes[1].r - 1} q6 9 0 13 q-6 -4 0 -13z`} />
             )}
           </g>
         )}
       </g>
 
-      {/* Mood effects outside the body's motion */}
       {mood === "fire" && (
         <g fill="#d7ff3a" stroke={OUTLINE} strokeWidth={2.5} strokeLinejoin="round">
-          <Sparkle className="totem-sparkle" x={34} y={58} r={10} />
-          <Sparkle className="totem-sparkle totem-sparkle-2" x={170} y={40} r={8} />
-          <Sparkle className="totem-sparkle totem-sparkle-3" x={26} y={128} r={6} />
+          <Sparkle className="totem-sparkle" x={30} y={58} r={10} />
+          <Sparkle className="totem-sparkle totem-sparkle-2" x={174} y={36} r={8} />
+          <Sparkle className="totem-sparkle totem-sparkle-3" x={24} y={128} r={6} />
         </g>
       )}
       {mood === "happy" && (
         <g fill="#d7ff3a" stroke={OUTLINE} strokeWidth={2.5} strokeLinejoin="round">
-          <Sparkle className="totem-sparkle" x={162} y={52} r={7} />
+          <Sparkle className="totem-sparkle" x={166} y={48} r={7} />
         </g>
       )}
       {mood === "idle" && (
         <g className="totem-zzz" fill="currentColor" fontWeight={800} fontFamily="var(--font-manrope), sans-serif" opacity={0.55}>
-          <text x={148} y={56} fontSize={18}>z</text>
-          <text x={160} y={40} fontSize={14}>z</text>
+          <text x={150} y={52} fontSize={18}>z</text>
+          <text x={162} y={36} fontSize={14}>z</text>
         </g>
       )}
       {mood === "exhausted" && (
-        <path className="totem-cloud" d="M60 34 q-10 -16 6 -20 q4 -14 20 -8 q12 -8 20 4 q16 -2 12 14 q8 12 -8 14 h-44 q-14 -2 -6 -4z" fill="#9aa0a6" opacity={0.6} />
+        <path className="totem-cloud" d="M60 30 q-10 -16 6 -20 q4 -14 20 -8 q12 -8 20 4 q16 -2 12 14 q8 12 -8 14 h-44 q-14 -2 -6 -4z" fill="#9aa0a6" opacity={0.6} />
       )}
     </svg>
+  );
+}
+
+function Head({
+  kind,
+  top,
+  earX,
+  fill,
+  shade,
+  sadish,
+  mood,
+}: {
+  kind: TotemKind;
+  top: number;
+  earX: number;
+  fill: string;
+  shade: string;
+  sadish: boolean;
+  mood: Mood;
+}) {
+  switch (kind.head) {
+    case "cat":
+      return (
+        <g fill={fill} {...line}>
+          <path d={`M${CX - earX} ${top + 22} L${CX - earX - 6} ${top - 14} L${CX - 14} ${top + 4} Z`} />
+          <path d={`M${CX + earX} ${top + 22} L${CX + earX + 6} ${top - 14} L${CX + 14} ${top + 4} Z`} />
+        </g>
+      );
+    case "horns":
+      return (
+        <g fill="#f5efe1" {...line}>
+          <path d={`M${CX - 28} ${top + 6} q-14 -22 -4 -34 q6 18 18 28 z`} />
+          <path d={`M${CX + 28} ${top + 6} q14 -22 4 -34 q-6 18 -18 28 z`} />
+        </g>
+      );
+    case "antenna":
+      return (
+        <g {...line}>
+          <path d={`M${CX - 12} ${top + 4} q-4 -20 -16 -30`} fill="none" />
+          <path d={`M${CX + 12} ${top + 4} q4 -20 16 -30`} fill="none" />
+          <circle cx={CX - 28} cy={top - 28} r={7} fill={mood === "fire" ? "#d7ff3a" : fill} />
+          <circle cx={CX + 28} cy={top - 28} r={7} fill={mood === "fire" ? "#d7ff3a" : fill} />
+        </g>
+      );
+    case "bunny":
+      return sadish ? (
+        <g fill={fill} {...line}>
+          <ellipse cx={CX - earX - 2} cy={top + 18} rx={10} ry={28} transform={`rotate(58 ${CX - earX - 2} ${top + 18})`} />
+          <ellipse cx={CX + earX + 2} cy={top + 18} rx={10} ry={28} transform={`rotate(-58 ${CX + earX + 2} ${top + 18})`} />
+        </g>
+      ) : (
+        <g fill={fill} {...line}>
+          <ellipse cx={CX - 22} cy={top - 18} rx={11} ry={30} transform={`rotate(-14 ${CX - 22} ${top - 18})`} />
+          <ellipse cx={CX + 22} cy={top - 18} rx={11} ry={30} transform={`rotate(14 ${CX + 22} ${top - 18})`} />
+        </g>
+      );
+    case "sprout":
+      return (
+        <g {...line}>
+          <path d={`M${CX} ${top + 2} q-2 -14 2 -22`} fill="none" />
+          <path d={`M${CX + 2} ${top - 18} q-24 -10 -30 6 q18 8 30 -6z`} fill={sadish ? "#a8b5a0" : "#7ed957"} />
+          <path d={`M${CX + 2} ${top - 18} q20 -18 32 -4 q-16 14 -32 4z`} fill={sadish ? "#a8b5a0" : "#7ed957"} />
+        </g>
+      );
+    case "bear":
+      return (
+        <g {...line}>
+          <circle cx={CX - earX} cy={top + 4} r={16} fill={fill} />
+          <circle cx={CX + earX} cy={top + 4} r={16} fill={fill} />
+          <circle cx={CX - earX} cy={top + 6} r={7} fill={shade} stroke="none" />
+          <circle cx={CX + earX} cy={top + 6} r={7} fill={shade} stroke="none" />
+        </g>
+      );
+    case "owl":
+      return (
+        <g fill={shade} {...line}>
+          <path d={`M${CX - 30} ${top + 10} l-14 -24 l26 12z`} />
+          <path d={`M${CX + 30} ${top + 10} l14 -24 l-26 12z`} />
+        </g>
+      );
+    case "unicorn":
+      return (
+        <g {...line}>
+          <path d={`M${CX - 6} ${top + 2} l6 -34 l6 34z`} fill="#ffd66b" />
+          <path d={`M${CX - 4} ${top - 8} l8 -3 M${CX - 3} ${top - 18} l6 -2`} fill="none" strokeWidth={2.5} />
+          <path d={`M${CX + 10} ${top + 4} q16 -14 28 -2 q-10 2 -10 12 q-8 -8 -18 -10z`} fill="#ff9ad5" />
+        </g>
+      );
+    default:
+      return null;
+  }
+}
+
+function Arms({ kind, side, fill, mood, sadish }: { kind: TotemKind; side: number; fill: string; mood: Mood; sadish: boolean }) {
+  if (kind.arms === "wings") {
+    const lift = mood === "fire" ? -18 : sadish ? 10 : 0;
+    return (
+      <g fill={fill} {...line}>
+        <ellipse cx={CX - side - 8} cy={136 + lift / 2} rx={13} ry={28} transform={`rotate(${28 - lift} ${CX - side - 8} ${136 + lift / 2})`} />
+        <ellipse cx={CX + side + 8} cy={136 + lift / 2} rx={13} ry={28} transform={`rotate(${-28 + lift} ${CX + side + 8} ${136 + lift / 2})`} />
+      </g>
+    );
+  }
+  const arm = (d: string) => (
+    <>
+      <path d={d} fill="none" strokeWidth={9} stroke={OUTLINE} strokeLinecap="round" />
+      <path d={d} fill="none" strokeWidth={5} stroke={fill} strokeLinecap="round" />
+    </>
+  );
+  const drop = sadish ? 22 : 6;
+  const reach = sadish ? 34 : 24;
+  return (
+    <g>
+      {arm(`M${CX - side + 2} 132 q-22 ${drop} -16 ${reach}`)}
+      {mood === "fire" ? (
+        <g className="totem-wave">
+          {arm(`M${CX + side - 2} 128 q22 -10 24 -36`)}
+          <g fill={fill} {...line}>
+            <rect x={CX + side + 12} y={78} width={20} height={18} rx={6} />
+            <rect x={CX + side + 16} y={64} width={8} height={18} rx={4} />
+          </g>
+        </g>
+      ) : (
+        arm(`M${CX + side - 2} 132 q22 ${drop} 16 ${reach}`)
+      )}
+    </g>
   );
 }
 
@@ -203,45 +315,48 @@ function Sparkle({ x, y, r, className }: { x: number; y: number; r: number; clas
   return <path className={className} d={`M${x} ${y - r} L${x + k} ${y - k} L${x + r} ${y} L${x + k} ${y + k} L${x} ${y + r} L${x - k} ${y + k} L${x - r} ${y} L${x - k} ${y - k} Z`} />;
 }
 
-function Eyes({ mood, cx, y, gap }: { mood: Mood; cx: number; y: number; gap: number }) {
+function Eyes({ mood, eyes }: { mood: Mood; eyes: { x: number; y: number; r: number }[] }) {
   const stroke = { stroke: OUTLINE, strokeWidth: 4, strokeLinecap: "round" as const, fill: "none" };
   if (mood === "fire" || mood === "happy") {
-    // Happy closed eyes: ^ ^
     return (
       <g {...stroke}>
-        <path d={`M${cx - gap - 9} ${y + 3} q9 -12 18 0`} />
-        <path d={`M${cx + gap - 9} ${y + 3} q9 -12 18 0`} />
+        {eyes.map((e) => (
+          <path key={e.x} d={`M${e.x - e.r * 0.85} ${e.y + 3} q${e.r * 0.85} ${-e.r * 1.1} ${e.r * 1.7} 0`} />
+        ))}
       </g>
     );
   }
   if (mood === "idle") {
     return (
       <g {...stroke}>
-        <path d={`M${cx - gap - 8} ${y} q8 6 16 0`} />
-        <path d={`M${cx + gap - 8} ${y} q8 6 16 0`} />
+        {eyes.map((e) => (
+          <path key={e.x} d={`M${e.x - e.r * 0.75} ${e.y} q${e.r * 0.75} ${e.r * 0.55} ${e.r * 1.5} 0`} />
+        ))}
       </g>
     );
   }
   const sad = mood === "sad" || mood === "exhausted";
   return (
     <g>
-      {[-1, 1].map((side) => {
-        const ex = cx + side * gap;
+      {eyes.map((e) => {
+        const side = e.x < CX - 1 ? -1 : e.x > CX + 1 ? 1 : 0;
+        const browY = e.y - e.r - 8;
+        const brow =
+          side === 0
+            ? sad
+              ? `M${e.x - 14} ${browY + 4} q14 -10 28 0`
+              : `M${e.x - 12} ${browY} L${e.x + 12} ${browY - 2}`
+            : sad
+              ? `M${e.x - side * 12} ${browY - 1} L${e.x + side * 6} ${browY + 5}`
+              : `M${e.x - 10} ${browY + 1} L${e.x + 10} ${browY - 1}`;
         return (
-          <g key={side}>
-            <ellipse cx={ex} cy={y} rx={11} ry={13} fill="#fff" stroke={OUTLINE} strokeWidth={3.5} />
-            <circle cx={ex + side * -1} cy={y + (sad ? 4 : 1)} r={5.5} fill={OUTLINE} />
-            <circle cx={ex + 2} cy={y - 2} r={1.8} fill="#fff" />
-            {/* Heavy eyelids and worried brows when things are bad */}
-            {sad ? (
-              <path d={`M${ex - 11} ${y - 2} q11 -8 22 0`} fill="#bdbdbd" stroke={OUTLINE} strokeWidth={3} />
-            ) : null}
-            <path
-              d={sad ? `M${ex - side * 12} ${y - 22} L${ex + side * 6} ${y - 16}` : `M${ex - 10} ${y - 20} L${ex + 10} ${y - 22}`}
-              stroke={OUTLINE}
-              strokeWidth={4}
-              strokeLinecap="round"
-            />
+          <g key={e.x}>
+            <ellipse cx={e.x} cy={e.y} rx={e.r} ry={e.r * 1.15} fill="#fff" stroke={OUTLINE} strokeWidth={3.5} />
+            <circle cx={e.x - side} cy={e.y + (sad ? e.r * 0.35 : 1)} r={e.r * 0.5} fill={OUTLINE} />
+            <circle cx={e.x + e.r * 0.2} cy={e.y - e.r * 0.2} r={e.r * 0.17} fill="#fff" />
+            {sad && <path d={`M${e.x - e.r} ${e.y - 2} q${e.r} ${-e.r * 0.75} ${e.r * 2} 0`} fill="#bdbdbd" stroke={OUTLINE} strokeWidth={3} />}
+            {/* Frogs' eyes sit on top of the head: no brows */}
+            {e.y > 70 && <path d={brow} stroke={OUTLINE} strokeWidth={4} strokeLinecap="round" fill="none" />}
           </g>
         );
       })}
@@ -249,25 +364,25 @@ function Eyes({ mood, cx, y, gap }: { mood: Mood; cx: number; y: number; gap: nu
   );
 }
 
-function Mouth({ mood, cx, y }: { mood: Mood; cx: number; y: number }) {
-  const stroke = { stroke: OUTLINE, strokeWidth: 4, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+function Mouth({ mood, y, wide }: { mood: Mood; y: number; wide: boolean }) {
+  const w = wide ? 1.5 : 1;
   switch (mood) {
     case "fire":
       return (
-        <g {...stroke}>
-          <path d={`M${cx - 16} ${y - 2} q16 22 32 0 z`} fill="#3b1220" />
-          <path d={`M${cx - 7} ${y + 8} q7 -5 14 0`} fill="#ff6f8e" stroke="none" />
+        <g {...line}>
+          <path d={`M${CX - 16 * w} ${y - 2} q${16 * w} 22 ${32 * w} 0 z`} fill="#3b1220" />
+          <path d={`M${CX - 7} ${y + 8} q7 -5 14 0`} fill="#ff6f8e" stroke="none" />
         </g>
       );
     case "happy":
-      return <path d={`M${cx - 14} ${y} q14 14 28 0`} fill="none" {...stroke} />;
+      return <path d={`M${CX - 14 * w} ${y} q${14 * w} 14 ${28 * w} 0`} fill="none" {...line} />;
     case "ok":
-      return <path d={`M${cx - 10} ${y + 2} q5 -4 10 0 q5 4 10 0`} fill="none" {...stroke} />;
+      return <path d={`M${CX - 10 * w} ${y + 2} q${5 * w} -4 ${10 * w} 0 q${5 * w} 4 ${10 * w} 0`} fill="none" {...line} />;
     case "sad":
-      return <path d={`M${cx - 12} ${y + 6} q12 -10 24 0`} fill="none" {...stroke} />;
+      return <path d={`M${CX - 12 * w} ${y + 6} q${12 * w} -10 ${24 * w} 0`} fill="none" {...line} />;
     case "exhausted":
-      return <path d={`M${cx - 10} ${y + 6} q10 -8 20 0 q-10 6 -20 0z`} fill="#3b1220" {...stroke} />;
+      return <path d={`M${CX - 10} ${y + 6} q10 -8 20 0 q-10 6 -20 0z`} fill="#3b1220" {...line} />;
     case "idle":
-      return <ellipse cx={cx} cy={y + 2} rx={5} ry={4} fill="#3b1220" {...stroke} />;
+      return <ellipse cx={CX} cy={y + 2} rx={5} ry={4} fill="#3b1220" {...line} />;
   }
 }

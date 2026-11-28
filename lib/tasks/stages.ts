@@ -48,6 +48,8 @@ export interface TeamMember {
   email: string;
   name: string | null;
   imageUrl: string | null;
+  /** Totem kind and colour picked in «Настройки» (Clerk public metadata). */
+  totem?: { kind?: string | null; color?: string | null } | null;
 }
 
 export interface TaskSummary {

@@ -34,6 +34,7 @@ export interface TotemMember {
   email: string;
   name: string | null;
   imageUrl: string | null;
+  choice: { kind?: string | null; color?: string | null } | null;
   score: number | null;
   mood: Mood;
   projects: TotemProject[];
@@ -65,6 +66,7 @@ export async function teamTotems(): Promise<TotemMember[]> {
       email: m.email,
       name: m.name,
       imageUrl: m.imageUrl,
+      choice: m.totem ?? null,
       score,
       mood: moodOf(score),
       projects: own.sort((a, b) => (a.score ?? 101) - (b.score ?? 101)),

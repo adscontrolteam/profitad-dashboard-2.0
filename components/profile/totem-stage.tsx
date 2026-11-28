@@ -69,7 +69,7 @@ export function TotemStage({ members, viewerEmail, detailed }: { members: TotemM
                 detailed ? "cursor-pointer opacity-80 hover:-translate-y-1 hover:opacity-100" : "cursor-default opacity-75",
               )}
             >
-              <TotemCreature seed={m.email} mood={m.mood} size={64} className="text-foreground" />
+              <TotemCreature seed={m.email} choice={m.choice} mood={m.mood} size={64} className="text-foreground" />
               <span className="mt-0.5 max-w-20 truncate text-[11px] font-medium text-muted-foreground group-hover:text-foreground">{firstName(m)}</span>
             </button>
           ))}
@@ -77,7 +77,7 @@ export function TotemStage({ members, viewerEmail, detailed }: { members: TotemM
 
         {/* The one in front */}
         <div className="relative z-10 mt-4 flex flex-col items-center pb-5">
-          <TotemCreature key={main.email} seed={main.email} mood={main.mood} size={176} className="text-foreground drop-shadow-[0_10px_18px_rgba(0,0,0,0.12)]" />
+          <TotemCreature key={main.email} seed={main.email} choice={main.choice} mood={main.mood} size={176} className="text-foreground drop-shadow-[0_10px_18px_rgba(0,0,0,0.12)]" />
           <span className="mt-1 rounded-full bg-card px-3 py-1 text-sm font-semibold shadow-[var(--shadow)]">
             {isMe ? "Ты" : main.name ?? main.email}
           </span>
