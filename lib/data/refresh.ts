@@ -13,6 +13,8 @@ import { TAGS } from "./tags";
 
 /** Everything is refreshed at most this often, whoever asks: the hourly call, an opened dashboard or both at once. */
 const EVERY_MS = 50 * 60_000;
+/** How long a started round keeps others out. */
+const HOLD_MS = 6 * 60_000;
 
 /**
  * Background refresh of every active project: ad numbers (Meta, Google), leads (sheets and CRMs) and the statistics of
@@ -23,9 +25,11 @@ const EVERY_MS = 50 * 60_000;
 export async function refreshAllStale(): Promise<{ ran: boolean; projects: number }> {
   const db = getDb();
   await db.insert(appState).values({ key: "refresh", updatedAt: new Date(0) }).onConflictDoNothing();
+  // The claim first holds the turn for a few minutes only; the full period starts when the round is done.
+  // A round that was cut short (a timeout, a deploy) is then picked up by the next caller instead of waiting an hour.
   const claimed = await db
     .update(appState)
-    .set({ updatedAt: sql`now()` })
+    .set({ updatedAt: new Date(Date.now() - EVERY_MS + HOLD_MS) })
     .where(and(eq(appState.key, "refresh"), lt(appState.updatedAt, new Date(Date.now() - EVERY_MS))))
     .returning({ key: appState.key });
   if (!claimed.length) return { ran: false, projects: 0 };
@@ -43,6 +47,7 @@ export async function refreshAllStale(): Promise<{ ran: boolean; projects: numbe
     revalidateTag(TAGS.project(p.id), "max");
   }
   revalidateTag(TAGS.projects, "max");
+  await db.update(appState).set({ updatedAt: sql`now()` }).where(eq(appState.key, "refresh"));
   return { ran: true, projects: active.length };
 }
 
