@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LocalClock } from "@/components/profile/local-clock";
+import { TotemStage } from "@/components/profile/totem-stage";
+import { teamTotems } from "@/lib/team/mood";
 import { ProjectCard } from "@/components/projects/project-card";
 import { TaskBoard } from "@/components/tasks/task-board";
 import type { TaskProject } from "@/components/tasks/types";
@@ -21,10 +23,11 @@ export default async function ProfilePage() {
   const showTasks = canViewSection(permissions, "tasks");
   const showProjects = canViewSection(permissions, "dashboard");
 
-  const [allTasks, projects, team] = await Promise.all([
+  const [allTasks, projects, team, totems] = await Promise.all([
     showTasks ? listTasks({ archived: false }) : Promise.resolve([]),
     getVisibleProjects(permissions),
     showTasks ? listTeam() : Promise.resolve([]),
+    teamTotems(),
   ]);
 
   const myTasks = allTasks.filter(
@@ -70,6 +73,11 @@ export default async function ProfilePage() {
         <div className="w-full sm:w-auto">
           <LocalClock />
         </div>
+      </Card>
+
+      <Card className="min-w-0">
+        <h2 className="section-title mb-4">{permissions.canManageAccess ? "Команда" : "Твой тотем"}</h2>
+        <TotemStage members={totems} viewerEmail={viewer.email} detailed={permissions.canManageAccess} />
       </Card>
 
       {showProjects && (
