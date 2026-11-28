@@ -21,12 +21,16 @@ function realNow(l: PayRow) {
     : { amount: l.rate, rule: l.streak === 2 ? "KPI в темпе 2-й месяц подряд. Следующий — +50%" : "KPI в темпе: полная ставка" };
 }
 
-/** The next month if the KPI is in pace, counting the streak from the real current state. */
+/**
+ * The next month by the KPI as it goes now: in pace — the rate (+50% from the 3rd month in a row); behind, or no KPI
+ * yet (a new project, a test, no data) — half of it, until the KPI is met. `full` is what the month gives in pace.
+ */
 function realNext(next: PayRow, cur: PayRow | undefined) {
-  if (next.rate === null) return null;
-  if (!cur || next.task !== "run" || cur.task !== "run") return next.amount;
-  const streak = (cur.state === "met" ? cur.streak : 0) + 1;
-  return next.rate * (streak >= 3 ? 1.5 : 1);
+  if (next.rate === null) return { amount: null, full: null };
+  if (next.task !== "run") return { amount: next.amount, full: next.amount };
+  const inPace = cur?.task === "run" && cur.state === "met";
+  const full = next.rate * ((inPace ? cur.streak : 0) + 1 >= 3 ? 1.5 : 1);
+  return { amount: inPace ? full : next.rate * 0.5, full };
 }
 
 export function MyIncome({ report: r, email }: { report: FinanceReport; email: string }) {
@@ -46,7 +50,8 @@ export function MyIncome({ report: r, email }: { report: FinanceReport; email: s
     return { key, cur, nxt, any: (cur ?? nxt)!, now, next: nxt ? realNext(nxt, cur) : null };
   });
   const totalNow = rows.reduce((a, x) => a + (x.now?.amount ?? 0), 0) + salaryNow;
-  const totalNext = rows.reduce((a, x) => a + (x.next ?? 0), 0) + salaryNext;
+  const totalNext = rows.reduce((a, x) => a + (x.next?.amount ?? 0), 0) + salaryNext;
+  const totalFull = rows.reduce((a, x) => a + (x.next?.full ?? 0), 0) + salaryNext;
 
   return (
     <div>
@@ -54,7 +59,7 @@ export function MyIncome({ report: r, email }: { report: FinanceReport; email: s
         <div>
           <h2 className="section-title">Твой доход</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            {monthShort(r.now)} — по тому, как KPI идут сейчас · {monthShort(r.nextMonth)} — сколько можно заработать, если KPI в темпе
+            {monthShort(r.now)} — по тому, как KPI идут сейчас · {monthShort(r.nextMonth)} — пока KPI не в темпе, половина ставки
           </p>
         </div>
         <div className="flex items-center gap-6 text-right tabular-nums">
@@ -63,8 +68,9 @@ export function MyIncome({ report: r, email }: { report: FinanceReport; email: s
             <b className="font-display text-2xl">{money(totalNow)}</b>
           </div>
           <div>
-            <span className="block text-[11px] uppercase tracking-wide text-muted-foreground">{monthShort(r.nextMonth)} потенциал</span>
-            <b className="font-display text-2xl text-positive">{money(totalNext)}</b>
+            <span className="block text-[11px] uppercase tracking-wide text-muted-foreground">{monthShort(r.nextMonth)}</span>
+            <b className="font-display text-2xl">{money(totalNext)}</b>
+            {totalFull > totalNext && <span className="block text-[11px] text-positive">в темпе {money(totalFull)}</span>}
           </div>
         </div>
       </div>
@@ -83,7 +89,9 @@ export function MyIncome({ report: r, email }: { report: FinanceReport; email: s
               <td>
                 <span className="font-medium">{any.projectName}</span>
                 {p.role !== any.role && <span className="ml-2 text-xs text-muted-foreground">{roleLabel(any.role)}</span>}
-                <span className="block text-xs text-muted-foreground">{now?.rule ?? any.rule}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {now?.rule ?? (any.task === "run" ? `Новый проект с ${monthShort(r.nextMonth)}: KPI ещё не выполнен — половина ставки` : any.rule)}
+                </span>
               </td>
               <td>
                 {cur ? (
@@ -100,7 +108,16 @@ export function MyIncome({ report: r, email }: { report: FinanceReport; email: s
                 {!cur ? <span className="text-muted-foreground">—</span> : now?.amount === null ? <span className="text-muted-foreground">уточняется</span> : money(now?.amount)}
               </td>
               <td className="text-right tabular-nums">
-                {!nxt ? <span className="text-muted-foreground">—</span> : next === null ? <span className="text-muted-foreground">уточняется</span> : money(next)}
+                {!nxt ? <span className="text-muted-foreground">—</span> : next?.amount === null || !next ? (
+                  <span className="text-muted-foreground">уточняется</span>
+                ) : (
+                  <>
+                    {money(next.amount)}
+                    {next.full !== null && next.full > (next.amount ?? 0) && (
+                      <span className="block text-[11px] text-positive">в темпе {money(next.full)}</span>
+                    )}
+                  </>
+                )}
               </td>
             </tr>
           ))}
