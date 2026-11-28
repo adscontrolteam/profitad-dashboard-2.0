@@ -3,7 +3,9 @@ import { isAdminEmail } from "@/lib/access/admins";
 import { getProjects } from "@/lib/data";
 import { HEALTH_GREEN, HEALTH_YELLOW } from "@/lib/domain/health";
 import { projectsAttention } from "@/lib/projects/health";
+import { listTasks } from "@/lib/tasks/store";
 import { listTeam } from "@/lib/tasks/team";
+import type { TaskGround } from "./totem-kinds";
 
 /**
  * The team's «тотемы»: each person's creature looks as well as their projects are doing.
@@ -37,6 +39,8 @@ export interface TotemMember {
   choice: { kind?: string | null; color?: string | null } | null;
   score: number | null;
   mood: Mood;
+  /** Open tasks: the grass and ropes around the creature. */
+  ground: TaskGround;
   projects: TotemProject[];
   isAdmin: boolean;
 }
@@ -47,7 +51,18 @@ const average = (values: (number | null)[]) => {
 };
 
 export async function teamTotems(): Promise<TotemMember[]> {
-  const [team, projects] = await Promise.all([listTeam(), getProjects()]);
+  const [team, projects, tasks] = await Promise.all([listTeam(), getProjects(), listTasks({ archived: false })]);
+  const today = new Date().toISOString().slice(0, 10);
+  const dayMs = 86_400_000;
+  const groundOf = (email: string): TaskGround => {
+    const open = tasks.filter((t) => t.assigneeEmail === email && t.stage !== "done");
+    const dated = open.filter((t) => t.deadline).map((t) => Math.round((Date.parse(t.deadline!) - Date.parse(today)) / dayMs));
+    return {
+      open: open.length,
+      overdue: dated.filter((d) => d < 0).length,
+      daysToNearest: dated.length ? Math.min(...dated) : null,
+    };
+  };
   const active = projects.filter((p) => p.status === "active");
   const attention = await projectsAttention(active);
   const scoreOf = (id: string) => attention.get(id)?.health.score ?? null;
@@ -69,6 +84,7 @@ export async function teamTotems(): Promise<TotemMember[]> {
       choice: m.totem ?? null,
       score,
       mood: moodOf(score),
+      ground: groundOf(m.email),
       projects: own.sort((a, b) => (a.score ?? 101) - (b.score ?? 101)),
       isAdmin: admin,
     };

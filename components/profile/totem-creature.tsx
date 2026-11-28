@@ -1,6 +1,6 @@
 import { cn } from "@/lib/cn";
 import type { Mood } from "@/lib/team/mood";
-import { resolveTotem, type TotemChoice, type TotemKind } from "@/lib/team/totem-kinds";
+import { groundLevel, resolveTotem, type TaskGround, type TotemChoice, type TotemKind } from "@/lib/team/totem-kinds";
 
 /**
  * A person's totem creature, drawn in SVG. Kind and colour are the person's pick (or follow the email);
@@ -49,12 +49,15 @@ export function TotemCreature({
   seed,
   choice,
   mood,
+  ground,
   className,
   size = 160,
 }: {
   seed: string;
   choice?: TotemChoice | null;
   mood: Mood;
+  /** Open tasks: grass grows as deadlines near; overdue ones overgrow and tie the creature up. Not given = a plain shadow. */
+  ground?: TaskGround | null;
   className?: string;
   size?: number;
 }) {
@@ -86,8 +89,15 @@ export function TotemCreature({
   const side = SIDE_X[kind.body];
 
   return (
-    <svg viewBox="0 0 200 220" width={size} height={size * 1.1} className={cn("overflow-visible", className)} aria-hidden>
-      <ellipse cx={100} cy={204} rx={54} ry={8} fill="currentColor" opacity={0.12} />
+    <svg viewBox="0 0 200 236" width={size} height={size * 1.18} className={cn("overflow-visible", className)} aria-hidden>
+      {ground !== undefined ? (
+        <>
+          <Plateau />
+          <Grass level={groundLevel(ground)} row="back" />
+        </>
+      ) : (
+        <ellipse cx={100} cy={204} rx={54} ry={8} fill="currentColor" opacity={0.12} />
+      )}
 
       <g className={cn("totem-motion", MOTION[mood])}>
         {kind.tail && (
@@ -157,7 +167,12 @@ export function TotemCreature({
             )}
           </g>
         )}
+
+        {ground && ground.overdue > 0 && <Ropes count={Math.min(ground.overdue, 3)} side={side} />}
       </g>
+
+      {ground !== undefined && <Grass level={groundLevel(ground)} row="front" />}
+      {ground && ground.overdue > 0 && <Vines count={Math.min(ground.overdue, 3)} side={side} />}
 
       {mood === "fire" && (
         <g fill="#d7ff3a" stroke={OUTLINE} strokeWidth={2.5} strokeLinejoin="round">
@@ -306,6 +321,97 @@ function Arms({ kind, side, fill, mood, sadish }: { kind: TotemKind; side: numbe
       ) : (
         arm(`M${CX + side - 2} 132 q22 ${drop} 16 ${reach}`)
       )}
+    </g>
+  );
+}
+
+/** A small earth plateau with a lawn on top. */
+function Plateau() {
+  return (
+    <g>
+      <path d="M28 200 q72 -14 144 0 q6 20 -12 28 q-60 10 -120 0 q-18 -8 -12 -28z" fill="#9a7550" stroke={OUTLINE} strokeWidth={3.5} strokeLinejoin="round" />
+      <path d="M44 218 q10 -3 18 0 M120 222 q10 -3 20 0" stroke="#6f5236" strokeWidth={3} strokeLinecap="round" fill="none" />
+      <ellipse cx={100} cy={200} rx={72} ry={10} fill="#73c04f" stroke={OUTLINE} strokeWidth={3.5} />
+    </g>
+  );
+}
+
+/** Height of the grass per ground level; overdue grass is twice as tall and darker. */
+const GRASS_HEIGHT = [5, 9, 16, 24, 38];
+
+function Grass({ level, row }: { level: 0 | 1 | 2 | 3 | 4; row: "back" | "front" }) {
+  const base = GRASS_HEIGHT[level];
+  const blades: { x: number; h: number; lean: number; tone: string }[] = [];
+  // Back row stands along the far edge, front row along the near edge (it hides the feet when tall).
+  const y = row === "back" ? 196 : 205;
+  for (let i = 0; i < 22; i++) {
+    const x = 34 + i * 6.1 + (row === "front" ? 3 : 0);
+    const k = ((i * 37 + (row === "front" ? 11 : 0)) % 10) / 10;
+    blades.push({
+      x,
+      h: base * (0.65 + k * 0.7) * (row === "front" ? 0.85 : 1),
+      lean: (k - 0.5) * (level >= 3 ? 10 : 6),
+      tone: level === 4 ? (i % 2 ? "#3f8f2f" : "#4f9f39") : i % 2 ? "#5fae3e" : "#7cc957",
+    });
+  }
+  return (
+    <g fill="none" strokeLinecap="round" className={level >= 2 ? "totem-grass" : undefined}>
+      {blades.map((b) => (
+        <path key={b.x} d={`M${b.x} ${y} q${b.lean * 0.4} ${-b.h * 0.55} ${b.lean} ${-b.h}`} stroke={b.tone} strokeWidth={level === 4 ? 4 : 3} />
+      ))}
+    </g>
+  );
+}
+
+/** Overdue tasks: vines climb the creature from the ground. */
+function Vines({ count, side }: { count: number; side: number }) {
+  const vines = [
+    `M${CX - side + 4} 204 q-14 -26 6 -44 q18 -16 2 -40`,
+    `M${CX + side - 4} 204 q14 -26 -6 -44 q-18 -16 -2 -40`,
+    `M${CX - 10} 206 q-24 -20 0 -36 q24 -14 6 -30`,
+  ].slice(0, count + 1);
+  return (
+    <g fill="none" strokeLinecap="round">
+      {vines.map((d, i) => (
+        <g key={i}>
+          <path d={d} stroke="#2f7a22" strokeWidth={5} />
+          <path d={d} stroke="#5aa83f" strokeWidth={2.5} />
+        </g>
+      ))}
+      <g fill="#5aa83f" stroke={OUTLINE} strokeWidth={2}>
+        {[
+          [CX - side + 2, 176],
+          [CX - side + 14, 148],
+          [CX + side - 2, 172],
+          [CX + side - 14, 144],
+          [CX - 14, 184],
+        ]
+          .slice(0, 2 + count)
+          .map(([x, y]) => (
+            <ellipse key={`${x}-${y}`} cx={x} cy={y} rx={7} ry={4} transform={`rotate(-30 ${x} ${y})`} />
+          ))}
+      </g>
+    </g>
+  );
+}
+
+/** Overdue tasks: one rope per overdue task (up to three) ties the creature. */
+function Ropes({ count, side }: { count: number; side: number }) {
+  const rows = [152, 128, 174].slice(0, count);
+  return (
+    <g fill="none" strokeLinecap="round">
+      {rows.map((y) => {
+        const d = `M${CX - side - 8} ${y - 4} q${side + 8} 14 ${2 * (side + 8)} 0`;
+        return (
+          <g key={y}>
+            <path d={d} stroke={OUTLINE} strokeWidth={10} />
+            <path d={d} stroke="#c9924f" strokeWidth={6} />
+            <path d={d} stroke="#8a5a2b" strokeWidth={6} strokeDasharray="2 6" />
+            <circle cx={CX + 10} cy={y + 3} r={6} fill="#c9924f" stroke={OUTLINE} strokeWidth={2.5} />
+            <path d={`M${CX + 14} ${y + 7} l8 10 M${CX + 8} ${y + 8} l2 12`} stroke="#c9924f" strokeWidth={4} />
+          </g>
+        );
+      })}
     </g>
   );
 }

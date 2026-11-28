@@ -71,3 +71,19 @@ export function resolveTotem(seed: string, choice?: TotemChoice | null) {
   const color = TOTEM_COLORS.find((c) => c.id === choice?.color) ?? TOTEM_COLORS[(h >>> 7) % TOTEM_COLORS.length];
   return { kind, color };
 }
+
+/** The person's open tasks, for the ground under the creature. Tasks never change the creature's mood. */
+export interface TaskGround {
+  open: number;
+  overdue: number;
+  /** Whole days to the nearest deadline of an open task; null = no deadlines. */
+  daysToNearest: number | null;
+}
+
+/** 0 tidy lawn (no open tasks) · 1 normal grass · 2 taller (≤3 days) · 3 tall (today/tomorrow) · 4 overgrown (overdue). */
+export function groundLevel(g: TaskGround | null | undefined): 0 | 1 | 2 | 3 | 4 {
+  if (!g || g.open === 0) return 0;
+  if (g.overdue > 0) return 4;
+  if (g.daysToNearest === null || g.daysToNearest > 3) return 1;
+  return g.daysToNearest > 1 ? 2 : 3;
+}

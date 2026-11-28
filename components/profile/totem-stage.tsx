@@ -37,6 +37,38 @@ const MOOD_TONE: Record<Mood, string> = {
 const scoreTone = (score: number | null) =>
   score === null ? "text-muted-foreground" : score >= HEALTH_GREEN ? "text-positive" : score >= HEALTH_YELLOW ? "text-warning" : "text-negative";
 
+const plural = (n: number, one: string, few: string, many: string) => {
+  const m10 = n % 10, m100 = n % 100;
+  return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
+};
+
+/** The grass explained: open tasks, the nearest deadline, overdue ones. */
+function TasksLine({ ground }: { ground: TotemMember["ground"] }) {
+  if (ground.open === 0) return <p className="mt-2 text-xs text-muted-foreground">Открытых задач нет — газон подстрижен.</p>;
+  const near =
+    ground.daysToNearest === null || ground.daysToNearest < 0
+      ? null
+      : ground.daysToNearest === 0
+        ? "дедлайн сегодня"
+        : ground.daysToNearest === 1
+          ? "дедлайн завтра"
+          : `ближайший дедлайн через ${ground.daysToNearest} ${plural(ground.daysToNearest, "день", "дня", "дней")}`;
+  return (
+    <p className="mt-2 text-xs text-muted-foreground">
+      <Link href="/tasks" className="hover:underline">
+        {ground.open} {plural(ground.open, "открытая задача", "открытые задачи", "открытых задач")}
+      </Link>
+      {ground.overdue > 0 && (
+        <span className="font-semibold text-negative">
+          {" "}
+          · просрочено {ground.overdue}
+        </span>
+      )}
+      {near && ` · ${near}`}
+    </p>
+  );
+}
+
 const firstName = (m: TotemMember) => m.name?.split(/\s+/)[0] ?? m.email.split("@")[0];
 
 /**
@@ -69,7 +101,7 @@ export function TotemStage({ members, viewerEmail, detailed }: { members: TotemM
                 detailed ? "cursor-pointer opacity-80 hover:-translate-y-1 hover:opacity-100" : "cursor-default opacity-75",
               )}
             >
-              <TotemCreature seed={m.email} choice={m.choice} mood={m.mood} size={64} className="text-foreground" />
+              <TotemCreature seed={m.email} choice={m.choice} mood={m.mood} ground={m.ground} size={64} className="text-foreground" />
               <span className="mt-0.5 max-w-20 truncate text-[11px] font-medium text-muted-foreground group-hover:text-foreground">{firstName(m)}</span>
             </button>
           ))}
@@ -77,7 +109,7 @@ export function TotemStage({ members, viewerEmail, detailed }: { members: TotemM
 
         {/* The one in front */}
         <div className="relative z-10 mt-4 flex flex-col items-center pb-5">
-          <TotemCreature key={main.email} seed={main.email} choice={main.choice} mood={main.mood} size={176} className="text-foreground drop-shadow-[0_10px_18px_rgba(0,0,0,0.12)]" />
+          <TotemCreature key={main.email} seed={main.email} choice={main.choice} mood={main.mood} ground={main.ground} size={176} className="text-foreground drop-shadow-[0_10px_18px_rgba(0,0,0,0.12)]" />
           <span className="mt-1 rounded-full bg-card px-3 py-1 text-sm font-semibold shadow-[var(--shadow)]">
             {isMe ? "Ты" : main.name ?? main.email}
           </span>
@@ -101,6 +133,7 @@ export function TotemStage({ members, viewerEmail, detailed }: { members: TotemM
             isMe && <p className="mt-1.5 text-sm text-muted-foreground">Пока нет проектов с оценкой.</p>
           )}
           {!isMe && detailed && <p className="mt-2 text-sm leading-6 text-muted-foreground">{MOOD_HINT[main.mood]}</p>}
+          {(isMe || detailed) && <TasksLine ground={main.ground} />}
         </div>
 
         {(detailed || isMe) && main.projects.length > 0 && (
