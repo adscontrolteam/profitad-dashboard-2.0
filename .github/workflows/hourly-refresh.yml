@@ -1,0 +1,16 @@
+name: Hourly data refresh
+
+# Vercel's cron runs once a day on the Hobby plan. This calls the dashboard every hour so the numbers of all
+# active projects (ads, leads, social statistics) are fresh without anyone opening the pages.
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Ask the dashboard to refresh
+        run: curl --fail --silent --show-error --max-time 300 https://profitad-dashboard-2.vercel.app/api/cron/refresh

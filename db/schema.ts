@@ -766,6 +766,12 @@ export const socialPosts = pgTable(
   (t) => [primaryKey({ columns: [t.projectId, t.network, t.postId] }), index("social_posts_project_idx").on(t.projectId, t.network, t.publishedAt)],
 );
 
+/** Small pieces of shared state, one row per key. `refresh` holds when all projects were last refreshed in the background. */
+export const appState = pgTable("app_state", {
+  key: text("key").primaryKey(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+});
+
 /** Secret of a project's ManyChat address: automations post their funnel steps to /api/hooks/manychat/<token>. */
 export const manychatHooks = pgTable(
   "manychat_hooks",

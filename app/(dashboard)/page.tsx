@@ -1,3 +1,5 @@
+import { after } from "next/server";
+import { AutoRefresh } from "@/components/dashboard/auto-refresh";
 import { StatusSummary } from "@/components/dashboard/status-summary";
 import { ProjectCard } from "@/components/projects/project-card";
 import { InfoHint } from "@/components/ui/info-hint";
@@ -6,9 +8,12 @@ import { projectsAttention } from "@/lib/projects/health";
 import { Placeholder } from "@/components/ui/page-header";
 import { requireSection } from "@/lib/access/viewer";
 import { getActiveProjects, getStatusSummary } from "@/lib/data";
+import { refreshAllStale } from "@/lib/data/refresh";
 
 export default async function DashboardPage() {
   const { permissions } = await requireSection("dashboard");
+  // Opening the dashboard also starts the background refresh of all projects when the hourly one is overdue.
+  after(() => refreshAllStale().then(() => undefined, (e) => console.error("refresh all", (e as Error).message)));
   const [summary, activeProjects] = await Promise.all([
     getStatusSummary(permissions),
     getActiveProjects(permissions),
@@ -19,6 +24,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <AutoRefresh />
       <StatusSummary summary={summary} />
 
       <section>
