@@ -325,13 +325,20 @@ function Arms({ kind, side, fill, mood, sadish }: { kind: TotemKind; side: numbe
   );
 }
 
-/** A small earth plateau with a lawn on top. */
+/** A soft grassy knoll under the creature: wide, uneven edge, no rim. */
 function Plateau() {
   return (
     <g>
-      <path d="M28 200 q72 -14 144 0 q6 20 -12 28 q-60 10 -120 0 q-18 -8 -12 -28z" fill="#9a7550" stroke={OUTLINE} strokeWidth={3.5} strokeLinejoin="round" />
-      <path d="M44 218 q10 -3 18 0 M120 222 q10 -3 20 0" stroke="#6f5236" strokeWidth={3} strokeLinecap="round" fill="none" />
-      <ellipse cx={100} cy={200} rx={72} ry={10} fill="#73c04f" stroke={OUTLINE} strokeWidth={3.5} />
+      <ellipse cx={100} cy={216} rx={92} ry={9} fill="currentColor" opacity={0.08} />
+      <path
+        d="M6 212 q10 -12 32 -14 q18 -8 40 -6 q22 -7 44 -2 q24 -4 42 4 q22 4 30 16 q-4 8 -24 10 q-80 8 -158 0 q-12 -2 -6 -8z"
+        fill="#6fbb4b"
+      />
+      <path d="M10 214 q86 10 180 0 q-2 6 -20 8 q-70 7 -142 0 q-16 -2 -18 -8z" fill="#5aa63c" />
+      <g fill="#8fd16a" opacity={0.7}>
+        <ellipse cx={46} cy={204} rx={14} ry={3} />
+        <ellipse cx={150} cy={206} rx={16} ry={3} />
+      </g>
     </g>
   );
 }
@@ -343,9 +350,9 @@ function Grass({ level, row }: { level: 0 | 1 | 2 | 3 | 4; row: "back" | "front"
   const base = GRASS_HEIGHT[level];
   const blades: { x: number; h: number; lean: number; tone: string }[] = [];
   // Back row stands along the far edge, front row along the near edge (it hides the feet when tall).
-  const y = row === "back" ? 196 : 205;
-  for (let i = 0; i < 22; i++) {
-    const x = 34 + i * 6.1 + (row === "front" ? 3 : 0);
+  const y = row === "back" ? 202 : 210;
+  for (let i = 0; i < 30; i++) {
+    const x = 16 + i * 5.8 + (row === "front" ? 3 : 0);
     const k = ((i * 37 + (row === "front" ? 11 : 0)) % 10) / 10;
     blades.push({
       x,
@@ -357,7 +364,7 @@ function Grass({ level, row }: { level: 0 | 1 | 2 | 3 | 4; row: "back" | "front"
   return (
     <g fill="none" strokeLinecap="round" className={level >= 2 ? "totem-grass" : undefined}>
       {blades.map((b) => (
-        <path key={b.x} d={`M${b.x} ${y} q${b.lean * 0.4} ${-b.h * 0.55} ${b.lean} ${-b.h}`} stroke={b.tone} strokeWidth={level === 4 ? 4 : 3} />
+        <path key={b.x} d={`M${b.x} ${y + ((b.x - 100) / 90) ** 2 * 8} q${b.lean * 0.4} ${-b.h * 0.55} ${b.lean} ${-b.h}`} stroke={b.tone} strokeWidth={level === 4 ? 4 : 3} />
       ))}
     </g>
   );
